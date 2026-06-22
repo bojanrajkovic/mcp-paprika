@@ -7,15 +7,16 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
+  errorResult,
   resolveLookup,
   resolveOrPick,
   toolResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
-import { groceryItemToMarkdown } from "../grocery-helpers.js";
+import { groceryItemsToRows, groceryItemToMarkdown } from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
-import { buildGroceryItems, itemInputSchema } from "./grocery-item.js";
+import { addGroceryItemsOutputSchema, buildGroceryItems, itemInputSchema } from "./grocery-item.js";
 import { groceryStartGuard, recipeSyncedGuard } from "./guards.js";
 
 const recipeLookupSchema = uidOrTextLookupSchema({
@@ -60,6 +61,7 @@ export const addRecipeToGroceryListTool = defineTool(
         .min(1)
         .describe("The recipe's ingredients, parsed: one entry per ingredient line"),
     },
+    outputSchema: addGroceryItemsOutputSchema,
   },
   [groceryStartGuard, recipeSyncedGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry" | "recipe", GroceryWrites>) => {
@@ -84,7 +86,7 @@ export const addRecipeToGroceryListTool = defineTool(
       // add_grocery_items): min(1) admits whitespace-only ingredients.
       for (const item of args.items) {
         if (item.ingredient.trim() === "") {
-          return toolResult(`Invalid item: ingredient must not be empty.`);
+          return errorResult(`Invalid item: ingredient must not be empty.`);
         }
       }
 
@@ -93,12 +95,12 @@ export const addRecipeToGroceryListTool = defineTool(
       if (args.listUid !== undefined) {
         list = ctx.state.lists.store.get(args.listUid);
         if (list === undefined) {
-          return toolResult(`Grocery list with UID "${args.listUid}" not found.`);
+          return errorResult(`Grocery list with UID "${args.listUid}" not found.`);
         }
       } else {
         list = ctx.state.lists.store.getAll().find((l) => l.isDefault);
         if (list === undefined) {
-          return toolResult("No default grocery list found — pass `listUid` (see list_grocery_lists).");
+          return errorResult("No default grocery list found — pass `listUid` (see list_grocery_lists).");
         }
       }
       const listUid = list.uid;
@@ -119,9 +121,13 @@ export const addRecipeToGroceryListTool = defineTool(
       const skippedNote =
         skipped.length > 0 ? `\n\nAlready on the list (skipped): ${skipped.map((i) => i.ingredient).join(", ")}.` : "";
       if (toAdd.length === 0) {
+        // Empty-but-valid success: nothing was created, so the structured payload
+        // is the target list with an empty item array (NOT an error — the input
+        // was fine and the act succeeded with zero new items).
         return toolResult(
           `Nothing to add — every ingredient from "${recipe.name}" is already on "${list.name}" unpurchased.` +
             skippedNote,
+          { listUid, items: [] },
         );
       }
 
@@ -132,16 +138,24 @@ export const addRecipeToGroceryListTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, listUid }, "saveGroceryItems failed");
-          return toolResult(`Failed to add grocery items: ${e.message}`);
+          return errorResult(`Failed to add grocery items: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
-      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems));
+
+      // The new child UIDs ride structuredContent (and the degraded commit branch),
+      // so the model can chain mark_grocery_item_purchased / update_grocery_item
+      // without a re-read.
+      const structured = { listUid, items: groceryItemsToRows(savedItems, ctx.deps.aisle) };
+      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
       const rendered = savedItems.map((item) => groceryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
       return toolResult(
         `Added ${String(savedItems.length)} item(s) from "${recipe.name}" to "${list.name}".${skippedNote}\n\n${rendered}`,
+        structured,
       );
     };
   },

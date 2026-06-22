@@ -6,11 +6,11 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { normalizeWire, todayWire } from "../../../utils/dates.js";
 import { NO_AISLE_UID } from "../../aisle/ids.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemToMarkdown } from "../pantry-helpers.js";
+import { addPantryItemsOutputSchema, pantryItemToMarkdown, pantryItemToRow } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 const itemInputSchema = z.object({
@@ -43,6 +43,7 @@ export const addPantryItemsTool = defineTool(
     inputSchema: {
       items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
+    outputSchema: addPantryItemsOutputSchema,
   },
   [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
@@ -56,7 +57,7 @@ export const addPantryItemsTool = defineTool(
 
         const expirationDate = item.expirationDate !== undefined ? normalizeWire(item.expirationDate) : null;
         if (item.expirationDate !== undefined && expirationDate === null) {
-          return toolResult(
+          return errorResult(
             `Item ${i.toString()} ("${item.ingredient}"): could not parse expirationDate "${item.expirationDate}". ` +
               `Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
           );
@@ -66,7 +67,7 @@ export const addPantryItemsTool = defineTool(
         if (item.purchaseDate !== undefined) {
           const parsedPurchase = normalizeWire(item.purchaseDate);
           if (parsedPurchase === null) {
-            return toolResult(
+            return errorResult(
               `Item ${i.toString()} ("${item.ingredient}"): could not parse purchaseDate "${item.purchaseDate}". ` +
                 `Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
             );
@@ -112,8 +113,11 @@ export const addPantryItemsTool = defineTool(
       }
 
       if (toAdd.length === 0) {
+        // Empty-but-valid success: nothing was created, so the structured payload
+        // is an empty item array (NOT an error — the input was fine, every item
+        // was simply a duplicate).
         const skipReport = skipMessages.join("\n");
-        return toolResult(`All items were duplicates and skipped.\n\n${skipReport}`);
+        return toolResult(`All items were duplicates and skipped.\n\n${skipReport}`, { items: [] });
       }
 
       // Phase 3: Build PantryItem objects with aisle resolution
@@ -138,7 +142,7 @@ export const addPantryItemsTool = defineTool(
           } else {
             const resolved = (await ctx.deps.aisle.ensureAisle(aisleInput)).match(
               (v) => v,
-              (message) => toolResult(message),
+              (message) => errorResult(message),
             );
             if ("content" in resolved) return resolved;
             aisle = resolved.aisle;
@@ -167,11 +171,17 @@ export const addPantryItemsTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e }, "savePantryItems failed");
-          return toolResult(`Failed to add pantry items: ${e.message}`);
+          return errorResult(`Failed to add pantry items: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
-      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItemsBatch(savedItems));
+
+      // The new UIDs ride structuredContent (and the degraded commit branch), so the
+      // model can chain update_pantry_item / mark_pantry_item_out_of_stock without a re-read.
+      const structured = { items: savedItems.map((item) => pantryItemToRow(item, ctx.deps.aisle)) };
+      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItemsBatch(savedItems), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
       // Phase 5: Build response
@@ -181,10 +191,10 @@ export const addPantryItemsTool = defineTool(
 
       if (skipMessages.length > 0) {
         const skipReport = skipMessages.join("\n");
-        return toolResult(`${header}\n\n${rendered}\n\n---\n\n**Skipped (duplicates):**\n${skipReport}`);
+        return toolResult(`${header}\n\n${rendered}\n\n---\n\n**Skipped (duplicates):**\n${skipReport}`, structured);
       }
 
-      return toolResult(`${header}\n\n${rendered}`);
+      return toolResult(`${header}\n\n${rendered}`, structured);
     };
   },
 );

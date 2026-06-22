@@ -38,10 +38,11 @@ export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
       }
       const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
 
-      // UID is rendered by recipeToMarkdown (shared with read_recipe), so the
-      // resource header carries only the metadata the body doesn't: URI, sync
-      // time, photo. (Avoids a duplicate UID line — Codex P3 on #195.)
-      const headerLines = [`**URI:** \`paprika://recipe/${uid}\``];
+      // The resource header carries the entity UID — the stable identifier a
+      // client keys follow-up calls on — alongside the URI, sync time, and photo,
+      // so the resource is self-identifying regardless of how the body renders.
+      // (The grocery-list and menu resources carry the same header UID.)
+      const headerLines = [`**UID:** \`${uid}\``, `**URI:** \`paprika://recipe/${uid}\``];
 
       const lastSynced = ctx.state.recipe.store.lastSyncedAt;
       if (lastSynced) {

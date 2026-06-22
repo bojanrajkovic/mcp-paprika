@@ -22,6 +22,13 @@ export const pantryItemRowSchema = z.object({
 export type PantryItemRow = z.infer<typeof pantryItemRowSchema>;
 
 /**
+ * Structured-output payload for `add_pantry_items` — a row per newly-added item
+ * (the new UIDs the model chains `update_pantry_item` / `mark_pantry_item_out_of_stock`
+ * / `restock_pantry_item` on). Shares {@link pantryItemRowSchema} with `list_pantry_items`.
+ */
+export const addPantryItemsOutputSchema = z.object({ items: z.array(pantryItemRowSchema) });
+
+/**
  * The structured-output payload for `read_pantry_item` — the machine-readable
  * counterpart to the markdown, and the pantry-checklist widget feed.
  * `uid` drives `update_pantry_item` / `mark_pantry_item_out_of_stock` /

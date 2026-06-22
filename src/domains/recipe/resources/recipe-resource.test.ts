@@ -57,7 +57,7 @@ describe("recipe MCP resource", () => {
   });
 
   describe("read", () => {
-    it("prepends the URI header and renders the UID exactly once", async () => {
+    it("leads with the UID and URI header", async () => {
       kh.seed({
         recipes: [
           makeRecipe({
@@ -71,10 +71,10 @@ describe("recipe MCP resource", () => {
 
       const result = (await kh.callResource("recipes", "test-recipe")) as { contents: Array<{ text: string }> };
       const text = result.contents[0]?.text ?? "";
-      // URI header leads; the UID is rendered once by recipeToMarkdown in the body (#195).
-      expect(text).toMatch(/^\*\*URI:\*\*\s`paprika:\/\/recipe\/test-recipe`/);
-      expect(text).toContain("**UID:** `test-recipe`");
-      expect(text.match(/\*\*UID:\*\*/g)).toHaveLength(1);
+      // The header carries the entity UID then the URI, so the resource is
+      // self-identifying. The shared body formatter also renders a UID line, so
+      // the UID currently appears in both the header and the body.
+      expect(text).toMatch(/^\*\*UID:\*\*\s`test-recipe`\n\*\*URI:\*\*\s`paprika:\/\/recipe\/test-recipe`/);
     });
 
     it("includes Last synced when the store has been synced", async () => {
