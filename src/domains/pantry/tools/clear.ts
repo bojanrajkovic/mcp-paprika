@@ -6,7 +6,7 @@ import { commitFailure, confirmOrCancel, errorResult, toolResult } from "../../.
 import { pantryStartGuard } from "./guards.js";
 
 /**
- * `clear_out_of_stock_pantry_items` — batch hard-delete all out-of-stock pantry items.
+ * `clear_out_of_stock_pantry_items` — batch soft-delete all out-of-stock pantry items.
  */
 export const clearOutOfStockPantryItemsTool = defineTool(
   {

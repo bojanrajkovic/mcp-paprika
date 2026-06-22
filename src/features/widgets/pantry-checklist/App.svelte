@@ -364,7 +364,10 @@
         <div class="drawer-head-row">
           <button
             class="drawer-head"
-            onclick={() => (drawerOpen = !drawerOpen)}
+            onclick={() => {
+              drawerOpen = !drawerOpen;
+              if (!drawerOpen) confirmingClear = false;
+            }}
             aria-expanded={drawerOpen}
           >
             <span class="chev">▸</span>
