@@ -103,14 +103,27 @@ export async function confirmOrCancel(
  * a recipe — instead of confirming a photo landed from prose alone. The bytes are
  * inlined as base64; callers pass a small normalized JPEG thumbnail (the full image
  * stays server-side). Pure construction, no throw.
+ *
+ * The three-argument form additionally carries a `structuredContent` record beside the
+ * image block — the same parallel structured channel as {@link toolResult}'s two-argument
+ * form — so a schema-bearing photo tool surfaces the recipe + photo (or pending
+ * generation) identifiers the model chains on without a re-read. As with `toolResult`, a
+ * tool using it must declare a matching `outputSchema` on its `ToolSpec`.
  */
-export function imageResult(text: string, jpeg: Buffer): CallToolResult {
-  return {
-    content: [
-      { type: "text" as const, text },
-      { type: "image" as const, data: jpeg.toString("base64"), mimeType: "image/jpeg" },
-    ],
-  } satisfies CallToolResult;
+export function imageResult(text: string, jpeg: Buffer): CallToolResult;
+export function imageResult<S extends Record<string, unknown>>(
+  text: string,
+  jpeg: Buffer,
+  structuredContent: S,
+): { content: CallToolResult["content"]; structuredContent: S };
+export function imageResult(text: string, jpeg: Buffer, structuredContent?: Record<string, unknown>): CallToolResult {
+  const content = [
+    { type: "text" as const, text },
+    { type: "image" as const, data: jpeg.toString("base64"), mimeType: "image/jpeg" },
+  ];
+  return structuredContent === undefined
+    ? ({ content } satisfies CallToolResult)
+    : ({ content, structuredContent } satisfies CallToolResult);
 }
 
 /**

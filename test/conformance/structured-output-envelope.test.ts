@@ -68,7 +68,9 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
     // R1 — the menu and catalog write-acks that echo their whole container
     // (move_menu_item, update_menu, update_menu_item echo the parent menu; update_aisle,
     // update_category, update_meal_type echo the full reordered catalog list).
-    // Add each later batch's tool names as they land.
+    // R1 — the photo tools, beside their image content block (generate_recipe_photo,
+    // upload_recipe_photo echo the recipe + new photo UID, or the recipe + pending
+    // generation token on a preview). Add each later batch's tool names as they land.
     expect(withSchema).toEqual([
       "add_grocery_items",
       "add_menu_items",
@@ -81,6 +83,7 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "create_recipe",
       "discover_recipes",
       "favorite_recipe",
+      "generate_recipe_photo",
       "list_aisles",
       "list_categories",
       "list_grocery_lists",
@@ -121,6 +124,7 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "update_menu_item",
       "update_pantry_item",
       "update_recipe",
+      "upload_recipe_photo",
     ]);
   });
 });

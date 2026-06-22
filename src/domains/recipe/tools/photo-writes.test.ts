@@ -70,6 +70,8 @@ describe("upload_recipe_photo", () => {
     expect(getText(result)).toContain('Attached photo 1 to "Test Recipe"');
     // The success message returns the generated photo UID so the caller can delete_recipe_photo it.
     expect(getText(result)).toContain(photo.uid);
+    // The recipe + new photo UIDs ride structuredContent so the model can chain on them.
+    expect(result.structuredContent).toEqual({ recipeUid: RECIPE_UID, photoUid: photo.uid });
   });
 
   it("auto-assigns order_flag/name from the existing gallery (max + 1)", async () => {
@@ -118,6 +120,7 @@ describe("upload_recipe_photo", () => {
     });
 
     expect(getText(result)).toContain("too large");
+    expect(result.isError).toBe(true);
     expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
   });
 
@@ -168,6 +171,10 @@ describe("upload_recipe_photo", () => {
     // so the person can confirm the right photo attached.
     expect(result.content[1]).toMatchObject({ type: "image", mimeType: "image/jpeg" });
     expect((result.content[1] as { data?: string }).data?.length ?? 0).toBeGreaterThan(0);
+    // The recipe + new photo UIDs ride structuredContent beside the image block.
+    const structured = result.structuredContent as { recipeUid: string; photoUid: string };
+    expect(structured.recipeUid).toBe(RECIPE_UID);
+    expect(structured.photoUid.length).toBeGreaterThan(0);
     // single-use: the token is spent
     expect(kh.infra().generatedImageStore.consume(token)).toBeNull();
   });
@@ -179,6 +186,7 @@ describe("upload_recipe_photo", () => {
       source: { generation_token: "gen_does_not_exist" },
     });
     expect(getText(result).toLowerCase()).toContain("expired");
+    expect(result.isError).toBe(true);
     expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
   });
 
@@ -195,6 +203,7 @@ describe("upload_recipe_photo", () => {
       source: { generation_token: token },
     });
     expect(getText(result).toLowerCase()).toContain("different recipe");
+    expect(result.isError).toBe(true);
     expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
     // Validation failure restores the token — it is still attachable (here we
     // confirm by consuming it back; in practice the caller would retry).
@@ -218,6 +227,7 @@ describe("upload_recipe_photo", () => {
       source: { generation_token: token },
     });
     expect(getText(failed)).toContain("Failed to upload");
+    expect(failed.isError).toBe(true);
 
     // attachPhotoToRecipe uploads to Paprika before the local commit, so the
     // photo may already exist remotely. The token is consumed and NOT restored,
@@ -301,6 +311,7 @@ describe("upload_recipe_photo", () => {
       source: { image_base64: notAnImage },
     });
     expect(getText(result)).toContain("Unsupported image format");
+    expect(result.isError).toBe(true);
     expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
   });
 
@@ -311,6 +322,7 @@ describe("upload_recipe_photo", () => {
       source: { image_base64: jpegBase64 },
     });
     expect(getText(result)).toContain("No recipe found");
+    expect(result.isError).toBe(true);
     expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
   });
 
