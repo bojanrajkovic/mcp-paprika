@@ -1,15 +1,14 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { ReferenceImage } from "../../photography.js";
 import type { PhotoGenState } from "../module.js";
 
-import { RecipeUidSchema } from "../../../domains/recipe/ids.js";
+import { PhotoUidSchema, RecipeUidSchema } from "../../../domains/recipe/ids.js";
 import { makeThumbnail } from "../../../domains/recipe/photo-helpers.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes } from "../../../shared/photo-fetch.js";
-import { imageResult, toolResult } from "../../../shared/tools.js";
+import { errorResult, imageResult, toolResult } from "../../../shared/tools.js";
 import { CircuitOpenError } from "../../../utils/errors.js";
 import { toMessage } from "../../../utils/log.js";
 import { PhotographyAPIError } from "../../photography-errors.js";
@@ -58,6 +57,26 @@ export const generatePhotoInputSchema = z.object({
 });
 
 /**
+ * Structured-output payload for `generate_recipe_photo`. The two paths are
+ * presence-discriminated: the attach path populates `photoUid` (the recipe's new
+ * photo); the preview path (attach:false) populates `generationToken` (the single-use
+ * token the model passes to `upload_recipe_photo` to save THAT exact image). Exactly
+ * one of the two is set per call; `recipeUid` is always present. A flat object with
+ * both optional — rather than a top-level `z.union` — because the MCP SDK serializes
+ * and validates only object output schemas (`normalizeObjectSchema` returns undefined
+ * for a union). `photoUrl` is intentionally absent on both paths — Paprika stamps the
+ * CDN URL server-side on the next sync, so it is not recoverable in-handler.
+ */
+export const generatePhotoOutputSchema = z.object({
+  recipeUid: RecipeUidSchema,
+  photoUid: PhotoUidSchema.optional().describe("The new photo's UID (attach path; absent on a preview)."),
+  generationToken: z
+    .string()
+    .optional()
+    .describe("The single-use token to attach this preview via upload_recipe_photo (preview path; absent on attach)."),
+});
+
+/**
  * `generate_recipe_photo` — generate (or restyle) an AI photo for a recipe. Reaches
  * recipe via `ctx.deps.recipe` (the read contract + `attachGeneratedPhoto`) and the
  * ephemeral preview ring buffer via `ctx.infra.generatedImageStore` — a shared
@@ -79,10 +98,11 @@ export const generatePhotoTool = defineTool(
       "Set restyle_existing:true to re-style the recipe's current photo instead of generating from scratch. " +
       "Set attach:false to preview without saving.",
     inputSchema: generatePhotoInputSchema.shape,
+    outputSchema: generatePhotoOutputSchema,
   },
   (ctx: DomainCtx<PhotoGenState, "recipe">) => {
     const log = ctx.infra.log.child({ component: "generate_recipe_photo" });
-    return async (args): Promise<CallToolResult> => {
+    return async (args) => {
       const model = args.model ?? DEFAULT_PHOTO_MODEL;
       const restyle = args.restyle_existing ?? false;
       const attach = args.attach ?? true;
@@ -90,7 +110,7 @@ export const generatePhotoTool = defineTool(
       // FEATURE GATE — null when image generation is unconfigured.
       const photographyClient = ctx.state.photographyClient;
       if (photographyClient === null) {
-        return toolResult(
+        return errorResult(
           "AI photo generation is not configured on this server. Set IMAGE_GEN_API_KEY (or reuse the " +
             "embeddings credentials) to enable generate_recipe_photo.",
         );
@@ -98,7 +118,7 @@ export const generatePhotoTool = defineTool(
 
       const recipe = ctx.deps.recipe.get(args.recipe_uid);
       if (recipe === undefined)
-        return toolResult(
+        return errorResult(
           `No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
         );
 
@@ -117,14 +137,14 @@ export const generatePhotoTool = defineTool(
           },
         );
         if (photoUrl === null || photoUrl === "") {
-          return toolResult(
+          return errorResult(
             `"${recipe.name}" has no photo to restyle. Generate one first (restyle_existing:false), or use upload_recipe_photo.`,
           );
         }
         // SSRF-safe fetch (same hardened path as upload_recipe_photo) — photoUrl is
         // synced data, not inherently trusted to point only at public hosts.
         const ref = await fetchImageBytes(photoUrl);
-        if ("error" in ref) return toolResult(`Couldn't fetch the existing photo to restyle: ${ref.error}`);
+        if ("error" in ref) return errorResult(`Couldn't fetch the existing photo to restyle: ${ref.error}`);
         referenceImage = { data: ref.bytes, mimeType: ref.contentType ?? "image/jpeg" };
       }
 
@@ -143,27 +163,27 @@ export const generatePhotoTool = defineTool(
         (error) => {
           log.error({ err: error, recipe_uid: args.recipe_uid, model }, "image generation failed");
           if (error instanceof CircuitOpenError) {
-            return toolResult(
+            return errorResult(
               "Image generation is temporarily unavailable — the provider circuit opened after repeated failures. Try again in a minute.",
             );
           }
           if (error instanceof PhotographyAPIError) {
             if (error.status === 401 || error.status === 403) {
-              return toolResult(
+              return errorResult(
                 "Image generation failed: the provider rejected the credentials. Check IMAGE_GEN_API_KEY (or the reused OpenRouter key).",
               );
             }
-            return toolResult(`Image generation failed (HTTP ${error.status.toString()}): ${toMessage(error)}`);
+            return errorResult(`Image generation failed (HTTP ${error.status.toString()}): ${toMessage(error)}`);
           }
           // A base PhotographyError with no cause is the client's own classification
           // (a refusal / text-only reply / non-data-URI payload); one WITH a cause
           // wraps a foreign escape (malformed envelope, abort) — keep the generic copy.
           if (error.cause === undefined) {
-            return toolResult(
+            return errorResult(
               `The model returned no image (a refusal or text-only reply) — try a different model or a clearer style hint. (${toMessage(error)})`,
             );
           }
-          return toolResult(`Failed to generate photo: ${toMessage(error)}`);
+          return errorResult(`Failed to generate photo: ${toMessage(error)}`);
         },
       );
       if ("content" in generated) return generated;
@@ -182,7 +202,7 @@ export const generatePhotoTool = defineTool(
           thumbnail = await makeThumbnail(generated.bytes);
         } catch (error) {
           log.error({ err: error, recipe_uid: args.recipe_uid }, "makeThumbnail failed");
-          return toolResult(`Generated an image but failed to process it: ${toMessage(error)}`);
+          return errorResult(`Generated an image but failed to process it: ${toMessage(error)}`);
         }
         const token = ctx.infra.generatedImageStore.put({
           bytes: generated.bytes,
@@ -190,11 +210,14 @@ export const generatePhotoTool = defineTool(
           recipeUid: args.recipe_uid,
           model,
         });
+        // The recipe + the single-use generation token ride structuredContent so the
+        // model can pass the token straight to upload_recipe_photo to save THIS image.
         return imageResult(
           `Generated a preview (≈280px thumbnail) for "${recipe.name}" using ${model}${costSuffix}. ` +
             `Not attached. To save THIS exact image, call upload_recipe_photo with generation_token \`${token}\` ` +
             `(no need to regenerate). The preview is held for about an hour.`,
           thumbnail,
+          { recipeUid: args.recipe_uid, generationToken: token },
         );
       }
 
@@ -209,9 +232,10 @@ export const generatePhotoTool = defineTool(
         (photo) =>
           toolResult(
             `Generated and attached a photo to "${recipe.name}" using ${model}${costSuffix} (photo UID: ${photo.uid}).`,
+            { recipeUid: args.recipe_uid, photoUid: photo.uid },
           ),
         (e) =>
-          toolResult(
+          errorResult(
             `Generated an image for "${recipe.name}" using ${model}${costSuffix}, but attaching it failed: ${e.message} ` +
               `Retry, or call generate_recipe_photo with attach:false to get a preview token and upload_recipe_photo it separately.`,
           ),

@@ -8,7 +8,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
-import { commitFailure, confirmOrCancel, imageResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, errorResult, imageResult, toolResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
@@ -65,6 +65,15 @@ type UploadPhotoSource = z.infer<typeof uploadPhotoSourceSchema>;
 export const deletePhotoInputSchema = z.object({
   photo_uid: PhotoUidSchema.describe("UID of the photo to delete."),
 });
+
+/**
+ * Structured-output payload for `upload_recipe_photo` — the recipe the photo
+ * attached to and the new photo's UID, so the model can chain on the just-attached
+ * photo (e.g. `delete_recipe_photo`) without a re-read. `photoUrl` is intentionally
+ * absent: Paprika stamps the CDN URL server-side on the next sync, so it is not
+ * recoverable in-handler.
+ */
+export const uploadPhotoOutputSchema = z.object({ recipeUid: RecipeUidSchema, photoUid: PhotoUidSchema });
 
 /** Magic-byte sniff for the raster formats sharp decodes (Paprika stores all as JPEG). */
 function sniffImage(bytes: Buffer): boolean {
@@ -148,6 +157,7 @@ export const uploadPhotoTool = defineTool(
       "(JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the " +
       "server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.",
     inputSchema: uploadPhotoInputSchema.shape,
+    outputSchema: uploadPhotoOutputSchema,
   },
   [recipeColdStartGuard, photoCatalogGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
@@ -155,14 +165,14 @@ export const uploadPhotoTool = defineTool(
     return async (args) => {
       const recipe = ctx.state.recipe.store.get(args.recipe_uid);
       if (recipe === undefined)
-        return toolResult(
+        return errorResult(
           `No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
         );
 
       const resolved = await resolveSource(args.source, args.recipe_uid, ctx.infra.generatedImageStore);
-      if ("error" in resolved) return toolResult(resolved.error);
+      if ("error" in resolved) return errorResult(resolved.error);
       if (!sniffImage(resolved.bytes)) {
-        return toolResult("Unsupported image format. Provide a JPEG, PNG, WEBP, or GIF image.");
+        return errorResult("Unsupported image format. Provide a JPEG, PNG, WEBP, or GIF image.");
       }
 
       let thumbnail: Buffer;
@@ -177,17 +187,21 @@ export const uploadPhotoTool = defineTool(
         ));
       } catch (error) {
         log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
-        return toolResult(`Failed to process image: ${toMessage(error)}`);
+        return errorResult(`Failed to process image: ${toMessage(error)}`);
       }
 
       return (await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full)).match(
         // Return the normalized thumbnail (already in memory) as an image block so the
-        // person can confirm the right photo attached (ADR-0019 R2), not just read an ack.
+        // person can confirm the right photo attached (ADR-0019 R2), and the recipe +
+        // new photo UIDs over structuredContent so the model can chain on them.
         (photo) =>
-          imageResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`, thumbnail),
+          imageResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`, thumbnail, {
+            recipeUid: args.recipe_uid,
+            photoUid: photo.uid,
+          }),
         (e) => {
           log.error({ err: e.cause ?? e, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
-          return toolResult(`Failed to upload photo: ${e.message}`);
+          return errorResult(`Failed to upload photo: ${e.message}`);
         },
       );
     };
