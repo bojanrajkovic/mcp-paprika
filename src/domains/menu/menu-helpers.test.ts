@@ -20,7 +20,8 @@ describe("menuToMarkdown", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Weeknight Plan", days: 2, notes: "low carb" });
     const md = menuToMarkdown(menu, [], [breakfast, dinner]);
     expect(md).toContain("# Weeknight Plan");
-    expect(md).toContain("**UID:** `m-1`");
+    // The menu UID rides structuredContent / the resource header, not the human text.
+    expect(md).not.toContain("**UID:**");
     expect(md).toContain("**Days:** 2");
     expect(md).toContain("**Notes:** low carb");
   });

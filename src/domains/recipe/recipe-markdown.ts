@@ -120,9 +120,6 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>, l
 
   lines.push(`# ${recipe.name}`);
 
-  lines.push("");
-  lines.push(`**UID:** \`${recipe.uid}\``);
-
   if (categoryNames.length > 0) {
     lines.push("");
     lines.push(`**Categories:** ${categoryNames.join(", ")}`);

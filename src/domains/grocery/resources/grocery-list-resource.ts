@@ -14,8 +14,8 @@ import { groceryListToMarkdown } from "../grocery-helpers.js";
  * `ctx.state.items.store`, not a dep), so a child grocery-item change fires
  * `resourceListChanged()`.
  *
- * Unlike the recipe resource, the header leads with `**UID:**` — `groceryListToMarkdown`
- * does not render the UID in its body, so there is no duplication.
+ * The header leads with `**UID:**` then `**URI:**` — the resource's stable
+ * identifier, carried in the header by every Content resource (recipe, menu too).
  */
 export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pantry">): void {
   const template = new ResourceTemplate("paprika://grocery-list/{uid}", {

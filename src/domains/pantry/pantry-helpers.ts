@@ -74,7 +74,6 @@ export function pantryItemToMarkdown(item: PantryItem, aisles: AisleNameSource):
 
   lines.push(`# ${item.ingredient}`);
   lines.push("");
-  lines.push(`**UID:** \`${item.uid}\``);
 
   if (item.quantity !== "") {
     lines.push(`**Quantity:** ${item.quantity}`);

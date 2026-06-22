@@ -101,7 +101,8 @@ describe("read_grocery_list tool", () => {
     const text = await kh.callToolText("read_grocery_list", { lookup: { uid: list.uid } });
 
     expect(text).toContain("Weekly Shopping");
-    expect(text).toContain(list.uid);
+    // The list UID rides structuredContent, not the human text (see the structuredContent test).
+    expect(text).not.toContain(list.uid);
     expect(text).toContain("Apples");
     expect(text).toContain("Milk");
   });
@@ -231,7 +232,6 @@ describe("read_grocery_list tool", () => {
     const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Weekly Shopping" } });
 
     expect(text).toContain("Weekly Shopping");
-    expect(text).toContain(list.uid);
   });
 
   it("resolves by starts-with name match", async () => {
@@ -241,7 +241,6 @@ describe("read_grocery_list tool", () => {
     const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Weekly" } });
 
     expect(text).toContain("Weekly Shopping");
-    expect(text).toContain(list.uid);
   });
 
   it("resolves by contains name match", async () => {
@@ -251,7 +250,6 @@ describe("read_grocery_list tool", () => {
     const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Shopping" } });
 
     expect(text).toContain("Weekly Shopping");
-    expect(text).toContain(list.uid);
   });
 
   it("returns not-found when name does not match any list", async () => {
@@ -403,7 +401,8 @@ describe("rename_grocery_list tool", () => {
     const text = await kh.callToolText("rename_grocery_list", { uid: list.uid, newName: "Weekly Shopping" });
 
     expect(text).toContain("Weekly Shopping");
-    expect(text).toContain(list.uid);
+    // The UID rides structuredContent now, not the human text (see the structuredContent test).
+    expect(text).not.toContain(list.uid);
     expect(kh.client().saveGroceryList).not.toHaveBeenCalled();
   });
 

@@ -112,11 +112,10 @@ export function groceryListToStructured(
 }
 
 /**
- * Renders a grocery list as markdown with metadata and a table of items. The
- * per-item UIDs travel on the structured channel ({@link groceryListToStructured},
- * ADR-0019 R1) — the human table stays clean. The `includeItemUids` per-renderer
- * UID-column flag was retired in B1 (#321, #353); the top-level list `**UID:**`
- * line is kept as a text fallback pending the reliable-channel decision (#367/#368).
+ * Renders a grocery list as markdown with metadata and a table of items. The list
+ * UID and the per-item UIDs travel on the structured channel
+ * ({@link groceryListToStructured}) and the resource header, so the human text
+ * carries no identifiers.
  */
 export function groceryListToMarkdown(
   list: GroceryList,
@@ -126,7 +125,6 @@ export function groceryListToMarkdown(
   const lines: Array<string> = [];
   lines.push(`# ${list.name}`);
   lines.push("");
-  lines.push(`**UID:** \`${list.uid}\``);
   lines.push(`**Items:** ${items.length.toString()}`);
 
   if (items.length > 0) {
@@ -146,14 +144,14 @@ export function groceryListToMarkdown(
 }
 
 /**
- * Renders a single grocery item as markdown with all available fields.
+ * Renders a single grocery item as markdown. The item UID and its parent-list UID
+ * travel on the structured channel and the caller's own request inputs, so the
+ * human text carries only the editable fields.
  */
 export function groceryItemToMarkdown(item: GroceryItem, aisles: AisleNameSource): string {
   const lines: Array<string> = [];
   lines.push(`# ${item.ingredient}`);
   lines.push("");
-  lines.push(`**UID:** \`${item.uid}\``);
-  lines.push(`**List:** \`${item.listUid}\``);
   if (item.quantity !== "") {
     lines.push(`**Quantity:** ${item.quantity}`);
   }
