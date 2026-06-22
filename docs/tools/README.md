@@ -73,6 +73,14 @@ Clear all items from a grocery list.
 
 - `listUid` — Grocery list UID to clear all items from
 
+## `clear_out_of_stock_pantry_items`
+
+**Remove all out-of-stock pantry items** — write, destructive, idempotent
+
+Permanently delete all pantry items marked out of stock. Cannot be undone.
+
+_No parameters._
+
 ## `clear_purchased_grocery_items`
 
 **Remove purchased items from a grocery list** — write, destructive, idempotent
