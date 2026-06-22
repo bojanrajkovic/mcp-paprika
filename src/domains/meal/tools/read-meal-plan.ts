@@ -29,8 +29,9 @@ export const readMealPlanInputSchema = z
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.")
       .optional()
       .describe(
-        "Anchor the window to this day (YYYY-MM-DD) instead of today, reading any past or future week. " +
-          "The meal-week-planner widget passes the Monday of each week it navigates to; omit it for the upcoming plan.",
+        "Read a specific week instead of the upcoming default: pass any day in the target week as " +
+          "`startDate` (YYYY-MM-DD) and the window becomes that whole Monday–Sunday week, past or future. " +
+          "The meal-week-planner widget passes each week's Monday; omit it for the plan from today.",
       ),
   })
   .strict();
@@ -54,8 +55,8 @@ export const readMealPlanTool = defineTool(
     annotations: { readOnlyHint: true, idempotentHint: true },
     description:
       "Read the meal plan: meals grouped by day in ascending date order. Defaults to the next 7 days from " +
-      "today; pass `days` to widen the window (max 31) and `startDate` (YYYY-MM-DD) to anchor it to a specific " +
-      'week, past or future. For recall ("when did we last have X"), use search_meal_history.',
+      "today; pass `startDate` (YYYY-MM-DD, any day in the week) to read that whole Monday–Sunday week instead, " +
+      'past or future, and `days` to widen the window (max 31). For recall ("when did we last have X"), use search_meal_history.',
     inputSchema: readMealPlanInputSchema,
     outputSchema: mealWeekOutputSchema,
     // Hosts with the apps surface render this result as the meal-week-planner widget; others
@@ -69,17 +70,19 @@ export const readMealPlanTool = defineTool(
       // production, but the unit-test harness invokes the handler with raw args,
       // so a schema default wouldn't fire there.
       const days = args.days ?? 7;
-      // Window start: an explicit `startDate` anchors to any day (no today-floor, so
-      // the widget can read past weeks); otherwise today. The regex pins the format;
-      // luxon still rejects a calendar-invalid date like 2026-13-40, which the regex
-      // lets through.
+      // Window start. An explicit `startDate` anchors to the MONDAY of the week containing that
+      // day (`startOf("week")` — luxon weeks are ISO/Monday-start), so the window is that full
+      // Mon–Sun week and `weekStart` always equals it; no today-floor, so any past or future week
+      // reads. No `startDate` keeps the upcoming default — today forward — so its window starts
+      // mid-week (weekStart is still the Monday, and the widget realigns once). The regex pins the
+      // format; luxon still rejects a calendar-invalid date like 2026-02-30 that the regex lets through.
       let since: DateTime;
       if (args.startDate !== undefined) {
-        const parsed = DateTime.fromISO(args.startDate, { zone: "utc" }).startOf("day");
+        const parsed = DateTime.fromISO(args.startDate, { zone: "utc" });
         if (!parsed.isValid) {
           return errorResult(`startDate "${args.startDate}" is not a valid calendar date (expected YYYY-MM-DD).`);
         }
-        since = parsed;
+        since = parsed.startOf("week");
       } else {
         since = DateTime.utc().startOf("day");
       }

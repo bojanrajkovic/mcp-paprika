@@ -444,12 +444,12 @@ Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with 
 
 **Show planned meals for a week** — read-only, idempotent
 
-Read the meal plan: meals grouped by day in ascending date order. Defaults to the next 7 days from today; pass `days` to widen the window (max 31) and `startDate` (YYYY-MM-DD) to anchor it to a specific week, past or future. For recall ("when did we last have X"), use search_meal_history.
+Read the meal plan: meals grouped by day in ascending date order. Defaults to the next 7 days from today; pass `startDate` (YYYY-MM-DD, any day in the week) to read that whole Monday–Sunday week instead, past or future, and `days` to widen the window (max 31). For recall ("when did we last have X"), use search_meal_history.
 
 **Parameters**
 
 - `days` _(optional)_ — How many days of the plan to show, counting from the window start (default 7, max 31).
-- `startDate` _(optional)_ — Anchor the window to this day (YYYY-MM-DD) instead of today, reading any past or future week. The meal-week-planner widget passes the Monday of each week it navigates to; omit it for the upcoming plan.
+- `startDate` _(optional)_ — Read a specific week instead of the upcoming default: pass any day in the target week as `startDate` (YYYY-MM-DD) and the window becomes that whole Monday–Sunday week, past or future. The meal-week-planner widget passes each week's Monday; omit it for the plan from today.
 
 ## `read_menu`
 

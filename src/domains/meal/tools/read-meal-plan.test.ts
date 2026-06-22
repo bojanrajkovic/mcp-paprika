@@ -121,20 +121,30 @@ describe("read_meal_plan tool", () => {
     });
   });
 
-  it("anchors the window to an explicit startDate, reading a past week the today-floor would hide", async () => {
+  it("reads the whole Monday–Sunday week containing an explicit (non-Monday) startDate, past or future", async () => {
+    // A meal on the Wednesday of a past week; anchor by passing that same Wednesday (not the Monday).
+    const pastMonday = DateTime.utc().startOf("day").minus({ days: 14 }).startOf("week");
+    const wedOfWeek = pastMonday.plus({ days: 2 });
     kh.seed({
       mealTypes: [makeMealType({ uid: DINNER_UID, name: "Dinner", originalType: 2, orderFlag: 2 })],
-      meals: [makeMeal({ uid: "past" as MealUid, name: "PastMeal", date: wireDay(-10), typeUid: DINNER_UID, type: 2 })],
+      meals: [
+        makeMeal({
+          uid: "past" as MealUid,
+          name: "PastMeal",
+          date: wedOfWeek.toFormat("yyyy-MM-dd HH:mm:ss"),
+          typeUid: DINNER_UID,
+          type: 2,
+        }),
+      ],
     });
 
-    const startDate = DateTime.utc().startOf("day").minus({ days: 12 }).toFormat("yyyy-MM-dd");
-    const result = await kh.callTool("read_meal_plan", { startDate, days: 7 });
+    const result = await kh.callTool("read_meal_plan", { startDate: wedOfWeek.toFormat("yyyy-MM-dd") });
     expect(result.isError).toBeFalsy();
     const { weekStart, meals } = result.structuredContent as { weekStart: string; meals: Array<{ name: string }> };
-    // The past meal (10 days back) is inside the anchored window (12 days back, 7-day span).
+    // The window is the full Mon–Sun week, so the Wednesday meal is in it...
     expect(meals.map((m) => m.name)).toContain("PastMeal");
-    // weekStart is the Monday of the anchored week, not of today.
-    expect(weekStart).toBe(DateTime.fromISO(startDate, { zone: "utc" }).startOf("week").toFormat("yyyy-MM-dd"));
+    // ...and weekStart is that week's Monday, regardless of which day was passed.
+    expect(weekStart).toBe(pastMonday.toFormat("yyyy-MM-dd"));
     // The default (no startDate) still floors at today and excludes the past meal.
     expect(await kh.callToolText("read_meal_plan", {})).not.toContain("PastMeal");
   });
@@ -144,9 +154,12 @@ describe("read_meal_plan tool", () => {
       mealTypes: [makeMealType({ uid: DINNER_UID, name: "Dinner", originalType: 2, orderFlag: 2 })],
       meals: [],
     });
-    const result = await kh.callTool("read_meal_plan", { startDate: "2026-13-40" });
-    expect(result.isError).toBe(true);
-    expect(getText(result)).toContain("not a valid calendar date");
+    // Month-overflow, day-overflow, and zero-month all pass the regex but are calendar-invalid.
+    for (const bad of ["2026-13-40", "2026-02-30", "2026-00-10"]) {
+      const result = await kh.callTool("read_meal_plan", { startDate: bad });
+      expect(result.isError, bad).toBe(true);
+      expect(getText(result)).toContain("not a valid calendar date");
+    }
   });
 
   it("reports an empty plan with an empty meals array but a populated registry (so the widget keeps its slots)", async () => {

@@ -56,12 +56,12 @@
   // True while a week re-fetch is in flight — locks the nav arrows so rapid prev/next
   // taps queue at most one fetch.
   let navBusy = $state(false);
-  // The meal whose recipe is being read — drives the per-row spinner in SlotPane.
+  // The MEAL whose recipe is being read (its `uid`, not the recipe's) — drives the per-row spinner
+  // AND doubles as the race token: any move away (Back, week nav, day select) nulls it, and the
+  // in-flight read is discarded if this no longer matches the meal it was started for, so a result
+  // that lands after the user left never hijacks the view. Keyed on the meal so two meals sharing
+  // one recipe stay distinct.
   let loadingRecipeUid = $state<string | null>(null);
-  // Non-reactive race token: the recipe UID the user is currently waiting on. Any move away
-  // — Back, week nav, or selecting another day — clears it, so a read_recipe result that lands
-  // after the user left is discarded rather than hijacking the new view.
-  let pendingRecipeUid: string | null = null;
   // Set true on the first applyWeek, so the one-time current-week realignment runs only on
   // the initial host payload, never on a widget-driven navigation.
   let primed = false;
@@ -197,11 +197,11 @@
     else
       selectedDate =
         indexInWeek(todayIso, w.weekStart) >= 0 ? todayIso : w.weekStart;
-    // A no-arg read_meal_plan anchors its window at TODAY, not the week's Monday, so a
-    // mid-week first load is a partial Monday→Sunday grid: next week's spill is dropped and
-    // this week's earlier days were never fetched. Re-fetch the aligned full week once, with
-    // the Monday as startDate (the today-floor is lifted server-side, so past days fill in).
-    // weekStart === todayIso on a Monday means the window already aligns — no realign needed.
+    // A no-arg read_meal_plan starts its window at TODAY (mid-week) even though weekStart is the
+    // Monday, so the initial Monday→Sunday grid is partial: next week's spill is dropped and this
+    // week's earlier days were never fetched. Re-fetch the aligned full week once, passing the
+    // Monday as startDate (which reads the whole Mon–Sun week, past days included). On a Monday
+    // weekStart === todayIso, so the window already aligns — no realign.
     if (firstLoad && w.weekStart < todayIso)
       void realignToCurrentWeek(w.weekStart);
   }
@@ -220,7 +220,6 @@
   // Clear the in-flight recipe read: any move away from the meal the user tapped (Back, week
   // nav, or selecting another day) means its result should no longer open the detail pane.
   function cancelPendingRecipe() {
-    pendingRecipeUid = null;
     loadingRecipeUid = null;
   }
 
@@ -232,7 +231,8 @@
   async function navigate(deltaWeeks: number) {
     if (!week || navBusy) return;
     const target = addDays(week.weekStart, deltaWeeks * 7);
-    const targetWeeks = Math.round(dayCount(mondayOf(todayIso), target) / 7);
+    // weekStart is Monday-aligned, so the target is exactly `deltaWeeks` from the current offset.
+    const targetWeeks = weeksFromNow + deltaWeeks;
     if (targetWeeks < -NAV_CLAMP_WEEKS || targetWeeks > NAV_CLAMP_WEEKS) return;
     cancelPendingRecipe();
     navBusy = true;
@@ -251,17 +251,13 @@
   async function openRecipe(meal: { uid: string; recipeUid: string | null }) {
     if (meal.recipeUid === null || loadingRecipeUid !== null) return;
     loadingRecipeUid = meal.uid;
-    pendingRecipeUid = meal.recipeUid;
     const res = await callTool(app, "read_recipe", {
       lookup: { uid: meal.recipeUid },
     });
-    // Discard if the user moved away (Back, nav, or day change) while this read was in flight —
-    // cancelPendingRecipe() nulls the token, so it no longer matches the meal we read for.
-    if (pendingRecipeUid !== meal.recipeUid) {
-      return;
-    }
+    // Discard if the user moved away (Back, nav, day change) while this read was in flight — the
+    // token (keyed on the MEAL) no longer matches the meal we read for.
+    if (loadingRecipeUid !== meal.uid) return;
     loadingRecipeUid = null;
-    pendingRecipeUid = null;
     const recipe = parseRecipeDetail(res.structuredContent);
     if (res.isError || recipe === null) {
       showToast("Couldn’t open that recipe — try again.");

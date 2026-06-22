@@ -6,6 +6,7 @@ import type { RecipeApi } from "../../recipe/api.js";
 import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
+import { sortCatalog } from "../../../shared/catalog.js";
 import { MealTypeUidSchema } from "../../meal-type/ids.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MealUidSchema } from "../ids.js";
@@ -190,12 +191,13 @@ export const mealWeekOutputSchema = z.object({
 });
 
 /**
- * Build the ordered meal-type registry for {@link mealWeekOutputSchema}. Sorted by
- * `orderFlag` so the widget's day slots stack Breakfast → Lunch → Dinner → … in the
- * user's configured order without the widget re-sorting.
+ * Build the ordered meal-type registry for {@link mealWeekOutputSchema} via the shared
+ * {@link sortCatalog} (orderFlag, ties broken by name) — the same order `list_meal_types`
+ * uses, so the widget's day slots stack Breakfast → Lunch → Dinner → … consistently with
+ * the rest of the surface, without the widget re-sorting.
  */
 export function mealTypeRegistry(mealType: MealTypeApi): Array<z.infer<typeof mealTypeRefSchema>> {
-  return [...mealType.getAll()].sort((a, b) => a.orderFlag - b.orderFlag).map((mt) => ({ uid: mt.uid, name: mt.name }));
+  return sortCatalog(mealType.getAll()).map((mt) => ({ uid: mt.uid, name: mt.name }));
 }
 
 /**

@@ -74,6 +74,6 @@ export function applyHostStyles(ctx: HostStyleContext | null | undefined): void 
   // clears a stale cap rather than leaving it; WidgetShell reads `var(--widget-max-h, none)`.
   document.documentElement.style.setProperty(
     "--widget-max-h",
-    maxH !== null && maxH > 0 ? `${maxH.toString()}px` : "none",
+    maxH !== null && Number.isFinite(maxH) && maxH > 0 ? `${maxH.toString()}px` : "none",
   );
 }
