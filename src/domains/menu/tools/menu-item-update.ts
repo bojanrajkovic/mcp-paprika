@@ -9,7 +9,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
-import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema } from "../ids.js";
 import { menuReadOutputSchema, menuToStructured } from "../menu-helpers.js";
@@ -28,8 +28,8 @@ export const updateMenuItemInputSchema = z
 
 /**
  * `update_menu_item` — edit a menu item. Re-resolves the recipe display name via
- * `ctx.deps.recipe.get` and the meal type via `resolveOrCreateMealType` (an unknown
- * `{name}` auto-creates a custom type).
+ * `ctx.deps.recipe.get` and the meal type via `ctx.deps["meal-type"].resolveOrCreate`
+ * (an unknown `{name}` auto-creates a custom type).
  */
 export const updateMenuItemTool = defineTool(
   {
@@ -79,7 +79,7 @@ export const updateMenuItemTool = defineTool(
       // known-good avoids leaving an orphan type behind on a rejected call.
       let newTypeUid: MealTypeUid | undefined;
       if (args.type !== undefined) {
-        const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+        const result = await ctx.deps["meal-type"].resolveOrCreate(args.type);
         if (!result.ok) {
           return errorResult(result.message);
         }

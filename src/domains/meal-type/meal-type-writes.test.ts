@@ -120,4 +120,57 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
     expect(state.store.resolveByName("Brunch")?.uid).toBe(created.uid);
     expect(state.store.isPendingUpsert(created.uid)).toBe(false); // cleared
   });
+
+  describe("resolveOrCreate (contract method)", () => {
+    it("returns the resolved type on a name hit, without a POST", async () => {
+      state.store.load(builtins());
+      const result = await api.resolveOrCreate({ name: "Dinner" });
+      expect(result).toEqual({ ok: true, resolved: expect.objectContaining({ uid: "dinner-uid" }) });
+      expect(saveMealType).not.toHaveBeenCalled();
+    });
+
+    it("auto-creates a custom type for an unknown name (delegating to ensureMealType)", async () => {
+      state.store.load(builtins());
+      const result = await api.resolveOrCreate({ name: "Brunch" });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.resolved.name).toBe("Brunch");
+        expect(result.resolved.originalType).toBeNull();
+      }
+      expect(saveMealType).toHaveBeenCalledOnce();
+      expect(state.store.resolveByName("Brunch")?.uid).toBe(result.ok ? result.resolved.uid : "");
+    });
+
+    it("returns a ready-to-surface message for an unknown uid (no create)", async () => {
+      state.store.load(builtins());
+      const result = await api.resolveOrCreate({ uid: "missing-uid" as MealTypeUid });
+      expect(result).toEqual({ ok: false, message: expect.stringContaining("missing-uid") });
+      expect(saveMealType).not.toHaveBeenCalled();
+    });
+
+    it("returns a ready-to-surface message for an unknown builtin index (no create)", async () => {
+      state.store.load(builtins());
+      const result = await api.resolveOrCreate({ builtin: 3 });
+      expect(result).toEqual({ ok: false, message: expect.stringContaining("index 3") });
+      expect(saveMealType).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("formatResolveError (contract method)", () => {
+    it("renders the unknown-name message with the known types and discriminator hint", () => {
+      const message = api.formatResolveError({
+        ok: false,
+        reason: "unknown_name",
+        name: "Linner",
+        knownNames: ["Breakfast", "Dinner"],
+      });
+      expect(message).toContain('Unknown meal type "Linner"');
+      expect(message).toContain("Breakfast, Dinner");
+    });
+
+    it("renders the unknown-uid and unknown-builtin messages", () => {
+      expect(api.formatResolveError({ ok: false, reason: "unknown_uid", uid: "X" })).toContain('UID "X"');
+      expect(api.formatResolveError({ ok: false, reason: "unknown_builtin", index: 9 })).toContain("index 9");
+    });
+  });
 });

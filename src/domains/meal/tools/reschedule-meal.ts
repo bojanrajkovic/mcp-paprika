@@ -8,7 +8,7 @@ import type { Meal } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
-import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
 import {
@@ -40,7 +40,7 @@ export const rescheduleMealInputSchema = z
 
 /**
  * `reschedule_meal` — move a scheduled meal to a new date. Resolves the optional type
- * co-change via `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
+ * co-change via `ctx.deps["meal-type"].resolveOrCreate` (an unknown `{name}` auto-creates a custom type).
  */
 export const rescheduleMealTool = defineTool(
   {
@@ -96,7 +96,7 @@ export const rescheduleMealTool = defineTool(
       let typeInteger: number | undefined;
       let typeUid: MealTypeUid | null | undefined;
       if (args.type !== undefined) {
-        const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+        const result = await ctx.deps["meal-type"].resolveOrCreate(args.type);
         if (!result.ok) {
           return errorResult(result.message);
         }

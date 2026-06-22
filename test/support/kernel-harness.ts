@@ -206,6 +206,8 @@ export interface KernelHarness<State = unknown, Writes = unknown> {
   readonly state: () => State;
   /** Any built module's `state`, keyed by id (root + transitive deps); cast at the call site (cross-module). */
   readonly stateOf: (id: string) => unknown;
+  /** Any built module's public `api` contract, keyed by id (root + transitive deps); cast at the call site. */
+  readonly apiOf: (id: string) => unknown;
   /** The root module's write chokepoints (`ctx.writes`), typed via the `Writes` generic. */
   readonly writes: () => Writes;
   readonly infra: () => Infra;
@@ -286,6 +288,7 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
     },
     state: () => live().rootState as State,
     stateOf: (id) => live().built.get(id)?.state,
+    apiOf: (id) => live().built.get(id)?.api,
     writes: () => live().rootWrites as Writes,
     infra: () => live().infra,
     notifier: () => live().notifier,

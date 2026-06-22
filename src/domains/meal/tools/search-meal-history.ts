@@ -9,7 +9,7 @@ import type { MealState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, toolResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
-import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
 import { mealListOutputSchema, mealToStructuredRow, renderMealsGroupedByDate, resolveMealTypeName } from "./helpers.js";
@@ -83,7 +83,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.type !== undefined) {
         const result = ctx.deps["meal-type"].resolveSpec(args.type);
         if (!result.ok) {
-          return errorResult(formatMealTypeResolveError(result));
+          return errorResult(ctx.deps["meal-type"].formatResolveError(result));
         }
         typeUid = result.resolved.uid;
         typeName = result.resolved.name;

@@ -11,7 +11,7 @@ import type { Meal } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, confirmOrCancel, errorResult, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
-import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
@@ -450,7 +450,7 @@ export const updateMealTool = defineTool(
       let typeInteger: number | undefined;
       let typeUid: MealTypeUid | null | undefined;
       if (op.type !== undefined) {
-        const result = await resolveOrCreateMealType(ctx.deps["meal-type"], op.type);
+        const result = await ctx.deps["meal-type"].resolveOrCreate(op.type);
         if (!result.ok) {
           return errorResult(result.message);
         }

@@ -10,7 +10,7 @@ import { confirmGate } from "../../../shared/elicit.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../../pantry/ids.js";
-import { addPantryItemsOutputSchema, pantryItemToRow } from "../../pantry/pantry-helpers.js";
+import { addPantryItemsOutputSchema } from "../../pantry/pantry-helpers.js";
 import { GroceryItemUidSchema } from "../ids.js";
 import { groceryStartGuard, pantrySyncedGuard } from "./guards.js";
 
@@ -96,7 +96,7 @@ export const moveToPantryTool = defineTool(
         async (savedPantry) => {
           // The CREATED pantry side rides structuredContent so the model can chain
           // update_pantry_item / mark_pantry_item_out_of_stock on what it just moved.
-          const structured = { items: savedPantry.map((p) => pantryItemToRow(p, ctx.deps.aisle)) };
+          const structured = { items: [...ctx.deps.pantry.itemsToRows(savedPantry)] };
 
           // Step 4: THEN DELETE — soft-delete grocery items
           const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
@@ -143,7 +143,7 @@ export const moveToPantryTool = defineTool(
           return toolResult(
             `Pantry items were created on the server (UIDs: ${pantryUids}) but the local cache commit failed: ${error.message}. ` +
               `Grocery items were NOT deleted. The pantry items will appear after the next sync cycle.`,
-            { items: error.saved.map((p) => pantryItemToRow(p, ctx.deps.aisle)) },
+            { items: [...ctx.deps.pantry.itemsToRows(error.saved)] },
           );
         },
       );

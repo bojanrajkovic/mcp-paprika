@@ -9,7 +9,7 @@ import type { Meal } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
-import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
@@ -39,8 +39,8 @@ export const logCookedMealInputSchema = z
 
 /**
  * `log_cooked_meal` — record a meal just cooked. Resolves the recipe via
- * `ctx.deps.recipe.get` and the meal type via `resolveOrCreateMealType` (an unknown
- * `{name}` auto-creates a custom type).
+ * `ctx.deps.recipe.get` and the meal type via `ctx.deps["meal-type"].resolveOrCreate`
+ * (an unknown `{name}` auto-creates a custom type).
  */
 export const logCookedMealTool = defineTool(
   {
@@ -86,7 +86,7 @@ export const logCookedMealTool = defineTool(
       // is known-good avoids leaving an orphan type behind on a rejected call.
       // Type defaults to Dinner (the common case for a cooked meal).
       const typeSpec: MealTypeSpec = args.type ?? { builtin: 2 };
-      const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
+      const typeResult = await ctx.deps["meal-type"].resolveOrCreate(typeSpec);
       if (!typeResult.ok) {
         return errorResult(typeResult.message);
       }

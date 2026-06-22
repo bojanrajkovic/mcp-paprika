@@ -13,6 +13,7 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
+import { pantryItemToRow } from "./pantry-helpers.js";
 import { PantryStore } from "./store.js";
 import { pantrySync } from "./sync.js";
 import { addPantryItemsTool } from "./tools/batch-add.js";
@@ -70,7 +71,7 @@ register(
       unwrapAtBoot(await hydrateStore(cache, store), "pantry cache hydrate");
       return { store, cache };
     })
-    .build((state, infra) => {
+    .build((state, infra, deps) => {
       // ---- Pantry write chokepoints ----
       // Assembled here (not in `.state`) because they close over `infra.client`,
       // keeping PantryState pure. The commit chokepoints are internal —
@@ -105,6 +106,10 @@ register(
           hasSynced: () => state.store.hasSynced,
           createItems,
           countItemsInAisle: (uid) => state.store.getAll().filter((i) => i.aisleUid === uid).length,
+          // Resolve the aisle display name through pantry's own aisle dep so the
+          // catalog dependency stays private — grocery's move calls this instead of
+          // importing pantryItemToRow and passing ctx.deps.aisle itself.
+          itemsToRows: (items) => items.map((i) => pantryItemToRow(i, deps.aisle)),
         },
         writes: { commitPantryItem, commitPantryItemsBatch },
         tools: [
