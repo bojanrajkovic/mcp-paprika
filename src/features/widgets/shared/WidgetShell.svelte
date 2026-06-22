@@ -45,12 +45,14 @@
     color-scheme: light;
 
     /* Floor (10rem) ensures the body reports a usable height to autoResize's ResizeObserver even
-       when the host starts the iframe small (e.g. from the loading-state measurement). Without it,
-       max-height: 100dvh locks in the small viewport and the host never grows the iframe. Cap
-       (100dvh) keeps long lists scrolling instead of expanding the iframe unboundedly. 100dvh uses
-       the dynamic viewport height, adjusting for mobile browser chrome that 100vh ignores. */
+       when the host starts the iframe small (e.g. from the loading-state measurement). Cap is the
+       host's container height (`--widget-max-h`, set by host-style.ts from `containerDimensions`)
+       so a long widget scrolls inside the card instead of growing the iframe — NOT `100dvh`, which
+       inside the iframe resolves to the CURRENT iframe height and collapses the cap during the
+       host's max-content autoResize measurement, pinning the widget at the floor. No host
+       dimensions → no cap (`none`): the widget grows to content and the host page scrolls. */
     min-height: 10rem;
-    max-height: 100dvh;
+    max-height: var(--widget-max-h, none);
     display: flex;
     flex-direction: column;
     position: relative;

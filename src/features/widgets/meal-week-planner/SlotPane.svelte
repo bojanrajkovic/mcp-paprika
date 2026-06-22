@@ -81,13 +81,14 @@
 </div>
 
 <style>
-  /* Content-sized, not an internal scroll region: the slot pane overflows WidgetShell's
-     `max-height: 100dvh` cap visibly so the host's max-content autoResize measures the widget's
-     true height and grows the iframe. `flex: 1; overflow-y: auto` here pins the iframe at the
-     min-height floor (the cap defeats the measurement). The day's slots are bounded, so no
-     internal scroll is needed — a very tall day grows the iframe and the host page scrolls. */
+  /* The scroll region: fills the space below the chrome and scrolls only when `main` hits the
+     host-height cap (WidgetShell's `--widget-max-h`). Below the cap, `main` sizes to content and
+     this never activates. (The cap must be the host's container height, not `100dvh` — see the
+     WidgetShell note; an iframe-relative cap pins the widget at its min-height floor.) */
   .day-detail {
-    flex: none;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     padding: 16px 0;
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }

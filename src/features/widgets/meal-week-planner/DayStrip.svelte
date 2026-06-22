@@ -83,8 +83,8 @@
 </div>
 
 <style>
-  /* flex: none — see the SlotPane/App note: these rows size to content and overflow the shell's
-     viewport cap visibly so the host's max-content autoResize measures the true height. */
+  /* flex: none — fixed chrome (see App): the day strip never shrinks, so SlotPane's scroll region
+     absorbs the overflow at the host-height cap. */
   .week-nav {
     flex: none;
     display: flex;

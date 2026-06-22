@@ -389,10 +389,8 @@
 </WidgetShell>
 
 <style>
-  /* The week-mode rows (header, DayStrip, SlotPane) size to content and never shrink: the host's
-     autoResize measures the document at `max-content`, so the widget must overflow WidgetShell's
-     `max-height: 100dvh` cap VISIBLY rather than scroll inside it — an internal scroll would report
-     only the capped height and pin the iframe at the min-height floor. */
+  /* Header + DayStrip are fixed chrome (flex: none) so only SlotPane's scroll region absorbs the
+     overflow when a day is taller than WidgetShell's host-height cap. */
   header {
     flex: none;
     display: flex;

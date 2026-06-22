@@ -25,6 +25,11 @@ interface HostStyleContext {
       }
     | undefined;
   readonly userAgent?: string | undefined;
+  // The host's allocation for the widget's iframe, in px — `WidgetShell` caps `main` at this so a
+  // long widget scrolls inside the card instead of growing the iframe. Untrusted; read defensively.
+  readonly containerDimensions?:
+    | { readonly height?: number | undefined; readonly maxHeight?: number | undefined }
+    | undefined;
 }
 
 // Hosts whose reading UI is serif-first — the NYT-Cooking editorial register this widget is tuned to.
@@ -57,4 +62,18 @@ export function applyHostStyles(ctx: HostStyleContext | null | undefined): void 
   if (fonts) ext?.applyHostFonts?.(fonts);
   const serif = SERIF_HOSTS.test(ctx?.userAgent ?? "");
   document.documentElement.style.setProperty("--widget-font", serif ? SERIF_STACK : SANS_STACK);
+
+  // Cap `WidgetShell`'s `main` at the host's container height (a STABLE px value), so long content
+  // scrolls inside the card. NOT `100dvh` — inside the iframe that resolves to the current iframe
+  // height, which collapses the cap during the host's max-content autoResize measurement and pins
+  // the widget at its min-height floor. When the host sends no dimensions, `--widget-max-h` stays
+  // unset and `WidgetShell` falls back to no cap (the widget grows; the host page scrolls).
+  const cd = ctx?.containerDimensions;
+  const maxH = typeof cd?.maxHeight === "number" ? cd.maxHeight : typeof cd?.height === "number" ? cd.height : null;
+  // Always set it (to `none` when absent) so a host that drops dimensions on a later context change
+  // clears a stale cap rather than leaving it; WidgetShell reads `var(--widget-max-h, none)`.
+  document.documentElement.style.setProperty(
+    "--widget-max-h",
+    maxH !== null && maxH > 0 ? `${maxH.toString()}px` : "none",
+  );
 }
