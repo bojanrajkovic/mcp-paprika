@@ -276,7 +276,7 @@ describe("add_grocery_items tool", () => {
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 
-  it("in-batch aisle inference: later item without aisle inherits from earlier item with explicit aisle", async () => {
+  it("in-batch duplicate: second occurrence of the same ingredient is skipped, first is saved with its explicit aisle", async () => {
     vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     vi.mocked(kh.client().saveGroceryIngredient).mockImplementation((ing) => okAsync(ing));
     vi.mocked(kh.client().saveAisle).mockImplementation((a) => okAsync(a));
@@ -287,18 +287,20 @@ describe("add_grocery_items tool", () => {
       groceryIngredients: [],
     });
 
-    await kh.callTool("add_grocery_items", {
+    const result = await kh.callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [{ ingredient: "Milk", aisle: "Produce" }, { ingredient: "Milk" }],
     });
+    const text = getText(result);
 
+    // Only the first "Milk" should be saved; the second is an intra-batch duplicate.
     const savedItems = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]?.[0] as ReadonlyArray<{
       ingredient: string;
       aisle: string;
     }>;
-    expect(savedItems).toHaveLength(2);
+    expect(savedItems).toHaveLength(1);
     expect(savedItems[0]?.aisle).toBe("Produce");
-    expect(savedItems[1]?.aisle).toBe("Produce");
+    expect(text).toContain("duplicates");
   });
 
   it("duplicate ingredient with explicit aisle calls saveGroceryIngredient only once per ingredient", async () => {
@@ -327,7 +329,7 @@ describe("add_grocery_items tool", () => {
     expect(ingredientCalls).toHaveLength(1);
   });
 
-  it("cross-invocation: explicit aisle in first call is auto-resolved in second call via updated store", async () => {
+  it("cross-invocation: re-adding an ingredient already on the list is skipped with UID hint", async () => {
     vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     vi.mocked(kh.client().saveGroceryIngredient).mockImplementation((ing) => okAsync(ing));
     vi.mocked(kh.client().saveAisle).mockImplementation((a) => okAsync(a));
@@ -345,16 +347,16 @@ describe("add_grocery_items tool", () => {
 
     vi.mocked(kh.client().saveGroceryItems).mockClear();
 
-    await kh.callTool("add_grocery_items", {
+    // "Tofu" is now on the list unpurchased — a second add should be skipped.
+    const result = await kh.callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [{ ingredient: "Tofu" }],
     });
+    const text = getText(result);
 
-    const secondCallItems = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]?.[0] as ReadonlyArray<{
-      aisle: string;
-    }>;
-    expect(secondCallItems).toHaveLength(1);
-    expect(secondCallItems[0]?.aisle).toBe("Deli");
+    expect(text).toContain("All items were duplicates");
+    expect(text).toContain("update_grocery_item");
+    expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 
   it("assigns the Miscellaneous aisle when no aisle is specified and there is no catalog match", async () => {
@@ -403,6 +405,115 @@ describe("add_grocery_items tool", () => {
     }>;
     expect(posted[0]?.aisle).toBe("");
     expect(posted[0]?.aisleUid).toBe("");
+  });
+
+  it("skips an ingredient already on the list unpurchased and reports it with UID + hint", async () => {
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
+    const existing = makeGroceryItem({
+      uid: "ITEM-DUP-1" as GroceryItemUid,
+      ingredient: "Butter",
+      listUid: "LIST-1" as GroceryListUid,
+      purchased: false,
+    });
+    kh.seed({
+      groceryLists: [WEEKLY_LIST],
+      groceryItems: [existing],
+      aisles: [PRODUCE_AISLE],
+      groceryIngredients: [],
+    });
+
+    const result = await kh.callTool("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "butter" }, { ingredient: "Eggs" }],
+    });
+    const text = getText(result);
+
+    expect(text).toContain("Added 1 item(s)");
+    expect(text).toContain("ITEM-DUP-1");
+    expect(text).toContain("update_grocery_item");
+
+    const saved = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]![0] as ReadonlyArray<{ ingredient: string }>;
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.ingredient).toBe("Eggs");
+  });
+
+  it("does not skip an ingredient that is purchased (re-adding is valid)", async () => {
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
+    const bought = makeGroceryItem({
+      uid: "ITEM-BOUGHT" as GroceryItemUid,
+      ingredient: "Butter",
+      listUid: "LIST-1" as GroceryListUid,
+      purchased: true,
+    });
+    kh.seed({
+      groceryLists: [WEEKLY_LIST],
+      groceryItems: [bought],
+      aisles: [PRODUCE_AISLE],
+      groceryIngredients: [],
+    });
+
+    const result = await kh.callTool("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "Butter" }],
+    });
+    const text = getText(result);
+
+    expect(text).toContain("Added 1 item(s)");
+    expect(kh.client().saveGroceryItems).toHaveBeenCalledOnce();
+  });
+
+  it("skips an intra-batch duplicate and reports it", async () => {
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
+    kh.seed({
+      groceryLists: [WEEKLY_LIST],
+      groceryItems: [],
+      aisles: [PRODUCE_AISLE],
+      groceryIngredients: [],
+    });
+
+    const result = await kh.callTool("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [
+        { ingredient: "Milk", quantity: "1 gal" },
+        { ingredient: "Milk", quantity: "2 qt" },
+      ],
+    });
+    const text = getText(result);
+
+    expect(text).toContain("Added 1 item(s)");
+    expect(text).toContain("duplicates");
+
+    const saved = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]![0] as ReadonlyArray<{ ingredient: string }>;
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.ingredient).toBe("Milk");
+  });
+
+  it("returns empty structured payload when all items are duplicates", async () => {
+    const existing = makeGroceryItem({
+      uid: "ITEM-ALL-DUP" as GroceryItemUid,
+      ingredient: "Eggs",
+      listUid: "LIST-1" as GroceryListUid,
+      purchased: false,
+    });
+    kh.seed({
+      groceryLists: [WEEKLY_LIST],
+      groceryItems: [existing],
+      aisles: [PRODUCE_AISLE],
+      groceryIngredients: [],
+    });
+
+    const result = await kh.callTool("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "Eggs" }],
+    });
+    const text = getText(result);
+
+    expect(text).toContain("All items were duplicates");
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { listUid: string; items: unknown[] };
+    expect(structured.listUid).toBe("LIST-1");
+    expect(structured.items).toHaveLength(0);
+    expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 
   it("sync-not-ready blocks add_grocery_items when stores not loaded", async () => {

@@ -113,7 +113,10 @@ describe("add_recipe_to_grocery_list tool", () => {
     });
 
     expect(text).toContain('Added 1 item(s) from "Pad Thai"');
-    expect(text).toContain("Already on the list (skipped): Rice Noodles.");
+    expect(text).toContain("Already on the list (skipped):");
+    expect(text).toContain("Rice Noodles");
+    expect(text).toContain(existing.uid);
+    expect(text).toContain("update_grocery_item");
     const saved = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]![0] as ReadonlyArray<GroceryItem>;
     expect(saved).toHaveLength(1);
     expect(saved[0]!.ingredient).toBe("Tamarind paste");

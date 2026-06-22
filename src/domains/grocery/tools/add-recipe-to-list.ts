@@ -50,7 +50,7 @@ export const addRecipeToGroceryListTool = defineTool(
     description:
       "Add a recipe's ingredients to a grocery list as linked grocery items. Parse the recipe's ingredient " +
       "lines into the `items` array (one entry per ingredient, quantity separated out). Ingredients already " +
-      "on the list unpurchased are skipped and reported. Omit `listUid` to use the default grocery list.",
+      "on the list unpurchased are skipped and reported with their UID and a hint to use update_grocery_item to merge quantities. Omit `listUid` to use the default grocery list.",
     inputSchema: {
       recipe: recipeLookupSchema.describe("The recipe to link: exact UID or title lookup"),
       listUid: GroceryListUidSchema.optional().describe(
@@ -105,21 +105,28 @@ export const addRecipeToGroceryListTool = defineTool(
       }
       const listUid = list.uid;
 
-      // Skip ingredients already on the list unpurchased (case-insensitive).
-      // One partition pass so the membership test lives in exactly one place.
-      const onList = new Set(
+      // Skip ingredients already on the list unpurchased (case-insensitive); report each
+      // with its UID so the model can call update_grocery_item to merge quantities.
+      const onList = new Map(
         ctx.state.items.store
           .getByListUid(listUid)
           .filter((i) => !i.purchased)
-          .map((i) => i.ingredient.toLowerCase()),
+          .map((i) => [i.ingredient.toLowerCase(), i.uid] as const),
       );
       const toAdd: Array<(typeof args.items)[number]> = [];
-      const skipped: Array<(typeof args.items)[number]> = [];
+      const skipMessages: Array<string> = [];
       for (const item of args.items) {
-        (onList.has(item.ingredient.toLowerCase()) ? skipped : toAdd).push(item);
+        const existingUid = onList.get(item.ingredient.toLowerCase());
+        if (existingUid !== undefined) {
+          skipMessages.push(`"${item.ingredient}" (UID: ${existingUid}) — use update_grocery_item to merge quantities`);
+        } else {
+          toAdd.push(item);
+        }
       }
       const skippedNote =
-        skipped.length > 0 ? `\n\nAlready on the list (skipped): ${skipped.map((i) => i.ingredient).join(", ")}.` : "";
+        skipMessages.length > 0
+          ? `\n\nAlready on the list (skipped):\n${skipMessages.map((m) => `- ${m}`).join("\n")}`
+          : "";
       if (toAdd.length === 0) {
         // Empty-but-valid success: nothing was created, so the structured payload
         // is the target list with an empty item array (NOT an error — the input
