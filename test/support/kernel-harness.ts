@@ -240,7 +240,13 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
 
       const order = closure(rootId);
       const built = new Map<string, Built>();
-      for (const m of order) built.set(m.id, await m.build(infra));
+      // `closure` is dependency-ordered, so every dep is already built when m builds —
+      // thread its declared deps' contracts into `.build` exactly as the kernel does.
+      for (const m of order) {
+        const buildDeps: Record<string, unknown> = {};
+        for (const depId of m.dependsOn) buildDeps[depId] = built.get(depId)!.api;
+        built.set(m.id, await m.build(infra, buildDeps));
+      }
 
       const rootModule = order[order.length - 1]!;
       const root = built.get(rootId)!;

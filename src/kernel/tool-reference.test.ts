@@ -28,7 +28,7 @@ describe("tool reference (docs/tools/README.md)", () => {
     const infra = makeKernelInfra({ cacheDir: tmp.dir() });
     const registered = new Set<string>();
     for (const m of registeredModules()) {
-      const built = await m.build(infra);
+      const built = await m.build(infra, {});
       for (const tool of built.tools) registered.add(tool.spec.name);
     }
     // What the generator documents: the globbed `defineTool` specs.

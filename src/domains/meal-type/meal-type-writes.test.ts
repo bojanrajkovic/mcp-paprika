@@ -43,7 +43,7 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
     infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listMealTypes, saveMealType, notifySync } });
     const mod = registeredModules().find((m) => m.id === "meal-type");
     if (mod === undefined) throw new Error("meal-type module not registered");
-    const built = await mod.build(infra);
+    const built = await mod.build(infra, {});
     state = built.state as MealTypeState;
     api = built.api as MealTypeApi;
   });

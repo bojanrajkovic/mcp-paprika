@@ -64,7 +64,7 @@ async function runIndexBoot(
   const { log, records } = makePinoCapture();
   const infra: Infra = { ...makeKernelInfra({ cacheDir: "/discover-index-boot-test-unused" }), log };
   const discoverModule = registeredModules().find((m) => m.id === "discover")!;
-  const built = await discoverModule.build(infra);
+  const built = await discoverModule.build(infra, {});
   (built.state as { vectorStore: VectorStore | null }).vectorStore = fromAny(mockVs);
   await built.onReady!.index!({ state: built.state, deps: { recipe: makeRecipeDeps(recipes) }, infra });
   return { infra, records };
@@ -264,7 +264,7 @@ describe("discover module — index boot hook (#177)", () => {
       const { log } = makePinoCapture();
       const infra: Infra = { ...makeKernelInfra({ cacheDir: "/discover-index-boot-test-unused" }), log };
       const discoverModule = registeredModules().find((m) => m.id === "discover")!;
-      const built = await discoverModule.build(infra);
+      const built = await discoverModule.build(infra, {});
 
       // Features off → the .state factory never builds a vectorStore.
       expect((built.state as { vectorStore: VectorStore | null }).vectorStore).toBeNull();
