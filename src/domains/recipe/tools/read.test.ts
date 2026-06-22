@@ -14,8 +14,8 @@ describe("read_recipe tool", () => {
     kh.seed({ recipes: [recipe] });
     const text = await kh.callToolText("read_recipe", { lookup: { uid: recipe.uid } });
     expect(text).toContain("# Chocolate Cake");
-    // The UID is rendered so the caller can act on the recipe without a re-lookup.
-    expect(text).toContain(recipe.uid);
+    // The UID rides structuredContent, not the human text (see the structuredContent test).
+    expect(text).not.toContain(recipe.uid);
   });
 
   it("UID lookup includes category names", async () => {

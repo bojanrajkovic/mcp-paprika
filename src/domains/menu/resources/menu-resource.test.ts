@@ -53,6 +53,8 @@ describe("menu MCP resource", () => {
       expect(text).toContain("**UID:** `m-read`");
       expect(text).toContain("**URI:** `paprika://menu/m-read`");
       expect(text).toContain("# Weekly");
+      // The body formatter no longer renders a UID line, so the header is the only one.
+      expect(text.match(/\*\*UID:\*\*/g)).toHaveLength(1);
     });
 
     it("includes Last synced when the menu store has been synced", async () => {

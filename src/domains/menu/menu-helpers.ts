@@ -96,11 +96,9 @@ export function menuToStructured(
  * `orderFlag` (an unknown `typeUid` sorts last), then by item `orderFlag`.
  *
  * Each item line shows the resolved meal-type name and the recipe display name
- * (already denormalized on `item.name`). The per-item menuitem/recipe UIDs travel on
- * the structured channel ({@link menuToStructured}, ADR-0019 R1) — the human lines stay
- * clean. The `includeItemUids` per-renderer flag was retired in B1 (#321, #353); the
- * top-level menu `**UID:**` line is kept as a text fallback pending the reliable-channel
- * decision (#367/#368).
+ * (already denormalized on `item.name`). The menu UID and the per-item
+ * menuitem/recipe UIDs travel on the structured channel ({@link menuToStructured})
+ * and the resource header — the human lines carry no identifiers.
  *
  * Pure — takes the `mealTypes` catalog array for `typeUid`→name/order resolution.
  * Both callers pass `ctx.deps["meal-type"].getAll()`.
@@ -124,7 +122,6 @@ export function menuToMarkdown(
   const lines: Array<string> = [];
   lines.push(`# ${menu.name}`);
   lines.push("");
-  lines.push(`**UID:** \`${menu.uid}\``);
   lines.push(`**Days:** ${menu.days.toString()}`);
   if (menu.notes !== "") {
     lines.push(`**Notes:** ${menu.notes}`);

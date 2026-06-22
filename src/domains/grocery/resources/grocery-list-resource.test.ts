@@ -59,6 +59,8 @@ describe("grocery-list MCP resource", () => {
       expect(text).toMatch(/^\*\*UID:\*\*\s`gl-read-1`/);
       expect(text).toContain("**URI:** `paprika://grocery-list/gl-read-1`");
       expect(text).toContain("Weekly");
+      // The body formatter no longer renders a UID line, so the header is the only one.
+      expect(text.match(/\*\*UID:\*\*/g)).toHaveLength(1);
     });
 
     it("includes Last synced when the store has been synced", async () => {

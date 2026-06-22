@@ -25,8 +25,8 @@ describe("create_recipe tool", () => {
     expect(text).toContain("# Soup");
     expect(text).toContain("## Ingredients");
     expect(text).toContain("## Directions");
-    // The new recipe's UID is surfaced so the caller can chain upload_recipe_photo / update_recipe.
-    expect(text).toContain(savedRecipe.uid);
+    // The new recipe's UID rides structuredContent, not the human text (see the structuredContent test).
+    expect(text).not.toContain(savedRecipe.uid);
   });
 
   it("mints an uppercase canonical UUID (Paprika's native format)", async () => {

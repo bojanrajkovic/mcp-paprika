@@ -16,7 +16,8 @@ describe("read_pantry_item tool", () => {
     const text = await kh.callToolText("read_pantry_item", { lookup: { uid: item.uid } });
 
     expect(text).toContain(`# ${item.ingredient}`);
-    expect(text).toContain(item.uid);
+    // The UID rides structuredContent, not the human text (see the structuredContent test).
+    expect(text).not.toContain(item.uid);
   });
 
   it("single fuzzy match by ingredient name returns item details", async () => {
