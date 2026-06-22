@@ -44,13 +44,15 @@
     --danger-bg: oklch(0.955 0.042 27);
     color-scheme: light;
 
-    /* Cap at the viewport so long lists scroll; don't force a height so short lists size to content
-       rather than leaving a blank gap below the footer (100dvh is the iframe viewport, adjusting for
-       mobile browser chrome that 100vh ignores). */
+    /* Floor (10rem) ensures the body reports a usable height to autoResize's ResizeObserver even
+       when the host starts the iframe small (e.g. from the loading-state measurement). Without it,
+       max-height: 100dvh locks in the small viewport and the host never grows the iframe. Cap
+       (100dvh) keeps long lists scrolling instead of expanding the iframe unboundedly. 100dvh uses
+       the dynamic viewport height, adjusting for mobile browser chrome that 100vh ignores. */
+    min-height: 10rem;
     max-height: 100dvh;
     display: flex;
     flex-direction: column;
-    min-height: 0;
     position: relative;
     background: var(--bg);
     color: var(--ink);
