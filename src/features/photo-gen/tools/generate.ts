@@ -5,8 +5,8 @@ import type { ReferenceImage } from "../../photography.js";
 import type { PhotoGenState } from "../module.js";
 
 import { PhotoUidSchema, RecipeUidSchema } from "../../../domains/recipe/ids.js";
-import { makeThumbnail } from "../../../domains/recipe/photo-helpers.js";
 import { defineTool } from "../../../kernel/tool.js";
+import { makeThumbnail } from "../../../shared/image.js";
 import { fetchImageBytes } from "../../../shared/photo-fetch.js";
 import { errorResult, imageResult, toolResult } from "../../../shared/tools.js";
 import { CircuitOpenError } from "../../../utils/errors.js";

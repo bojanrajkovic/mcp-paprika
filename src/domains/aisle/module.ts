@@ -160,6 +160,10 @@ register(
           ensureAisle,
           resolveByName: (name) => state.store.resolveByName(name),
           get: (uid) => state.store.get(uid),
+          // Resolve an item's display aisle against this catalog (live name first, the
+          // item's denormalized copy as the dangling/no-aisle fallback). The one
+          // render-resolution point grocery/pantry renderers call via ctx.deps.aisle.
+          displayName: (item) => state.store.get(item.aisleUid)?.name ?? item.aisle,
           deleteAisle,
         },
         writes: {

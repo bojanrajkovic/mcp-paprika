@@ -2,6 +2,7 @@ import type { ResultAsync } from "neverthrow";
 
 import type { HasSynced } from "../../kernel/registry.js";
 import type { AisleUid } from "../aisle/ids.js";
+import type { PantryItemRow } from "./pantry-helpers.js";
 import type { PantryItem } from "./types.js";
 
 /**
@@ -12,7 +13,10 @@ import type { PantryItem } from "./types.js";
  *   - `createItems` — the write `move_grocery_items_to_pantry` needs, distinguishing
  *     API-create failure from local-commit failure so grocery can keep its
  *     create-first/delete-second ordering and partial-failure messaging;
- *   - `countItemsInAisle` — the reference count `delete_aisle`'s guard blocks on.
+ *   - `countItemsInAisle` — the reference count `delete_aisle`'s guard blocks on;
+ *   - `toRows` — projects pantry items into their list-row payloads, resolving the
+ *     aisle display name through pantry's own aisle dep, so grocery's move builds its
+ *     structured response without reaching pantry's internal row helper.
  */
 export interface PantryApi extends HasSynced {
   /**
@@ -30,6 +34,13 @@ export interface PantryApi extends HasSynced {
   createItems(items: ReadonlyArray<PantryItem>): ResultAsync<ReadonlyArray<PantryItem>, PantryCreateError>;
   /** How many pantry items reference an aisle — `delete_aisle`'s guard blocks while > 0. */
   countItemsInAisle(uid: AisleUid): number;
+  /**
+   * Project pantry items into their list-row payloads, resolving each item's aisle
+   * display name through the live aisle catalog (pantry's own declared dep). Grocery's
+   * `move_grocery_items_to_pantry` uses it to build the structured response for the
+   * items it just created, so the aisle dependency stays private to pantry.
+   */
+  toRows(items: ReadonlyArray<PantryItem>): ReadonlyArray<PantryItemRow>;
 }
 
 /** The phase that failed inside `createItems`, with the underlying error message. */

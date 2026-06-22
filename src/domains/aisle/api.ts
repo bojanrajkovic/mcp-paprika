@@ -27,6 +27,14 @@ export interface AisleApi {
   /** UID lookup; `undefined` for an unknown or dangling UID. */
   get(uid: AisleUid): Aisle | undefined;
   /**
+   * An item's display aisle: the LIVE catalog name first (resolved through this
+   * catalog by `aisleUid`), the item's denormalized `aisle` copy as the
+   * dangling/no-aisle fallback. Items denormalize the aisle name at write time, so
+   * after a rename only the catalog is current — every grocery/pantry renderer
+   * resolves through here rather than trusting the copy.
+   */
+  displayName(item: { readonly aisleUid: AisleUid; readonly aisle: string }): string;
+  /**
    * Tombstone-delete an aisle (POST `deleted: true`, then the local delete
    * commit). Errs with a ready-to-surface message on an unsynced catalog, an
    * unknown UID, or a failed save; a failed LOCAL commit after a successful
@@ -36,3 +44,10 @@ export interface AisleApi {
    */
   deleteAisle(uid: AisleUid): Promise<Result<void, string>>;
 }
+
+/**
+ * The aisle-catalog slice the grocery/pantry renderers read: just `displayName`.
+ * Callers pass `ctx.deps.aisle` (the full contract satisfies it); the helpers
+ * narrow to this so they depend on the resolution method alone, not the whole api.
+ */
+export type AisleDisplaySource = Pick<AisleApi, "displayName">;

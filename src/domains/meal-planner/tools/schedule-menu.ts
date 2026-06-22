@@ -11,7 +11,7 @@ import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
 import { MealUidSchema } from "../../meal/ids.js";
-import { mealListOutputSchema, mealToStructuredRow, resolveMealTypeName } from "../../meal/tools/helpers.js";
+import { mealListOutputSchema } from "../../meal/tools/helpers.js";
 import { MenuUidSchema } from "../../menu/ids.js";
 import { scheduleMenuStartGuard } from "./guards.js";
 
@@ -234,19 +234,18 @@ export const scheduleMenuTool = defineTool(
         deleted: false,
       }));
 
-      // The new meal UIDs ride structuredContent — schedule_menu's text omits them
-      // entirely (it scales to a 21-meal week), so without this the model could not
-      // chain reschedule_meal / update_meal / delete_meal on what it just created.
-      const typeName = resolveMealTypeName(ctx.deps["meal-type"]);
-
       // The meal contract internalizes the live `client.saveMeals` + `commitMealsBatch`
       // sequence and returns a Result; a write failure carries the same toMessage-style
       // text the live tool rendered. The coordinator never touches the meal store/cache.
       const result = await ctx.deps.meal.createMeals(builtItems);
       return result.match(
+        // The new meal UIDs ride structuredContent — schedule_menu's text omits them
+        // entirely (it scales to a 21-meal week), so without this the model could not
+        // chain reschedule_meal / update_meal / delete_meal on what it just created. The
+        // rows are built through the meal contract so the meal-type catalog stays meal's.
         (savedMeals) =>
           toolResult(renderPlannerAdds(menu.name, startDay, materialized), {
-            items: savedMeals.map((m) => mealToStructuredRow(m, typeName(m))),
+            items: [...ctx.deps.meal.toRows(savedMeals)],
           }),
         (message) => {
           log.error({ uid: menu.uid, count: builtItems.length }, "saveMeals failed");

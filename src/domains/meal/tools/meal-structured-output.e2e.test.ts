@@ -4,7 +4,7 @@
  * Uses {@link callStructuredProbe} to register each production schema on a real server
  * and validate a representative payload over the in-memory transport — coverage the
  * `makeTestServer` unit path can't reach (it discards the config and never runs
- * `validateToolOutput`). The payloads (built by the real `mealToStructuredRow` producer)
+ * `validateToolOutput`). The payloads (built by the real `mealToRow` producer)
  * exercise branded UIDs, nullable branded FKs, a nullable label, the nested `recent[]`,
  * and the `.extend()` / `.pick()` compositions.
  */
@@ -14,23 +14,23 @@ import type { MealUid } from "../ids.js";
 
 import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { callStructuredProbe } from "../../../../test/support/structured-output-probe.js";
-import { mealListOutputSchema, mealToStructuredRow } from "./helpers.js";
+import { mealListOutputSchema, mealToRow } from "./helpers.js";
 import { readRecipeHistoryOutputSchema } from "./recipe-history.js";
 import { searchMealHistoryOutputSchema } from "./search-meal-history.js";
 
 // Rows that span the schema's nullable axes: a fully-linked meal (recipe + type +
 // scale), a freeform one (recipeUid null), and a legacy one (typeUid + typeName null).
 const rows = [
-  mealToStructuredRow(
+  mealToRow(
     makeMeal({ uid: "m-linked" as MealUid, recipeUid: "recipe-x", typeUid: "dinner-uid", scale: "2" }),
     "Dinner",
   ),
-  mealToStructuredRow(makeMeal({ uid: "m-freeform" as MealUid, recipeUid: null, typeUid: "lunch-uid" }), "Lunch"),
-  mealToStructuredRow(makeMeal({ uid: "m-legacy" as MealUid, typeUid: null }), null),
+  mealToRow(makeMeal({ uid: "m-freeform" as MealUid, recipeUid: null, typeUid: "lunch-uid" }), "Lunch"),
+  mealToRow(makeMeal({ uid: "m-legacy" as MealUid, typeUid: null }), null),
 ];
 
 describe("meal structured output validates through the SDK (R1, #318)", () => {
-  it("mealListOutputSchema accepts the rows mealToStructuredRow produces", async () => {
+  it("mealListOutputSchema accepts the rows mealToRow produces", async () => {
     const result = await callStructuredProbe(mealListOutputSchema, { items: rows });
     expect(result.isError).toBeFalsy();
     expect((result.structuredContent as { items: unknown[] }).items).toHaveLength(3);

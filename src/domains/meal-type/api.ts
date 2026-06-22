@@ -7,12 +7,14 @@ import type { MealType } from "./types.js";
 
 /**
  * Meal-type's public contract — the shared meal-type catalog the meal and menu
- * domains (and the menu resource) resolve against. Read lookups, plus two write
+ * domains (and the menu resource) resolve against. Read lookups, plus the write
  * paths: `ensureMealType` auto-creates a custom type on first reference (mirroring
- * aisle's `ensureAisle`), and `deleteMealType` backs the meal-planner coordinator's
- * `delete_meal_type` tool (the reference counts live with the coordinator, which
- * can see meal and menu; this owns only the catalog write). Explicit edits go
- * through `update_meal_type`, a meal-type-domain tool that needs no contract.
+ * aisle's `ensureAisle`), `resolveOrCreate` is the spec-driven resolve-or-create the
+ * meal/menu single-item write tools call, and `deleteMealType` backs the meal-planner
+ * coordinator's `delete_meal_type` tool (the reference counts live with the
+ * coordinator, which can see meal and menu; this owns only the catalog write).
+ * Explicit edits go through `update_meal_type`, a meal-type-domain tool that needs no
+ * contract.
  *
  * The inherited `hasSynced` is the catalog start-gate the meal/menu write tools
  * check before resolving or auto-creating a type.
@@ -45,6 +47,20 @@ export interface MealTypeApi extends HasSynced {
    * re-create, and the replace-all sync heals the disk copy.
    */
   ensureMealType(name: string): Promise<Result<MealType, string>>;
+  /**
+   * Resolve a `{name} | {uid} | {builtin}` spec for a single-item WRITE tool:
+   * resolve `{uid}`/`{builtin}` as usual, and resolve-or-CREATE for `{name}` — an
+   * unknown name auto-creates a custom type via `ensureMealType`. Returns the resolved
+   * or created `MealType`, or a ready-to-surface error message for an unknown
+   * uid/builtin (or a failed create). Called by the meal/menu single-item write tools
+   * (`update_meal`, `reschedule_meal`, `log_cooked_meal`, `update_menu_item`); batch
+   * tools resolve in a validation pass and create in a build pass instead, so a
+   * rejected batch leaves no orphan type. Read/filter tools use `resolveSpec` and
+   * never create.
+   */
+  resolveOrCreate(
+    spec: MealTypeSpec,
+  ): Promise<{ readonly ok: true; readonly resolved: MealType } | { readonly ok: false; readonly message: string }>;
   /**
    * Tombstone-delete a meal type (POST `deleted: true`, then the local delete
    * commit). Errs with a ready-to-surface message on an unsynced catalog, an

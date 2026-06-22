@@ -206,6 +206,8 @@ export interface KernelHarness<State = unknown, Writes = unknown> {
   readonly state: () => State;
   /** Any built module's `state`, keyed by id (root + transitive deps); cast at the call site (cross-module). */
   readonly stateOf: (id: string) => unknown;
+  /** Any built module's public `api` contract, keyed by id (root + transitive deps); cast at the call site. */
+  readonly apiOf: (id: string) => unknown;
   /** The root module's write chokepoints (`ctx.writes`), typed via the `Writes` generic. */
   readonly writes: () => Writes;
   readonly infra: () => Infra;
@@ -240,7 +242,13 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
 
       const order = closure(rootId);
       const built = new Map<string, Built>();
-      for (const m of order) built.set(m.id, await m.build(infra));
+      // `closure` is dependency-ordered, so every dep is already built when m builds —
+      // thread its declared deps' contracts into `.build` exactly as the kernel does.
+      for (const m of order) {
+        const buildDeps: Record<string, unknown> = {};
+        for (const depId of m.dependsOn) buildDeps[depId] = built.get(depId)!.api;
+        built.set(m.id, await m.build(infra, buildDeps));
+      }
 
       const rootModule = order[order.length - 1]!;
       const root = built.get(rootId)!;
@@ -280,6 +288,7 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
     },
     state: () => live().rootState as State,
     stateOf: (id) => live().built.get(id)?.state,
+    apiOf: (id) => live().built.get(id)?.api,
     writes: () => live().rootWrites as Writes,
     infra: () => live().infra,
     notifier: () => live().notifier,

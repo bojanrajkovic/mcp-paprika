@@ -16,6 +16,7 @@ import { makeCatalogDelete } from "../../shared/catalog.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { MealTypeUidSchema } from "./ids.js";
+import { resolveOrCreateMealType } from "./meal-type-helpers.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";
@@ -164,56 +165,63 @@ register(
       const deleteMealType: MealTypeApi["deleteMealType"] = (uid) =>
         catalogWriteMutex.runExclusive(() => deleteMealTypeInner(uid));
 
-      return {
-        api: {
-          // Build the uid→name map from the catalog and resolve in order, skipping
-          // unknown/dangling UIDs (the same projection the meal/menu renderers build
-          // inline today). `MealTypeStore` has no `resolveNames` of its own.
-          resolveNames: (uids) => {
-            const nameByUid = new Map<string, string>();
-            for (const mt of state.store.getAll()) nameByUid.set(mt.uid, mt.name);
-            const names: Array<string> = [];
-            for (const uid of uids) {
-              const name = nameByUid.get(uid);
-              if (name !== undefined) names.push(name);
-            }
-            return names;
-          },
-          // Resolves a `{name}|{uid}|{builtin}` spec against this module's own
-          // store, returning a structured `MealTypeResolveResult`.
-          resolveSpec: (spec) => {
-            if ("uid" in spec) {
-              const resolved = state.store.getAll().find((mt) => mt.uid === spec.uid);
-              if (resolved === undefined) {
-                return { ok: false, reason: "unknown_uid", uid: spec.uid };
-              }
-              return { ok: true, resolved };
-            }
-            if ("name" in spec) {
-              const resolved = state.store.resolveByName(spec.name);
-              if (resolved === undefined) {
-                return {
-                  ok: false,
-                  reason: "unknown_name",
-                  name: spec.name,
-                  knownNames: state.store.getAll().map((mt) => mt.name),
-                };
-              }
-              return { ok: true, resolved };
-            }
-            const builtinInt = spec.builtin;
-            const resolved = state.store.getAll().find((mt) => mt.originalType === builtinInt);
+      // Assembled as a named const so `resolveOrCreate` can reuse the existing free
+      // helper against this same contract (it resolves via `resolveSpec` and falls
+      // back to `ensureMealType` for an unknown name) — a self-reference, not a
+      // cross-domain reach.
+      const api: MealTypeApi = {
+        // Build the uid→name map from the catalog and resolve in order, skipping
+        // unknown/dangling UIDs (the same projection the meal/menu renderers build
+        // inline today). `MealTypeStore` has no `resolveNames` of its own.
+        resolveNames: (uids) => {
+          const nameByUid = new Map<string, string>();
+          for (const mt of state.store.getAll()) nameByUid.set(mt.uid, mt.name);
+          const names: Array<string> = [];
+          for (const uid of uids) {
+            const name = nameByUid.get(uid);
+            if (name !== undefined) names.push(name);
+          }
+          return names;
+        },
+        // Resolves a `{name}|{uid}|{builtin}` spec against this module's own
+        // store, returning a structured `MealTypeResolveResult`.
+        resolveSpec: (spec) => {
+          if ("uid" in spec) {
+            const resolved = state.store.getAll().find((mt) => mt.uid === spec.uid);
             if (resolved === undefined) {
-              return { ok: false, reason: "unknown_builtin", index: builtinInt };
+              return { ok: false, reason: "unknown_uid", uid: spec.uid };
             }
             return { ok: true, resolved };
-          },
-          getAll: () => state.store.getAll(),
-          get: (uid) => state.store.get(uid),
-          hasSynced: () => state.store.hasSynced,
-          ensureMealType,
-          deleteMealType,
+          }
+          if ("name" in spec) {
+            const resolved = state.store.resolveByName(spec.name);
+            if (resolved === undefined) {
+              return {
+                ok: false,
+                reason: "unknown_name",
+                name: spec.name,
+                knownNames: state.store.getAll().map((mt) => mt.name),
+              };
+            }
+            return { ok: true, resolved };
+          }
+          const builtinInt = spec.builtin;
+          const resolved = state.store.getAll().find((mt) => mt.originalType === builtinInt);
+          if (resolved === undefined) {
+            return { ok: false, reason: "unknown_builtin", index: builtinInt };
+          }
+          return { ok: true, resolved };
         },
+        getAll: () => state.store.getAll(),
+        get: (uid) => state.store.get(uid),
+        hasSynced: () => state.store.hasSynced,
+        ensureMealType,
+        resolveOrCreate: (spec) => resolveOrCreateMealType(api, spec),
+        deleteMealType,
+      };
+
+      return {
+        api,
         writes: {
           commitMealTypes,
           withCatalogWriteLock: <T>(body: () => Promise<T>): Promise<T> => catalogWriteMutex.runExclusive(body),

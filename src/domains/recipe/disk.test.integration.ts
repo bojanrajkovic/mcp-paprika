@@ -30,7 +30,7 @@ async function coldStartRecipeTools(
   const infra = makeKernelInfra({ cacheDir });
   const recipeModule = registeredModules().find((m) => m.id === "recipe");
   if (recipeModule === undefined) throw new Error("recipe module not registered");
-  const built = await recipeModule.build(infra);
+  const built = await recipeModule.build(infra, {});
   const { server, callTool } = makeTestServer();
   const ctx = { state: built.state, writes: built.writes ?? {}, deps: {}, infra, server };
   for (const tool of built.tools) tool.register(ctx);

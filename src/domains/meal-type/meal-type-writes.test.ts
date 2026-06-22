@@ -43,7 +43,7 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
     infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listMealTypes, saveMealType, notifySync } });
     const mod = registeredModules().find((m) => m.id === "meal-type");
     if (mod === undefined) throw new Error("meal-type module not registered");
-    const built = await mod.build(infra);
+    const built = await mod.build(infra, {});
     state = built.state as MealTypeState;
     api = built.api as MealTypeApi;
   });
@@ -119,5 +119,40 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
     await mealTypeSync(state).reconcile({ state, deps: {}, infra });
     expect(state.store.resolveByName("Brunch")?.uid).toBe(created.uid);
     expect(state.store.isPendingUpsert(created.uid)).toBe(false); // cleared
+  });
+
+  describe("resolveOrCreate (contract method)", () => {
+    it("returns the resolved type on a name hit, without a POST", async () => {
+      state.store.load(builtins());
+      const result = await api.resolveOrCreate({ name: "Dinner" });
+      expect(result).toEqual({ ok: true, resolved: expect.objectContaining({ uid: "dinner-uid" }) });
+      expect(saveMealType).not.toHaveBeenCalled();
+    });
+
+    it("auto-creates a custom type for an unknown name (delegating to ensureMealType)", async () => {
+      state.store.load(builtins());
+      const result = await api.resolveOrCreate({ name: "Brunch" });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.resolved.name).toBe("Brunch");
+        expect(result.resolved.originalType).toBeNull();
+      }
+      expect(saveMealType).toHaveBeenCalledOnce();
+      expect(state.store.resolveByName("Brunch")?.uid).toBe(result.ok ? result.resolved.uid : "");
+    });
+
+    it("returns a ready-to-surface message for an unknown uid (no create)", async () => {
+      state.store.load(builtins());
+      const result = await api.resolveOrCreate({ uid: "missing-uid" as MealTypeUid });
+      expect(result).toEqual({ ok: false, message: expect.stringContaining("missing-uid") });
+      expect(saveMealType).not.toHaveBeenCalled();
+    });
+
+    it("returns a ready-to-surface message for an unknown builtin index (no create)", async () => {
+      state.store.load(builtins());
+      const result = await api.resolveOrCreate({ builtin: 3 });
+      expect(result).toEqual({ ok: false, message: expect.stringContaining("index 3") });
+      expect(saveMealType).not.toHaveBeenCalled();
+    });
   });
 });

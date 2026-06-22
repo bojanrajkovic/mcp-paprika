@@ -7,7 +7,7 @@ import type { Menu } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuReadOutputSchema, menuToMarkdown, menuToStructured } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToMarkdown, menuToReadStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -65,7 +65,7 @@ export const createMenuTool = defineTool(
         async (saved) => {
           const created = saved[0] ?? newMenu;
           const mealTypes = ctx.deps["meal-type"].getAll();
-          const structured = menuToStructured(created, [], mealTypes);
+          const structured = menuToReadStructured(created, [], mealTypes);
           const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created), {
             structuredContent: structured,
           });

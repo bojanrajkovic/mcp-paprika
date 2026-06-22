@@ -180,7 +180,7 @@ export function resolveMealTypeName(mealType: MealTypeApi): (meal: Readonly<Meal
 }
 
 /** Map a stored `Meal` plus its already-resolved type name into a {@link MealRow}. */
-export function mealToStructuredRow(meal: Readonly<Meal>, typeName: string | null): MealRow {
+export function mealToRow(meal: Readonly<Meal>, typeName: string | null): MealRow {
   return {
     uid: meal.uid,
     date: meal.date.slice(0, 10),

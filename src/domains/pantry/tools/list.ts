@@ -5,7 +5,6 @@ import type { PantryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { toolResult } from "../../../shared/tools.js";
-import { aisleDisplayName } from "../../aisle/display.js";
 import { pantryItemRowSchema, pantryItemToRow } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -45,7 +44,7 @@ export const listPantryItemsTool = defineTool(
       const header = `You have ${total.toString()} pantry item${total === 1 ? "" : "s"}:\n`;
       const lines = all.map((item) => {
         const qty = item.quantity !== "" ? ` (${item.quantity})` : "";
-        const aisle = aisleDisplayName(ctx.deps.aisle, item);
+        const aisle = ctx.deps.aisle.displayName(item);
         const aisleStr = aisle !== "" ? ` — ${aisle}` : "";
         const status = item.inStock ? "" : " · **out of stock**";
         const expires = item.expirationDate !== null ? ` · expires ${item.expirationDate}` : "";

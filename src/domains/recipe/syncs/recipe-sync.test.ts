@@ -34,7 +34,7 @@ describe("recipe diff-and-fetch reconcile", () => {
     infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listRecipes, getRecipes } });
     const recipeModule = registeredModules().find((m) => m.id === "recipe");
     if (recipeModule === undefined) throw new Error("recipe module not registered");
-    state = (await recipeModule.build(infra)).state as RecipeState;
+    state = (await recipeModule.build(infra, {})).state as RecipeState;
   });
 
   afterEach(async () => {

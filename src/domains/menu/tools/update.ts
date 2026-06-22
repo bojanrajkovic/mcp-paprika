@@ -15,7 +15,7 @@ import {
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuReadOutputSchema, menuToMarkdown, menuToStructured } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToMarkdown, menuToReadStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -123,7 +123,7 @@ export const updateMenuTool = defineTool(
           const persisted = saved[0] ?? merged;
           const items = ctx.state.items.store.getByMenuUid(persisted.uid);
           const mealTypes = ctx.deps["meal-type"].getAll();
-          const structured = menuToStructured(persisted, items, mealTypes);
+          const structured = menuToReadStructured(persisted, items, mealTypes);
           const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted), {
             structuredContent: structured,
           });

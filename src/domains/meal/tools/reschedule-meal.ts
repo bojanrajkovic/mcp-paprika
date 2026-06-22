@@ -8,16 +8,10 @@ import type { Meal } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
-import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
-import {
-  makeMealOrderFlagAssigner,
-  mealRowSchema,
-  mealToStructuredRow,
-  renderMealCard,
-  resolveMealTypeName,
-} from "./helpers.js";
+import { makeMealOrderFlagAssigner, mealRowSchema, mealToRow, renderMealCard, resolveMealTypeName } from "./helpers.js";
 
 // `.strict()`. Rescheduling is its own act because moving a meal's date moves it
 // into the destination day's order_flag sequence (per-date), which a generic
@@ -40,7 +34,7 @@ export const rescheduleMealInputSchema = z
 
 /**
  * `reschedule_meal` — move a scheduled meal to a new date. Resolves the optional type
- * co-change via `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
+ * co-change via `ctx.deps["meal-type"].resolveOrCreate` (an unknown `{name}` auto-creates a custom type).
  */
 export const rescheduleMealTool = defineTool(
   {
@@ -86,7 +80,7 @@ export const rescheduleMealTool = defineTool(
       if (!dateChanged && args.type === undefined) {
         return toolResult(
           renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
-          mealToStructuredRow(existing, typeName(existing)),
+          mealToRow(existing, typeName(existing)),
         );
       }
 
@@ -96,7 +90,7 @@ export const rescheduleMealTool = defineTool(
       let typeInteger: number | undefined;
       let typeUid: MealTypeUid | null | undefined;
       if (args.type !== undefined) {
-        const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+        const result = await ctx.deps["meal-type"].resolveOrCreate(args.type);
         if (!result.ok) {
           return errorResult(result.message);
         }
@@ -131,7 +125,7 @@ export const rescheduleMealTool = defineTool(
       if ("content" in savedItems) return savedItems;
       const saved = savedItems[0]!;
 
-      const structured = mealToStructuredRow(saved, typeName(saved));
+      const structured = mealToRow(saved, typeName(saved));
       const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems), {
         structuredContent: structured,
       });

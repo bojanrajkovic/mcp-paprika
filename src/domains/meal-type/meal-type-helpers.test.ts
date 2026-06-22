@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MealTypeUid } from "./ids.js";
 
-import { mealTypeSpecSchema } from "./meal-type-helpers.js";
+import { formatMealTypeResolveError, mealTypeSpecSchema } from "./meal-type-helpers.js";
 
 describe("mealTypeSpecSchema", () => {
   it("parses {name} variant and trims whitespace", () => {
@@ -39,5 +39,23 @@ describe("mealTypeSpecSchema", () => {
 
   it("rejects unknown shape", () => {
     expect(() => mealTypeSpecSchema.parse({ kind: "builtin", value: 2 })).toThrow();
+  });
+});
+
+describe("formatMealTypeResolveError", () => {
+  it("renders the unknown-name message with the known types and discriminator hint", () => {
+    const message = formatMealTypeResolveError({
+      ok: false,
+      reason: "unknown_name",
+      name: "Linner",
+      knownNames: ["Breakfast", "Dinner"],
+    });
+    expect(message).toContain('Unknown meal type "Linner"');
+    expect(message).toContain("Breakfast, Dinner");
+  });
+
+  it("renders the unknown-uid and unknown-builtin messages", () => {
+    expect(formatMealTypeResolveError({ ok: false, reason: "unknown_uid", uid: "X" })).toContain('UID "X"');
+    expect(formatMealTypeResolveError({ ok: false, reason: "unknown_builtin", index: 9 })).toContain("index 9");
   });
 });

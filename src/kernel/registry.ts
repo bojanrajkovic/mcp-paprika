@@ -193,7 +193,7 @@ interface ErasedSync {
 }
 
 /**
- * What a module's `.build((state, infra) => …)` callback returns. `api` must satisfy
+ * What a module's `.build((state, infra, deps) => …)` callback returns. `api` must satisfy
  * the contract the module registered for its own id; `tools`/`resources`/`onReady`
  * get a ctx narrowed to `State` + the `dependsOn` tuple — INFERRED, so the author
  * writes no per-module ctx alias; `flush` is optional.
@@ -252,17 +252,27 @@ interface ErasedBuild {
 export interface ErasedModule {
   readonly id: string;
   readonly dependsOn: ReadonlyArray<string>;
-  build(infra: Infra): ErasedBuild | Promise<ErasedBuild>;
+  build(infra: Infra, deps: Record<string, unknown>): ErasedBuild | Promise<ErasedBuild>;
 }
 
 /** The `.build(...)` step: supply the assemble callback (it receives the built
- * `state` and `infra`) and get an {@link ErasedModule}. `infra` is what lets the
- * infra-dependent write chokepoints be assembled here rather than in `.state`. Tools/
- * hooks infer their ctx from `State`/`Writes` + the dependency tuple — no per-module
- * ctx alias to declare; `Writes` is inferred from the returned `writes`. */
+ * `state`, `infra`, and the module's declared dependencies' contracts `deps`) and get
+ * an {@link ErasedModule}. `infra` is what lets the infra-dependent write chokepoints
+ * be assembled here rather than in `.state`; `deps` carries exactly the `dependsOn`
+ * tuple's already-built contracts (the kernel constructs in dependency order, so they
+ * are in hand by the time `assemble` runs) — the SAME `{ [K in DepList[number]]:
+ * DomainRegistry[K] }` shape `BootCtx`/`DomainCtx` use, so an `api` method can project
+ * across a domain boundary symmetrically with the tool/sync/boot ctx. Tools/hooks infer
+ * their ctx from `State`/`Writes` + the dependency tuple — no per-module ctx alias to
+ * declare; `Writes` is inferred from the returned `writes`. A 2-arg `(state, infra)`
+ * assemble stays valid (it ignores the extra `deps` argument). */
 export interface ModuleBuildStep<Id extends DomainId, DepList extends ReadonlyArray<DomainId>, State> {
   build<Writes = Record<never, never>>(
-    assemble: (state: State, infra: Infra) => ModuleParts<Id, DepList[number], State, Writes>,
+    assemble: (
+      state: State,
+      infra: Infra,
+      deps: { readonly [K in DepList[number]]: DomainRegistry[K] },
+    ) => ModuleParts<Id, DepList[number], State, Writes>,
   ): ErasedModule;
 }
 
@@ -278,7 +288,7 @@ export interface ModuleStateStep<Id extends DomainId, DepList extends ReadonlyAr
 }
 
 /**
- * Author a module: `defineModule(id, dependsOn).state(factory).build((state, infra) => parts)`.
+ * Author a module: `defineModule(id, dependsOn).state(factory).build((state, infra, deps) => parts)`.
  *
  * `id` fixes which registry contract `api` must satisfy; the `const` dependency
  * tuple is the single source of truth (its element union is the tools'/hooks'
@@ -298,9 +308,9 @@ export function defineModule<Id extends DomainId, const DepList extends Readonly
       return {
         id,
         dependsOn,
-        build: async (infra: Infra) => {
+        build: async (infra: Infra, deps: { readonly [K in DepList[number]]: DomainRegistry[K] }) => {
           const state = await factory(infra);
-          const parts = assemble(state, infra);
+          const parts = assemble(state, infra, deps);
           return {
             state,
             writes: parts.writes,
@@ -471,7 +481,9 @@ export async function buildKernel(
   await inBoot(async () => {
     for (const m of order) {
       // async wrapper: ErasedModule.build may return a plain value or a promise.
-      const b = await tracePromise(getTracer(), `boot.build_module ${m.id}`, {}, async () => m.build(infra));
+      const b = await tracePromise(getTracer(), `boot.build_module ${m.id}`, {}, async () =>
+        m.build(infra, depsOf(m.dependsOn)),
+      );
       apis.set(m.id, b.api);
       if (b.flush !== undefined) flushers.push(b.flush);
       built.push({

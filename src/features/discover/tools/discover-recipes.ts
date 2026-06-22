@@ -5,7 +5,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverState } from "../module.js";
 
-import { recipeMetadataLines, recipeRowSchema, recipeToRow } from "../../../domains/recipe/recipe-markdown.js";
+import { recipeMetadataLines, recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, toolResult } from "../../../shared/tools.js";
 
@@ -114,14 +114,17 @@ export const discoverRecipesTool = defineTool(
         return toolResult("No recipes found matching that description.", { items: [] });
       }
 
-      // One pass: resolve each hit's category names once, feeding the structured row
-      // (the shared recipe row + score) and the re-numbered text line.
+      // Build the structured rows through the recipe contract (it resolves each row's
+      // category names against recipe's own store) once, then layer the similarity score
+      // on each. The text line reuses the row's already-resolved `categories`, so the
+      // structured and text categories can't drift and each hit resolves names once.
+      const rows = ctx.deps.recipe.toRows(enriched.map((entry) => entry.recipe));
       const items: Array<z.infer<typeof discoverRowSchema>> = [];
       const lines: Array<string> = [];
       enriched.forEach((entry, index) => {
-        const categoryNames = [...ctx.deps.recipe.resolveCategoryNames(entry.recipe.categories)];
-        items.push({ ...recipeToRow(entry.recipe, categoryNames), score: entry.result.score });
-        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, categoryNames));
+        const row = rows[index]!;
+        items.push({ ...row, score: entry.result.score });
+        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, row.categories));
       });
 
       return toolResult(lines.join("\n\n"), { items });

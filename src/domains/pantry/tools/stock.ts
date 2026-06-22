@@ -7,7 +7,7 @@ import type { PantryItem } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToStructured } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToReadStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 export const markPantryItemOutOfStockInputSchema = z
@@ -57,7 +57,7 @@ export const markPantryItemOutOfStockTool = defineTool(
       );
       if ("content" in saved) return saved;
 
-      const structured = pantryItemToStructured(saved, ctx.deps.aisle);
+      const structured = pantryItemToReadStructured(saved, ctx.deps.aisle);
       const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved), {
         structuredContent: structured,
       });
@@ -103,7 +103,7 @@ export const restockPantryItemTool = defineTool(
       );
       if ("content" in saved) return saved;
 
-      const structured = pantryItemToStructured(saved, ctx.deps.aisle);
+      const structured = pantryItemToReadStructured(saved, ctx.deps.aisle);
       const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved), {
         structuredContent: structured,
       });
