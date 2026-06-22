@@ -107,10 +107,18 @@ describe("update_aisle tool", () => {
   });
 
   it("reports no changes when name and position already match", async () => {
-    const { produce } = seedCatalog();
+    const { produce, dairy, frozen } = seedCatalog();
     const result = await kh.callTool("update_aisle", { uid: produce.uid, name: "Produce" });
-    expect(result.isError).toBe(true);
-    expect(result.structuredContent).toBeUndefined();
+    // An update whose requested end-state already holds is an idempotent success,
+    // not an error — it echoes the unchanged catalog over structuredContent.
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      items: [
+        { uid: produce.uid, name: "Produce" },
+        { uid: dairy.uid, name: "Dairy" },
+        { uid: frozen.uid, name: "Frozen" },
+      ],
+    });
     expect(getText(result)).toContain("No changes");
     expect(kh.client().saveAisles).not.toHaveBeenCalled();
   });

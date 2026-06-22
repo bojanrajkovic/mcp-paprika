@@ -83,7 +83,9 @@ export const updateAisleTool = defineTool(
           return prev === undefined || prev.name !== a.name || prev.orderFlag !== a.orderFlag;
         });
         if (toSave.length === 0) {
-          return errorResult(`No changes — "${existing.name}" already has that name/position.`);
+          return toolResult(`No changes — "${existing.name}" already has that name/position.`, {
+            items: buildAisleRows(ctx.state),
+          });
         }
 
         return (await ctx.infra.client.saveAisles(toSave)).match(

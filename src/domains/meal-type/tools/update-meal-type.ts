@@ -95,7 +95,9 @@ export const updateMealTypeTool = defineTool(
           );
         });
         if (toSave.length === 0) {
-          return errorResult(`No changes — "${existing.name}" already has that name/color/position.`);
+          return toolResult(`No changes — "${existing.name}" already has that name/color/position.`, {
+            items: buildMealTypeRows(ctx.state),
+          });
         }
 
         return (await ctx.infra.client.saveMealTypes(toSave)).match(

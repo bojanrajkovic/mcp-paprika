@@ -90,10 +90,18 @@ describe("update_meal_type tool", () => {
   });
 
   it("reports no changes when nothing differs", async () => {
-    const { brunch } = seedCatalog();
+    const { breakfast, dinner, brunch } = seedCatalog();
     const result = await kh.callTool("update_meal_type", { uid: brunch.uid, name: "Brunch", color: "#000000" });
-    expect(result.isError).toBe(true);
-    expect(result.structuredContent).toBeUndefined();
+    // An update whose requested end-state already holds is an idempotent success,
+    // not an error — it echoes the unchanged catalog over structuredContent.
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      items: [
+        { uid: breakfast.uid, name: "Breakfast", originalType: 0 },
+        { uid: dinner.uid, name: "Dinner", originalType: 2 },
+        { uid: brunch.uid, name: "Brunch", originalType: null },
+      ],
+    });
     expect(getText(result)).toContain("No changes");
     expect(kh.client().saveMealTypes).not.toHaveBeenCalled();
   });
