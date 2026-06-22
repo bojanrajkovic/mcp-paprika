@@ -128,27 +128,45 @@ describe("update_menu tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" } });
-    expect(text).toContain("Nothing to update");
+    const result = await kh.callTool("update_menu", { lookup: { uid: "m-1" } });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("Nothing to update");
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
 
-  it("partial-merges name, days, and notes", async () => {
+  it("partial-merges name, days, and notes, echoing the whole menu over structuredContent", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Old", days: 2, notes: "old notes" });
-    kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
+    const item = makeMenuItem({
+      uid: "mi-1" as MenuItemUid,
+      menuUid: "m-1",
+      day: 1,
+      name: "Soup",
+      typeUid: "dinner-uid" as MealTypeUid,
+    });
+    kh.seed({ menus: [menu], menuItems: [item], mealTypes: [DINNER_TYPE] });
     vi.mocked(kh.client().saveMenus).mockReturnValue(
       okAsync([makeMenu({ uid: "m-1" as MenuUid, name: "New", days: 4, notes: "old notes" })]),
     );
 
-    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" }, name: "New", days: 4 });
+    const result = await kh.callTool("update_menu", { lookup: { uid: "m-1" }, name: "New", days: 4 });
 
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     const savedArg = savedArgs?.[0];
     expect(savedArg?.name).toBe("New");
     expect(savedArg?.days).toBe(4);
     expect(savedArg?.notes).toBe("old notes"); // preserved
+    const text = getText(result);
     expect(text).toContain("# New");
     expect(text).toContain("**Days:** 4");
+    // The whole parent menu (with its items) rides structuredContent.
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      uid: "m-1",
+      name: "New",
+      days: 4,
+      items: [{ uid: "mi-1", name: "Soup", typeName: "Dinner" }],
+    });
   });
 
   it("rejects a rename that collides with a different menu's name", async () => {
@@ -156,8 +174,10 @@ describe("update_menu tool", () => {
     const b = makeMenu({ uid: "m-2" as MenuUid, name: "Holiday" });
     kh.seed({ menus: [a, b], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" }, name: "Holiday" });
-    expect(text).toContain('A menu named "Holiday" already exists (UID: m-2).');
+    const result = await kh.callTool("update_menu", { lookup: { uid: "m-1" }, name: "Holiday" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain('A menu named "Holiday" already exists (UID: m-2).');
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
 
@@ -218,8 +238,11 @@ describe("update_menu tool", () => {
     const day5 = makeMenuItem({ uid: "mi-5" as MenuItemUid, menuUid: "m-1", day: 5, name: "Steak" });
     kh.seed({ menus: [menu], menuItems: [day3, day5], mealTypes: [DINNER_TYPE] });
 
-    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" }, days: 2 });
+    const result = await kh.callTool("update_menu", { lookup: { uid: "m-1" }, days: 2 });
 
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    const text = getText(result);
     expect(text).toContain("Cannot shrink");
     expect(text).toContain('"Soup" on day 3');
     expect(text).toContain('"Steak" on day 5');

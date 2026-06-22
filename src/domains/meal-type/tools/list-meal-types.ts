@@ -29,6 +29,19 @@ export const listMealTypesOutputSchema = z.object({
 });
 
 /**
+ * Build the {@link listMealTypesOutputSchema} rows from the meal-type catalog — sorted
+ * by order then name, one `{uid, name, originalType}` per type. Shared by
+ * `list_meal_types` and `update_meal_type` so the two echo the identical shape.
+ */
+export function buildMealTypeRows(state: MealTypeState): z.infer<typeof listMealTypesOutputSchema>["items"] {
+  return sortCatalog(state.store.getAll()).map((mt) => ({
+    uid: mt.uid,
+    name: mt.name,
+    originalType: mt.originalType,
+  }));
+}
+
+/**
  * Format seconds-since-midnight as zero-padded `HH:MM` (e.g. 64800 → "18:00").
  * Meal types store their calendar-export time this way (`exportTime`). There is
  * no shared seconds→clock helper in the repo and this is the only caller, so it
@@ -83,9 +96,8 @@ export const listMealTypesTool = defineTool(
         return toolResult("No meal types found.", { items: [] });
       }
 
-      const items = mealTypes.map((mt) => ({ uid: mt.uid, name: mt.name, originalType: mt.originalType }));
       const lines = mealTypes.map(mealTypeLine);
-      return toolResult(lines.join("\n"), { items });
+      return toolResult(lines.join("\n"), { items: buildMealTypeRows(ctx.state) });
     };
   },
 );

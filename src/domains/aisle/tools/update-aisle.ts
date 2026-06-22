@@ -1,15 +1,16 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { TypedCallToolResult } from "../../../shared/tools.js";
 import type { AisleState, AisleWrites } from "../module.js";
 import type { Aisle } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { renderCatalogOrder, repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { AisleUidSchema } from "../ids.js";
 import { aisleStartGuard } from "./guards.js";
+import { buildAisleRows, listAislesOutputSchema } from "./list-aisles.js";
 
 /**
  * `update_aisle` — rename and/or reposition an aisle. Renames do NOT rewrite the
@@ -37,6 +38,7 @@ export const updateAisleTool = defineTool(
         .optional()
         .describe("New 1-based position in the aisle order (omit to leave unchanged)"),
     },
+    outputSchema: listAislesOutputSchema,
   },
   [aisleStartGuard],
   (ctx: DomainCtx<AisleState, never, AisleWrites>) => {
@@ -49,19 +51,19 @@ export const updateAisleTool = defineTool(
       ctx.writes.withCatalogWriteLock(async () => {
         const existing = ctx.state.store.get(args.uid);
         if (existing === undefined) {
-          return toolResult(`No aisle found with UID "${args.uid}" (see list_aisles for the catalog).`);
+          return errorResult(`No aisle found with UID "${args.uid}" (see list_aisles for the catalog).`);
         }
 
         if (args.name === undefined && args.position === undefined) {
-          return toolResult("Nothing to update: provide `name`, `position`, or both.");
+          return errorResult("Nothing to update: provide `name`, `position`, or both.");
         }
 
         const newName = args.name?.trim();
         if (newName !== undefined) {
-          if (newName === "") return toolResult("Aisle name cannot be empty.");
+          if (newName === "") return errorResult("Aisle name cannot be empty.");
           const clash = ctx.state.store.resolveByName(newName);
           if (clash !== undefined && clash.uid !== existing.uid) {
-            return toolResult(`An aisle named "${clash.name}" already exists — aisle names must be unique.`);
+            return errorResult(`An aisle named "${clash.name}" already exists — aisle names must be unique.`);
           }
         }
 
@@ -81,12 +83,16 @@ export const updateAisleTool = defineTool(
           return prev === undefined || prev.name !== a.name || prev.orderFlag !== a.orderFlag;
         });
         if (toSave.length === 0) {
-          return toolResult(`No changes — "${existing.name}" already has that name/position.`);
+          return toolResult(`No changes — "${existing.name}" already has that name/position.`, {
+            items: buildAisleRows(ctx.state),
+          });
         }
 
         return (await ctx.infra.client.saveAisles(toSave)).match(
-          async (): Promise<CallToolResult> => {
-            const commitErr = commitFailure("aisle", await ctx.writes.commitAisles(toSave));
+          async (): Promise<TypedCallToolResult<z.infer<typeof listAislesOutputSchema>>> => {
+            const commitErr = commitFailure("aisle", await ctx.writes.commitAisles(toSave), {
+              structuredContent: { items: buildAisleRows(ctx.state) },
+            });
             if (commitErr) return commitErr;
 
             const did: Array<string> = [];
@@ -98,15 +104,18 @@ export const updateAisleTool = defineTool(
               const landed = ordered.findIndex((a) => a.uid === target.uid) + 1;
               did.push(`moved to position ${String(landed)}`);
             }
+            // The whole post-commit catalog rides structuredContent (the same full-list
+            // shape list_aisles produces), so the model sees the reordered order.
             return toolResult(
               `Updated aisle "${existing.name}": ${did.join(", ")}.\n\nCurrent aisle order:\n${renderCatalogOrder(
                 sortCatalog(ctx.state.store.getAll()),
               )}`,
+              { items: buildAisleRows(ctx.state) },
             );
           },
           async (e) => {
             log.error({ err: e, uid: args.uid }, "saveAisles failed");
-            return toolResult(`Failed to update aisle: ${e.message}`);
+            return errorResult(`Failed to update aisle: ${e.message}`);
           },
         );
       });

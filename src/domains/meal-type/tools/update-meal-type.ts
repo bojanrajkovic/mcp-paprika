@@ -1,15 +1,16 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { TypedCallToolResult } from "../../../shared/tools.js";
 import type { MealTypeState, MealTypeWrites } from "../module.js";
 import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { renderCatalogOrder, repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../ids.js";
 import { mealTypeStartGuard } from "./guards.js";
+import { buildMealTypeRows, listMealTypesOutputSchema } from "./list-meal-types.js";
 
 /**
  * `update_meal_type` — rename, recolor, and/or reposition a meal type (built-ins
@@ -43,6 +44,7 @@ export const updateMealTypeTool = defineTool(
         .optional()
         .describe("New 1-based position in the meal-type order (omit to leave unchanged)"),
     },
+    outputSchema: listMealTypesOutputSchema,
   },
   [mealTypeStartGuard],
   (ctx: DomainCtx<MealTypeState, never, MealTypeWrites>) => {
@@ -55,19 +57,19 @@ export const updateMealTypeTool = defineTool(
       ctx.writes.withCatalogWriteLock(async () => {
         const existing = ctx.state.store.get(args.uid);
         if (existing === undefined) {
-          return toolResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
+          return errorResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
         }
 
         if (args.name === undefined && args.color === undefined && args.position === undefined) {
-          return toolResult("Nothing to update: provide `name`, `color`, `position`, or any combination.");
+          return errorResult("Nothing to update: provide `name`, `color`, `position`, or any combination.");
         }
 
         const newName = args.name?.trim();
         if (newName !== undefined) {
-          if (newName === "") return toolResult("Meal type name cannot be empty.");
+          if (newName === "") return errorResult("Meal type name cannot be empty.");
           const clash = ctx.state.store.resolveByName(newName);
           if (clash !== undefined && clash.uid !== existing.uid) {
-            return toolResult(`A meal type named "${clash.name}" already exists — meal type names must be unique.`);
+            return errorResult(`A meal type named "${clash.name}" already exists — meal type names must be unique.`);
           }
         }
 
@@ -93,12 +95,16 @@ export const updateMealTypeTool = defineTool(
           );
         });
         if (toSave.length === 0) {
-          return toolResult(`No changes — "${existing.name}" already has that name/color/position.`);
+          return toolResult(`No changes — "${existing.name}" already has that name/color/position.`, {
+            items: buildMealTypeRows(ctx.state),
+          });
         }
 
         return (await ctx.infra.client.saveMealTypes(toSave)).match(
-          async (): Promise<CallToolResult> => {
-            const commitErr = commitFailure("meal type", await ctx.writes.commitMealTypes(toSave));
+          async (): Promise<TypedCallToolResult<z.infer<typeof listMealTypesOutputSchema>>> => {
+            const commitErr = commitFailure("meal type", await ctx.writes.commitMealTypes(toSave), {
+              structuredContent: { items: buildMealTypeRows(ctx.state) },
+            });
             if (commitErr) return commitErr;
 
             const did: Array<string> = [];
@@ -111,15 +117,18 @@ export const updateMealTypeTool = defineTool(
               const landed = ordered.findIndex((mt) => mt.uid === target.uid) + 1;
               did.push(`moved to position ${String(landed)}`);
             }
+            // The whole post-commit catalog rides structuredContent (the same full-list
+            // shape list_meal_types produces), so the model sees the reordered order.
             return toolResult(
               `Updated meal type "${existing.name}": ${did.join(", ")}.\n\nCurrent meal-type order:\n${renderCatalogOrder(
                 sortCatalog(ctx.state.store.getAll()),
               )}`,
+              { items: buildMealTypeRows(ctx.state) },
             );
           },
           async (e) => {
             log.error({ err: e, uid: args.uid }, "saveMealTypes failed");
-            return toolResult(`Failed to update meal type: ${e.message}`);
+            return errorResult(`Failed to update meal type: ${e.message}`);
           },
         );
       });
