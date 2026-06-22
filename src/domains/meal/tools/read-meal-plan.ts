@@ -58,6 +58,9 @@ export const readMealPlanTool = defineTool(
       'week, past or future. For recall ("when did we last have X"), use search_meal_history.',
     inputSchema: readMealPlanInputSchema,
     outputSchema: mealWeekOutputSchema,
+    // Hosts with the apps surface render this result as the meal-week-planner widget; others
+    // show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/meal-week-planner" },
   },
   [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
