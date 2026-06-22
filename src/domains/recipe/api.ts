@@ -3,6 +3,7 @@ import type { Result } from "neverthrow";
 import type { HasSynced } from "../../kernel/registry.js";
 import type { CategoryUid, RecipeUid } from "./ids.js";
 import type { Photo } from "./photo/types.js";
+import type { RecipeRow } from "./recipe-markdown.js";
 import type { Recipe } from "./types.js";
 
 /**
@@ -14,7 +15,9 @@ import type { Recipe } from "./types.js";
  * Scoped to exactly the live cross-domain call sites (nothing speculative):
  *   - `get` — the recipe-name/existence read every meal/menu/coordinator write does;
  *   - `resolveCategoryRefs` — meal's `search_meal_history` UID/name → CategoryUid;
- *   - `resolveCategoryNames` — meal label, discover display, photo-gen prompt.
+ *   - `resolveCategoryNames` — meal label, discover display, photo-gen prompt;
+ *   - `toRows` / `metadataLines` — discover's `discover_recipes` row + text projection,
+ *     resolving each recipe's category names through recipe's own category store.
  *
  * The inherited `hasSynced` is the meal-planner cold-start gate — the recipe store
  * must be warm before the coordinator resolves recipe names.
@@ -58,6 +61,19 @@ export interface RecipeApi extends HasSynced {
   getAll(): ReadonlyArray<Recipe>;
   /** The non-trashed recipe count — discover's `index.size < recipes.size * 0.9` rebuild guard. */
   size(): number;
+  /**
+   * Project recipes into their list-row payloads, resolving each recipe's category
+   * names through recipe's own category store. Discover's `discover_recipes` uses it
+   * to build the structured rows (then layers its similarity `score` on each), so the
+   * category dependency stays private to recipe.
+   */
+  toRows(recipes: ReadonlyArray<Recipe>): ReadonlyArray<RecipeRow>;
+  /**
+   * The metadata text lines (times / rating / pinned / on-grocery-list) for one
+   * recipe — the human-readable counterpart discover's hit renderer appends under
+   * each result. Pure projection of the recipe's own fields.
+   */
+  metadataLines(recipe: Recipe): ReadonlyArray<string>;
   /**
    * Attach an AI-generated image (raw full-resolution bytes) to a recipe — the
    * recipe-domain write `generate_recipe_photo` (attach:true) calls, since recipe

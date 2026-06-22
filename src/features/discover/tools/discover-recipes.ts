@@ -5,7 +5,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverState } from "../module.js";
 
-import { recipeMetadataLines, recipeRowSchema, recipeToRow } from "../../../domains/recipe/recipe-markdown.js";
+import { recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, toolResult } from "../../../shared/tools.js";
 
@@ -114,14 +114,17 @@ export const discoverRecipesTool = defineTool(
         return toolResult("No recipes found matching that description.", { items: [] });
       }
 
-      // One pass: resolve each hit's category names once, feeding the structured row
-      // (the shared recipe row + score) and the re-numbered text line.
+      // Build the structured rows through the recipe contract (it resolves each row's
+      // category names against recipe's own store), then layer the similarity score on
+      // each. The text line resolves category names through the same contract for its
+      // own display.
+      const rows = ctx.deps.recipe.toRows(enriched.map((entry) => entry.recipe));
       const items: Array<z.infer<typeof discoverRowSchema>> = [];
       const lines: Array<string> = [];
       enriched.forEach((entry, index) => {
+        items.push({ ...rows[index]!, score: entry.result.score });
         const categoryNames = [...ctx.deps.recipe.resolveCategoryNames(entry.recipe.categories)];
-        items.push({ ...recipeToRow(entry.recipe, categoryNames), score: entry.result.score });
-        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, categoryNames));
+        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, categoryNames, ctx.deps.recipe));
       });
 
       return toolResult(lines.join("\n\n"), { items });
@@ -129,7 +132,13 @@ export const discoverRecipesTool = defineTool(
   },
 );
 
-function formatDiscoverHit(index: number, recipe: Recipe, score: number, categoryNames: Array<string>): string {
+function formatDiscoverHit(
+  index: number,
+  recipe: Recipe,
+  score: number,
+  categoryNames: Array<string>,
+  recipeApi: { metadataLines(recipe: Recipe): ReadonlyArray<string> },
+): string {
   const percentage = Math.round(score * 100);
   const lines: Array<string> = [];
   lines.push(`${String(index)}. **${recipe.name}** — ${String(percentage)}% match`);
@@ -137,7 +146,7 @@ function formatDiscoverHit(index: number, recipe: Recipe, score: number, categor
   if (categoryNames.length > 0) {
     lines.push(`   **Categories:** ${categoryNames.join(", ")}`);
   }
-  for (const line of recipeMetadataLines(recipe)) {
+  for (const line of recipeApi.metadataLines(recipe)) {
     lines.push(`   ${line}`);
   }
   return lines.join("\n");

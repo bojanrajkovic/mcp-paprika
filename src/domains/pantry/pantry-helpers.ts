@@ -1,10 +1,19 @@
 import { z } from "zod";
 
-import type { AisleNameSource } from "../aisle/display.js";
+import type { AisleUid } from "../aisle/ids.js";
 import type { PantryItem } from "./types.js";
 
-import { aisleDisplayName } from "../aisle/display.js";
 import { PantryItemUidSchema } from "./ids.js";
+
+/**
+ * The aisle-catalog slice these renderers read: `displayName(item)` resolves an
+ * item's aisle through the live catalog with the item's denormalized copy as the
+ * fallback. Callers pass `ctx.deps.aisle` (the aisle contract carries the method);
+ * the resolution contract lives on `AisleApi.displayName`.
+ */
+export interface AisleDisplaySource {
+  displayName(item: { readonly aisleUid: AisleUid; readonly aisle: string }): string;
+}
 
 /**
  * The six-field list row emitted by `list_pantry_items` — also the base shape
@@ -44,8 +53,8 @@ export type PantryItemReadStructured = z.infer<typeof pantryItemReadOutputSchema
 
 /** Map a `PantryItem` into its list-row payload, resolving the aisle name through
  * the live catalog. */
-export function pantryItemToRow(item: PantryItem, aisles: AisleNameSource): PantryItemRow {
-  const aisle = aisleDisplayName(aisles, item);
+export function pantryItemToRow(item: PantryItem, aisles: AisleDisplaySource): PantryItemRow {
+  const aisle = aisles.displayName(item);
   return {
     uid: item.uid,
     ingredient: item.ingredient,
@@ -58,7 +67,7 @@ export function pantryItemToRow(item: PantryItem, aisles: AisleNameSource): Pant
 
 /** Map a `PantryItem` into its structured read payload, resolving the aisle name through
  * the live catalog (the same resolution {@link pantryItemToMarkdown} uses). */
-export function pantryItemToStructured(item: PantryItem, aisles: AisleNameSource): PantryItemReadStructured {
+export function pantryItemToStructured(item: PantryItem, aisles: AisleDisplaySource): PantryItemReadStructured {
   return { ...pantryItemToRow(item, aisles), purchaseDate: item.purchaseDate };
 }
 
@@ -67,9 +76,8 @@ export function pantryItemToStructured(item: PantryItem, aisles: AisleNameSource
 // Omitted from display and from POST payloads; retained in the schema so
 // the parser doesn't reject the field if the server starts populating it.
 // The aisle display name resolves through the live catalog (`aisles` — the
-// caller passes `ctx.deps.aisle`); the fallback contract lives in
-// `../aisle/display.ts`.
-export function pantryItemToMarkdown(item: PantryItem, aisles: AisleNameSource): string {
+// caller passes `ctx.deps.aisle`, which carries `displayName`).
+export function pantryItemToMarkdown(item: PantryItem, aisles: AisleDisplaySource): string {
   const lines: Array<string> = [];
 
   lines.push(`# ${item.ingredient}`);
@@ -78,7 +86,7 @@ export function pantryItemToMarkdown(item: PantryItem, aisles: AisleNameSource):
   if (item.quantity !== "") {
     lines.push(`**Quantity:** ${item.quantity}`);
   }
-  const aisleName = aisleDisplayName(aisles, item);
+  const aisleName = aisles.displayName(item);
   if (aisleName !== "") {
     lines.push(`**Aisle:** ${aisleName}`);
   }

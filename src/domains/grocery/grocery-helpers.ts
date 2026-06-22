@@ -1,16 +1,20 @@
 import { z } from "zod";
 
-import type { AisleNameSource } from "../aisle/display.js";
 import type { AisleUid } from "../aisle/ids.js";
 import type { GroceryItem } from "./grocery-item/types.js";
 import type { GroceryList } from "./grocery-list/types.js";
 
-import { aisleDisplayName } from "../aisle/display.js";
 import { GroceryItemUidSchema, GroceryListUidSchema } from "./ids.js";
 
-// Aisle display names resolve through the live catalog (`aisles` — the caller
-// passes `ctx.deps.aisle`), with the item's denormalized copy as the fallback;
-// the contract lives in `../aisle/display.ts`.
+/**
+ * The aisle-catalog slice these renderers read: `displayName(item)` resolves an
+ * item's aisle through the live catalog with the item's denormalized copy as the
+ * fallback. Callers pass `ctx.deps.aisle` (the aisle contract carries the method);
+ * the resolution contract lives on `AisleApi.displayName`.
+ */
+export interface AisleDisplaySource {
+  displayName(item: { readonly aisleUid: AisleUid; readonly aisle: string }): string;
+}
 
 /**
  * The structured-output row for one grocery item (ADR-0019, R1, B1/#321) — the
@@ -50,8 +54,8 @@ export type GroceryListReadStructured = z.infer<typeof groceryListReadOutputSche
  * the live catalog (the same resolution {@link groceryListToMarkdown} uses, so the
  * text table and the structured row agree by construction).
  */
-export function groceryItemToRow(item: GroceryItem, aisles: AisleNameSource): GroceryItemRow {
-  const aisle = aisleDisplayName(aisles, item);
+export function groceryItemToRow(item: GroceryItem, aisles: AisleDisplaySource): GroceryItemRow {
+  const aisle = aisles.displayName(item);
   return {
     uid: item.uid,
     ingredient: item.ingredient,
@@ -61,7 +65,10 @@ export function groceryItemToRow(item: GroceryItem, aisles: AisleNameSource): Gr
   };
 }
 
-export function groceryItemsToRows(items: ReadonlyArray<GroceryItem>, aisles: AisleNameSource): Array<GroceryItemRow> {
+export function groceryItemsToRows(
+  items: ReadonlyArray<GroceryItem>,
+  aisles: AisleDisplaySource,
+): Array<GroceryItemRow> {
   return items.map((item) => groceryItemToRow(item, aisles));
 }
 
@@ -106,7 +113,7 @@ export function sortGroceryItemsForChecklist(
 export function groceryListToStructured(
   list: GroceryList,
   items: ReadonlyArray<GroceryItem>,
-  aisles: AisleNameSource,
+  aisles: AisleDisplaySource,
 ): GroceryListReadStructured {
   return { uid: list.uid, name: list.name, items: groceryItemsToRows(items, aisles) };
 }
@@ -120,7 +127,7 @@ export function groceryListToStructured(
 export function groceryListToMarkdown(
   list: GroceryList,
   items: ReadonlyArray<GroceryItem>,
-  aisles: AisleNameSource,
+  aisles: AisleDisplaySource,
 ): string {
   const lines: Array<string> = [];
   lines.push(`# ${list.name}`);
@@ -133,7 +140,7 @@ export function groceryListToMarkdown(
     lines.push("|------------|-----|-------|-----------|");
     for (const item of items) {
       const qty = item.quantity !== "" ? item.quantity : "—";
-      const aisleName = aisleDisplayName(aisles, item);
+      const aisleName = aisles.displayName(item);
       const aisle = aisleName !== "" ? aisleName : "—";
       const purchased = item.purchased ? "Yes" : "No";
       lines.push(`| ${item.ingredient} | ${qty} | ${aisle} | ${purchased} |`);
@@ -148,14 +155,14 @@ export function groceryListToMarkdown(
  * travel on the structured channel and the caller's own request inputs, so the
  * human text carries only the editable fields.
  */
-export function groceryItemToMarkdown(item: GroceryItem, aisles: AisleNameSource): string {
+export function groceryItemToMarkdown(item: GroceryItem, aisles: AisleDisplaySource): string {
   const lines: Array<string> = [];
   lines.push(`# ${item.ingredient}`);
   lines.push("");
   if (item.quantity !== "") {
     lines.push(`**Quantity:** ${item.quantity}`);
   }
-  const aisleName = aisleDisplayName(aisles, item);
+  const aisleName = aisles.displayName(item);
   if (aisleName !== "") {
     lines.push(`**Aisle:** ${aisleName}`);
   }

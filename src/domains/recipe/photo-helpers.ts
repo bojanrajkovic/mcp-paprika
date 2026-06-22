@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 
-/** Longest edge (px) of the recipe thumbnail Paprika stores in `recipe.photo`. */
-const THUMBNAIL_PX = 280;
+import { THUMBNAIL_PX } from "../../shared/image.js";
 
 /**
  * Longest edge (px) AI-generated `full` images are capped to before upload.
@@ -65,20 +64,6 @@ export async function normalizePhoto(
     thumbnailPipeline.toBuffer(),
   ]);
   return { thumbnail, full };
-}
-
-/**
- * Produce just the ~280px thumbnail JPEG. Used by `generate_recipe_photo`'s preview
- * (attach:false) path, which only needs the thumbnail — calling this avoids the
- * wasted full-resolution encode that {@link normalizePhoto} would also produce.
- */
-export async function makeThumbnail(input: Buffer): Promise<Buffer> {
-  const { default: sharp } = await import("sharp");
-  return sharp(input)
-    .rotate()
-    .resize(THUMBNAIL_PX, THUMBNAIL_PX, { fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 80 })
-    .toBuffer();
 }
 
 /**

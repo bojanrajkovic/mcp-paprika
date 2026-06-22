@@ -29,7 +29,7 @@ import { PhotoUidSchema } from "./ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto, sha256Hex } from "./photo-helpers.js";
 import { PhotoStore } from "./photo/store.js";
 import { photoDiskDescriptor } from "./photo/types.js";
-import { resolveCategoryRefs } from "./recipe-markdown.js";
+import { recipeMetadataLines, recipeToRow, resolveCategoryRefs } from "./recipe-markdown.js";
 import { recipeResource } from "./resources/recipe-resource.js";
 import { RecipeStore } from "./store.js";
 import { categoriesSync } from "./syncs/category-sync.js";
@@ -360,6 +360,12 @@ register(
           hasSynced: () => state.recipe.store.hasSynced,
           getAll: () => state.recipe.store.getAll(),
           size: () => state.recipe.store.size,
+          // Resolve each recipe's category names through recipe's own category store so
+          // the category dependency stays private — discover calls this instead of
+          // importing recipeToRow and resolving names itself.
+          toRows: (recipes) =>
+            recipes.map((r) => recipeToRow(r, [...state.category.store.resolveNames([...r.categories])])),
+          metadataLines: (recipe) => recipeMetadataLines(recipe),
           attachGeneratedPhoto,
         },
         writes: {
