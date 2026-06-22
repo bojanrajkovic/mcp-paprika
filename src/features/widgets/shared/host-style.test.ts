@@ -60,6 +60,34 @@ describe("applyHostStyles — font selection", () => {
   });
 });
 
+describe("applyHostStyles — height cap (--widget-max-h)", () => {
+  const maxH = (): unknown => setProperty.mock.calls.find(([k]) => k === "--widget-max-h")?.[1];
+
+  it("caps at the host's container maxHeight in px", () => {
+    useExtApp();
+    applyHostStyles({ containerDimensions: { maxHeight: 720 } });
+    expect(maxH()).toBe("720px");
+  });
+
+  it("prefers maxHeight over a fixed height", () => {
+    useExtApp();
+    applyHostStyles({ containerDimensions: { height: 900, maxHeight: 600 } });
+    expect(maxH()).toBe("600px");
+  });
+
+  it("falls back to the fixed container height when no maxHeight", () => {
+    useExtApp();
+    applyHostStyles({ containerDimensions: { height: 800 } });
+    expect(maxH()).toBe("800px");
+  });
+
+  it("sets `none` (no cap) when the host provides no dimensions", () => {
+    useExtApp();
+    applyHostStyles({ userAgent: "cursor" });
+    expect(maxH()).toBe("none");
+  });
+});
+
 describe("applyHostStyles — style variable delegation", () => {
   it("calls applyHostStyleVariables when variables are provided", () => {
     const { extApps } = useExtApp();

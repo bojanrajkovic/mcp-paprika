@@ -1,5 +1,5 @@
 /**
- * The meal reads' structured output validated through the REAL SDK (ADR-0019, A3 #318).
+ * The meal reads' structured output validated through the REAL SDK.
  *
  * Uses {@link callStructuredProbe} to register each production schema on a real server
  * and validate a representative payload over the in-memory transport — coverage the
@@ -14,7 +14,7 @@ import type { MealUid } from "../ids.js";
 
 import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { callStructuredProbe } from "../../../../test/support/structured-output-probe.js";
-import { mealListOutputSchema, mealToRow } from "./helpers.js";
+import { mealListOutputSchema, mealToRow, mealWeekOutputSchema } from "./helpers.js";
 import { readRecipeHistoryOutputSchema } from "./recipe-history.js";
 import { searchMealHistoryOutputSchema } from "./search-meal-history.js";
 
@@ -29,11 +29,24 @@ const rows = [
   mealToRow(makeMeal({ uid: "m-legacy" as MealUid, typeUid: null }), null),
 ];
 
-describe("meal structured output validates through the SDK (R1, #318)", () => {
+describe("meal structured output validates through the SDK", () => {
   it("mealListOutputSchema accepts the rows mealToRow produces", async () => {
     const result = await callStructuredProbe(mealListOutputSchema, { items: rows });
     expect(result.isError).toBeFalsy();
     expect((result.structuredContent as { items: unknown[] }).items).toHaveLength(3);
+  });
+
+  it("mealWeekOutputSchema accepts the week payload (weekStart + rows + type registry)", async () => {
+    const result = await callStructuredProbe(mealWeekOutputSchema, {
+      weekStart: "2026-06-22",
+      meals: rows,
+      mealTypes: [
+        { uid: "breakfast-uid", name: "Breakfast" },
+        { uid: "dinner-uid", name: "Dinner" },
+      ],
+    });
+    expect(result.isError).toBeFalsy();
+    expect((result.structuredContent as { meals: unknown[] }).meals).toHaveLength(3);
   });
 
   it("searchMealHistoryOutputSchema (.extend) accepts items plus the pagination cursor", async () => {

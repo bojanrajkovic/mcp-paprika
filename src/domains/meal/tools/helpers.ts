@@ -6,6 +6,7 @@ import type { RecipeApi } from "../../recipe/api.js";
 import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
+import { sortCatalog } from "../../../shared/catalog.js";
 import { MealTypeUidSchema } from "../../meal-type/ids.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MealUidSchema } from "../ids.js";
@@ -136,7 +137,7 @@ export function renderMealsGroupedByDate(meals: ReadonlyArray<Readonly<Meal>>, m
 }
 
 /**
- * The structured-output row for one meal (ADR-0019, R1) — the machine-readable
+ * The structured-output row for one meal — the machine-readable
  * counterpart to `renderMealsGroupedByDate`'s human text, shared by `read_meal_plan`
  * and `search_meal_history`. The `uid` is the gap-closer: the rendered text omits it,
  * so without this row the model cannot drive `reschedule_meal` / `delete_meal` /
@@ -160,11 +161,44 @@ export type MealRow = z.infer<typeof mealRowSchema>;
 
 /**
  * The `{ items }` structured-output wrapper shared by the meal-list reads:
- * `read_meal_plan` returns it as-is, `search_meal_history` `.extend()`s it with its
- * pagination cursor. `structuredContent` is a record, never a bare array, so the rows
- * ride under `items` — the tree-wide list convention.
+ * `search_meal_history` returns it (`.extend()`ed with its pagination cursor).
+ * `structuredContent` is a record, never a bare array, so the rows ride under `items` —
+ * the tree-wide list convention. (`read_meal_plan` once shared this too, but its widget
+ * surface needs the richer week payload below.)
  */
 export const mealListOutputSchema = z.object({ items: z.array(mealRowSchema) });
+
+/** One entry in the meal-week payload's meal-type registry. */
+export const mealTypeRefSchema = z.object({ uid: MealTypeUidSchema, name: z.string() });
+
+/**
+ * `read_meal_plan`'s structured-output payload — a self-contained week the
+ * meal-week-planner widget renders without a second `list_meal_types` call.
+ * `weekStart` (Monday of the returned window) anchors the widget's prev/next navigation;
+ * `meals` are the window's rows (shared {@link mealRowSchema}, with its denormalized
+ * `typeName`); `mealTypes` is the catalog ordered by `orderFlag`, so an EMPTY day slot
+ * still shows its meal-type label. Diverges from {@link mealListOutputSchema}: this read
+ * is a week, not a flat list.
+ */
+export const mealWeekOutputSchema = z.object({
+  weekStart: z
+    .string()
+    .describe("YYYY-MM-DD; Monday of the returned window — the meal-week-planner widget's navigation anchor."),
+  meals: z.array(mealRowSchema),
+  mealTypes: z
+    .array(mealTypeRefSchema)
+    .describe("Meal-type registry, ordered by orderFlag, for the widget's day-slot labels (empty slots included)."),
+});
+
+/**
+ * Build the ordered meal-type registry for {@link mealWeekOutputSchema} via the shared
+ * {@link sortCatalog} (orderFlag, ties broken by name) — the same order `list_meal_types`
+ * uses, so the widget's day slots stack Breakfast → Lunch → Dinner → … consistently with
+ * the rest of the surface, without the widget re-sorting.
+ */
+export function mealTypeRegistry(mealType: MealTypeApi): Array<z.infer<typeof mealTypeRefSchema>> {
+  return sortCatalog(mealType.getAll()).map((mt) => ({ uid: mt.uid, name: mt.name }));
+}
 
 /**
  * Build a meal → type-name resolver from the catalog, returning the resolved name or

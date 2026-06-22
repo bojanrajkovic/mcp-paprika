@@ -1,18 +1,19 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
-  // The shared pill action button. Variants map to the roles the two widgets use: `neutral` (muted,
+  // The shared pill action button. Variants map to the roles the widgets use: `neutral` (muted,
   // hover to ink — grocery's Clear/Keep), `danger` (muted, hover to danger — the pantry Out),
   // `danger-strong` (danger outline + text always — grocery's clear-confirm), `accent` (accent
-  // outline + text — the pantry Restock). The shape, focus ring, and transition are shared; the
-  // variant sets the colors (and the one-px padding differences the originals carried).
+  // outline + text — the pantry Restock), `accent-fill` (muted at rest, fills accent on hover —
+  // the meal-planner's empty-slot Plan call-to-action). The shape, focus ring, and transition are
+  // shared; the variant sets the colors (and the one-px padding differences the originals carried).
   let {
     variant = "neutral",
     onclick,
     ariaLabel,
     children,
   }: {
-    variant?: "neutral" | "danger" | "danger-strong" | "accent";
+    variant?: "neutral" | "danger" | "danger-strong" | "accent" | "accent-fill";
     onclick: () => void;
     ariaLabel?: string;
     children: Snippet;
@@ -25,6 +26,7 @@
   class:danger={variant === "danger"}
   class:danger-strong={variant === "danger-strong"}
   class:accent={variant === "accent"}
+  class:accent-fill={variant === "accent-fill"}
   {onclick}
   aria-label={ariaLabel}>{@render children()}</button
 >
@@ -78,5 +80,11 @@
   }
   .pill.accent:hover {
     background: color-mix(in oklch, var(--accent) 12%, transparent);
+  }
+  /* Muted at rest, fills accent on hover — a soft call-to-action (the empty-slot Plan pill). */
+  .pill.accent-fill:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
   }
 </style>

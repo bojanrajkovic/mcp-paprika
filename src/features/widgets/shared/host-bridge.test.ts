@@ -90,7 +90,9 @@ describe("connectHost", () => {
     fireHostContextChanged(updatedCtx);
 
     expect(onContext).toHaveBeenLastCalledWith(updatedCtx);
-    expect(setProperty).toHaveBeenCalledTimes(2);
+    // applyHostStyles ran twice (connect + context change); count its --widget-font writes rather
+    // than total setProperty calls, since each run also sets --widget-max-h.
+    expect(setProperty.mock.calls.filter(([k]) => k === "--widget-font")).toHaveLength(2);
   });
 });
 
