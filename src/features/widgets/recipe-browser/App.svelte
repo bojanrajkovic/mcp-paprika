@@ -52,8 +52,8 @@
   let errorMsg = $state<string | null>(null);
   let toast = $state<{ kind: "error" | "info"; msg: string } | null>(null);
 
-  // Client-side refine state (Decision 3): the chip filter, the live search text, and the
-  // list-only sort. None re-fetches — the full result set is already in structuredContent.
+  // Client-side refine state: the chip filter, the live search text, and the list-only sort.
+  // None re-fetches — the full result set is already in structuredContent.
   let activeCat = $state("All");
   let query = $state("");
   let sortMode = $state<"alpha" | "rating">("alpha");
@@ -147,10 +147,14 @@
       browse = b;
       phase = "browse";
       errorMsg = null;
-      // A fresh result set: drop any carried-over refine/expansion state.
+      // A fresh result set replaces everything: leave any open detail pane, drop the
+      // content-tied refine state (category + search), and reset the saved scroll. The display
+      // preferences (sort mode, photos) persist deliberately.
+      detail = null;
       activeCat = "All";
       query = "";
       openUid = null;
+      listScroll = 0;
       cancelPendingRecipe();
       return;
     }
@@ -164,34 +168,43 @@
     loadingRecipeUid = null;
   }
 
+  // Collapsing the open row or refining the list moves away from any recipe read in flight, so
+  // its result must no longer pop the detail pane — null the open row AND the race token together.
+  function resetExpansion() {
+    openUid = null;
+    cancelPendingRecipe();
+  }
+
   function toggleRow(uid: string) {
-    openUid = openUid === uid ? null : uid;
+    const next = openUid === uid ? null : uid;
+    resetExpansion();
+    openUid = next;
   }
 
   function setCategory(c: string) {
     activeCat = c;
-    openUid = null; // filtering resets the expanded row (Decision 3)
+    resetExpansion();
   }
 
   function onSearchInput(e: Event) {
     query = (e.currentTarget as HTMLInputElement).value;
-    openUid = null;
+    resetExpansion();
   }
 
   function clearSearch() {
     query = "";
-    openUid = null;
+    resetExpansion();
   }
 
   function clearFilters() {
     activeCat = "All";
     query = "";
-    openUid = null;
+    resetExpansion();
   }
 
   function toggleSort() {
     sortMode = sortMode === "alpha" ? "rating" : "alpha";
-    openUid = null;
+    resetExpansion();
   }
 
   async function openRecipe(recipe: BrowseRecipe) {
@@ -304,7 +317,11 @@
       desc={errorMsg ?? undefined}
     />
   {:else if detail}
-    <RecipeDetail recipe={detail} onBack={backToBrowse} />
+    <RecipeDetail
+      recipe={detail}
+      onBack={backToBrowse}
+      backLabel="Back to recipes"
+    />
   {:else if recipes.length === 0}
     <StatusScreen icon="🍽️" title="No recipes found" desc={emptyDesc} />
   {:else}
@@ -381,7 +398,9 @@
       {#if allFilteredOut}
         <div class="noresults">
           <p>No recipes match these filters.</p>
-          <button class="clear" onclick={clearFilters}>Clear filters</button>
+          <PillButton onclick={clearFilters} ariaLabel="Clear filters"
+            >Clear filters</PillButton
+          >
         </div>
       {:else}
         {#each filtered as r (r.uid)}
@@ -607,24 +626,5 @@
   .noresults p {
     margin: 0;
     font-size: 14px;
-  }
-  .clear {
-    appearance: none;
-    border: 1px solid color-mix(in oklch, var(--ink) 22%, transparent);
-    background: var(--bg);
-    color: var(--ink);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 5px 12px;
-    border-radius: 999px;
-    cursor: pointer;
-  }
-  .clear:hover {
-    background: var(--hover);
-  }
-  .clear:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
 </style>

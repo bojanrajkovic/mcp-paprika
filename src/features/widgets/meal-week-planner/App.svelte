@@ -352,7 +352,11 @@
       desc={errorMsg ?? undefined}
     />
   {:else if detail}
-    <RecipeDetail recipe={detail} onBack={backToWeek} />
+    <RecipeDetail
+      recipe={detail}
+      onBack={backToWeek}
+      backLabel="Back to the week"
+    />
   {:else}
     <header>
       <BrandMark title="Meal plan" />

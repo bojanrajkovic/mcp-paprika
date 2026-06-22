@@ -9,8 +9,17 @@
 
   import PillButton from "./PillButton.svelte";
 
-  let { recipe, onBack }: { recipe: RecipeDetailData; onBack: () => void } =
-    $props();
+  // `backLabel` is the back control's accessible name — each consumer names its own destination
+  // ("Back to the week" / "Back to recipes"), since the visible glyph + "Back" can't say where.
+  let {
+    recipe,
+    onBack,
+    backLabel = "Back",
+  }: {
+    recipe: RecipeDetailData;
+    onBack: () => void;
+    backLabel?: string;
+  } = $props();
 
   // read_recipe emits ingredients/directions as newline-delimited prose; split to lines,
   // dropping blanks, so each renders on its own row. Directions render as paragraphs (not an
@@ -30,7 +39,7 @@
 </script>
 
 <header>
-  <PillButton onclick={onBack} ariaLabel="Back to the week">
+  <PillButton onclick={onBack} ariaLabel={backLabel}>
     <span class="back"
       ><svg viewBox="0 0 16 16" aria-hidden="true"
         ><path d="M10 3.5 5.5 8l4.5 4.5" /></svg
