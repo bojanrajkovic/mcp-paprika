@@ -38,7 +38,13 @@ export const trashRecipeTool = defineTool(
       }
 
       if (recipe.inTrash) {
-        return errorResult(`Recipe "${recipe.name}" is already in the trash.`);
+        // A no-op success: the recipe is already where the caller wants it, so the
+        // structured payload is the trashed recipe (NOT an error).
+        const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
+        return toolResult(
+          `Recipe "${recipe.name}" is already in the trash.`,
+          recipeToReadStructured(recipe, categoryNames),
+        );
       }
 
       const trashed = { ...recipe, inTrash: true };

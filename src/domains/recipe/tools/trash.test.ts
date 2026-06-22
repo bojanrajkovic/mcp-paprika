@@ -63,7 +63,7 @@ describe("trash_recipe tool", () => {
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("recipe already in trash is an isError result with no structuredContent", async () => {
+  it("recipe already in trash is an idempotent success carrying the recipe's structuredContent", async () => {
     const nonTrashedRecipe = makeRecipe({ name: "Pasta Bolognese" });
     const trashedRecipe = makeRecipe({ name: "Trashed Recipe", inTrash: true });
     kh.seed({ recipes: [nonTrashedRecipe, trashedRecipe] });
@@ -71,8 +71,8 @@ describe("trash_recipe tool", () => {
     const result = await kh.callTool("trash_recipe", { uid: trashedRecipe.uid });
 
     expect(getText(result).toLowerCase()).toContain("already in the trash");
-    expect(result.isError).toBe(true);
-    expect(result.structuredContent).toBeUndefined();
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: trashedRecipe.uid, name: "Trashed Recipe" });
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
