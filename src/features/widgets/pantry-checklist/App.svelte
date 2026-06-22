@@ -20,6 +20,7 @@
     type ReceivedResult,
   } from "../shared/host-bridge.js";
   import { motion } from "../shared/motion.js";
+  import { SERVER_CAPS_KEY } from "../shared/server-caps-key.js";
 
   // A pantry row: a structured pantry item plus transient per-row UI flags. `inStock` drives which
   // list the row lives in (the in-stock checklist vs. the out-of-stock drawer).
@@ -43,7 +44,9 @@
   let theme = $state<"light" | "dark">("light");
   // Touch hosts get swipe-to-remove (the Out button hides); pointer hosts get the button.
   let touchDevice = $state(false);
+  let elicitation = $state(false);
   let drawerOpen = $state(false);
+  let confirmingClear = $state(false);
   let toast = $state<{
     kind: "error" | "info";
     msg: string;
@@ -76,6 +79,12 @@
   });
 
   onMount(() => {
+    const serverCaps = (globalThis as Record<string, unknown>)[SERVER_CAPS_KEY];
+    if (serverCaps !== null && typeof serverCaps === "object") {
+      elicitation = Boolean(
+        (serverCaps as Record<string, unknown>)["supportsElicitation"],
+      );
+    }
     connectHost(app, {
       onResult: receive,
       onContext: (ctx) => {
@@ -104,6 +113,7 @@
     }
     items = rawItems.map((r) => toRow(r));
     errorMsg = null;
+    confirmingClear = false;
     phase = "ready";
   }
 
@@ -147,6 +157,26 @@
   function dismissToast() {
     clearTimeout(toastTimer);
     toast = null;
+  }
+
+  function onClear() {
+    confirmingClear = true;
+  }
+  function cancelClear() {
+    confirmingClear = false;
+  }
+  async function confirmClear() {
+    confirmingClear = false;
+    const res = await callTool(app, "clear_out_of_stock_pantry_items", {});
+    if (res.isError) {
+      showToast("Couldn't clear — try again.");
+      return;
+    }
+    // A declined server-confirm is non-error with no structuredContent — indistinguishable
+    // from a successful clear — so re-read authoritatively rather than filtering blindly.
+    const fresh = await callTool(app, "list_pantry_items", {});
+    if (fresh.structuredContent) receive(fresh);
+    else items = items.filter((i) => i.inStock); // re-read unavailable: the clear succeeded, sweep
   }
 
   // Mark out of stock: optimistic same-UID flip (the row leaves the in-stock list for the drawer),
@@ -331,14 +361,29 @@
 
     {#if outOfStock.length > 0}
       <div class="drawer" class:open={drawerOpen}>
-        <button
-          class="drawer-head"
-          onclick={() => (drawerOpen = !drawerOpen)}
-          aria-expanded={drawerOpen}
-        >
-          <span class="chev">▸</span>
-          <span class="grow">Out of stock ({outOfStock.length})</span>
-        </button>
+        <div class="drawer-head-row">
+          <button
+            class="drawer-head"
+            onclick={() => (drawerOpen = !drawerOpen)}
+            aria-expanded={drawerOpen}
+          >
+            <span class="chev">▸</span>
+            <span class="grow">Out of stock ({outOfStock.length})</span>
+          </button>
+          {#if confirmingClear}
+            <span class="clear-confirm">Remove {outOfStock.length}?</span>
+            <PillButton variant="danger-strong" onclick={confirmClear}
+              >Clear</PillButton
+            >
+            <PillButton onclick={cancelClear}>Keep</PillButton>
+          {:else}
+            <PillButton
+              variant="danger"
+              onclick={elicitation ? confirmClear : onClear}
+              >Clear all</PillButton
+            >
+          {/if}
+        </div>
         {#if drawerOpen}
           <div class="drawer-body">
             {#each outOfStock as item (item.uid)}
@@ -509,11 +554,18 @@
     background: var(--bg);
     padding-bottom: env(safe-area-inset-bottom);
   }
+  .drawer-head-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-right: 16px;
+  }
   .drawer-head {
     display: flex;
     align-items: center;
     gap: 8px;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     appearance: none;
     border: 0;
     background: transparent;
@@ -521,7 +573,7 @@
     font: inherit;
     font-size: 12.5px;
     font-weight: 600;
-    padding: 12px 16px;
+    padding: 12px 0 12px 16px;
     cursor: pointer;
     text-align: left;
   }
@@ -533,6 +585,11 @@
   }
   .drawer-head .grow {
     flex: 1;
+  }
+  .clear-confirm {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
   }
   .drawer-body {
     max-height: 38vh;
