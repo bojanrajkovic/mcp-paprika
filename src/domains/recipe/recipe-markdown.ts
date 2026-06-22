@@ -7,6 +7,24 @@ import type { Recipe } from "./types.js";
 import { CategoryUidSchema, RecipeUidSchema } from "./ids.js";
 
 /**
+ * The `ui://recipe/{uid}/photo` resource URI when a recipe has a photo the proxy can
+ * actually serve — an uploaded photo (`photoLarge`, the full-image cover whose bytes
+ * live in the photo catalog) or an imported source image (`imageUrl`/`photoUrl`) — else
+ * `null`. Surfaced additively on the browse rows and the single-recipe read so a consumer
+ * can fetch the cover photo's bytes through the proxy resource; `null` tells a widget to
+ * keep its placeholder tile rather than attempt (and 404) a read.
+ *
+ * The thumbnail-only `photo` field is deliberately NOT counted: the resolver serves the
+ * full image (`photoLarge` → catalog) or a source URL, never the bare thumbnail filename,
+ * so counting `photo` would advertise a URI that 404s for a recipe that has only a
+ * thumbnail and no catalog entry.
+ */
+export function recipePhotoResourceUri(recipe: Recipe): string | null {
+  const hasPhoto = Boolean(recipe.photoLarge || recipe.imageUrl || recipe.photoUrl);
+  return hasPhoto ? `ui://recipe/${recipe.uid}/photo` : null;
+}
+
+/**
  * The structured-output row for one recipe (ADR-0019, R1) — the machine-readable
  * counterpart to the list/search text, shared by `list_recipes` and `search_recipes`.
  * The `uid` is what the model's follow-ups (`read_recipe`, `rate_recipe`,
@@ -25,6 +43,10 @@ export const recipeRowSchema = z.object({
   servings: z.string().nullable(),
   isPinned: z.boolean(),
   onGroceryList: z.boolean(),
+  photoResourceUri: z
+    .string()
+    .nullable()
+    .describe("Resource URI for the recipe's cover photo (ui://recipe/{uid}/photo), or null when it has none."),
 });
 
 export type RecipeRow = z.infer<typeof recipeRowSchema>;
@@ -42,6 +64,7 @@ export function recipeToRow(recipe: Recipe, categoryNames: Array<string>): Recip
     servings: recipe.servings,
     isPinned: recipe.isPinned,
     onGroceryList: recipe.onGroceryList,
+    photoResourceUri: recipePhotoResourceUri(recipe),
   };
 }
 
@@ -90,6 +113,13 @@ export const recipeReadOutputSchema = z.object({
     .string()
     .nullable()
     .describe("Display photo URL — the imported source image or an uploaded Paprika photo, or null."),
+  photoResourceUri: z
+    .string()
+    .nullable()
+    .describe(
+      "Resource URI for the recipe's cover photo (ui://recipe/{uid}/photo) — reads back the bytes even for " +
+        "user-uploaded photos that have no public URL — or null when the recipe has no photo.",
+    ),
   isPinned: z.boolean(),
   onFavorites: z.boolean(),
   onGroceryList: z.boolean(),
@@ -123,6 +153,7 @@ export function recipeToReadStructured(recipe: Recipe, categoryNames: Array<stri
     // alone would drop the photo. `|| null` normalizes a trailing "" (a fresh recipe's
     // imageUrl) to null.
     photoUrl: recipe.imageUrl || recipe.photoUrl || null,
+    photoResourceUri: recipePhotoResourceUri(recipe),
     isPinned: recipe.isPinned,
     onFavorites: recipe.onFavorites,
     onGroceryList: recipe.onGroceryList,

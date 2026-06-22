@@ -10,7 +10,7 @@ import type { App } from "@modelcontextprotocol/ext-apps";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { flushMicrotasks, useExtApp } from "../../../../test/support/widget-ext-app.js";
-import { callTool, connectHost, errorText } from "./host-bridge.js";
+import { callTool, connectHost, errorText, readResource } from "./host-bridge.js";
 
 // host-style.ts calls document.documentElement.style.setProperty; stub the minimum needed.
 const setProperty = vi.fn();
@@ -154,5 +154,52 @@ describe("errorText", () => {
 
   it("returns null when content array is missing", () => {
     expect(errorText({ structuredContent: {} })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readResource
+// ---------------------------------------------------------------------------
+describe("readResource", () => {
+  it("returns a data: URI built from the blob and mimeType", async () => {
+    const { app } = useExtApp();
+    app.readServerResource.mockResolvedValueOnce({
+      contents: [{ uri: "ui://recipe/r1/photo", mimeType: "image/jpeg", blob: "QUJD" }],
+    });
+
+    const result = await readResource(app as unknown as App, "ui://recipe/r1/photo");
+
+    expect(app.readServerResource).toHaveBeenCalledWith({ uri: "ui://recipe/r1/photo" });
+    expect(result).toBe("data:image/jpeg;base64,QUJD");
+  });
+
+  it("defaults the mimeType to image/jpeg when absent", async () => {
+    const { app } = useExtApp();
+    app.readServerResource.mockResolvedValueOnce({ contents: [{ uri: "u", blob: "QUJD" }] });
+    expect(await readResource(app as unknown as App, "u")).toBe("data:image/jpeg;base64,QUJD");
+  });
+
+  it("falls back to image/jpeg for a non-image mimeType (host can't steer the data: type)", async () => {
+    const { app } = useExtApp();
+    app.readServerResource.mockResolvedValueOnce({ contents: [{ uri: "u", mimeType: "text/html", blob: "QUJD" }] });
+    expect(await readResource(app as unknown as App, "u")).toBe("data:image/jpeg;base64,QUJD");
+  });
+
+  it("returns null for a text (non-blob) content", async () => {
+    const { app } = useExtApp();
+    app.readServerResource.mockResolvedValueOnce({ contents: [{ uri: "u", text: "hi" }] });
+    expect(await readResource(app as unknown as App, "u")).toBeNull();
+  });
+
+  it("returns null when there are no contents", async () => {
+    const { app } = useExtApp();
+    app.readServerResource.mockResolvedValueOnce({ contents: [] });
+    expect(await readResource(app as unknown as App, "u")).toBeNull();
+  });
+
+  it("returns null when the read rejects", async () => {
+    const { app } = useExtApp();
+    app.readServerResource.mockRejectedValueOnce(new Error("not found"));
+    expect(await readResource(app as unknown as App, "u")).toBeNull();
   });
 });

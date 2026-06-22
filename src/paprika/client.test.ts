@@ -389,6 +389,32 @@ describe("PaprikaClient", () => {
     });
   });
 
+  describe("getPhotoDownloadUrl() resolves a photo's presigned bytes URL", () => {
+    it("returns the photo_url from the per-photo GET", async () => {
+      server.use(
+        http.get(`${API_BASE}/photo/photo-1/`, () => {
+          return HttpResponse.json({
+            result: { uid: "photo-1", photo_url: "https://cdn.example.com/p.jpg?sig=abc" },
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const url = (await client.getPhotoDownloadUrl("photo-1"))._unsafeUnwrap();
+
+      expect(url).toBe("https://cdn.example.com/p.jpg?sig=abc");
+    });
+
+    it("surfaces a 404 as a PaprikaAPIError", async () => {
+      server.use(http.get(`${API_BASE}/photo/gone/`, () => new HttpResponse(null, { status: 404 })));
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const result = await client.getPhotoDownloadUrl("gone");
+
+      expect(result.isErr()).toBe(true);
+    });
+  });
+
   describe("getRecipe() returns a full recipe by UID", () => {
     it("returns Recipe object with camelCase fields", async () => {
       server.use(

@@ -43,6 +43,28 @@ export function errorText(result: ReceivedResult | null | undefined): string | n
 }
 
 /**
+ * Read a server resource through the host bridge and return it as a `data:` URI ready for an
+ * `` `src`, or `null` when the read fails or carries no blob. Used to pull a recipe's photo
+ * bytes (`ui://recipe/{uid}/photo`) into a sandboxed iframe, which can't load an external image
+ * URL directly. Untrusted host payload — the blob must be a non-empty string and the mimeType is
+ * accepted only when it is an `image/*` type (else it falls back to `image/jpeg`), so a host
+ * cannot steer the `data:` URI to a non-image type; any transport rejection or missing blob
+ * degrades to `null` so the caller falls back to its placeholder.
+ */
+export async function readResource(app: App, uri: string): Promise<string | null> {
+  try {
+    const result = await app.readServerResource({ uri });
+    const content = result.contents?.[0];
+    if (!content || !("blob" in content) || typeof content.blob !== "string" || content.blob === "") return null;
+    const mimeType =
+      typeof content.mimeType === "string" && content.mimeType.startsWith("image/") ? content.mimeType : "image/jpeg";
+    return `data:${mimeType};base64,${content.blob}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Wire a widget to its host in one call: register the tool-result handler, adopt the host's style
  * tokens + typeface ({@link applyHostStyles}) on connect AND on every host-context change, and hand the
  * widget the merged context for its own reads (theme, touch). Handlers are set BEFORE `connect()`, so

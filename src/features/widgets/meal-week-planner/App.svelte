@@ -12,6 +12,7 @@
     callTool,
     connectHost,
     errorText,
+    readResource,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
   import {
@@ -45,6 +46,12 @@
   const NAV_CLAMP_WEEKS = 4; // prev/next reach ±4 weeks from the current week
 
   let { app }: { app: App } = $props();
+
+  // The recipe-detail hero photo loader. A stable identity (defined once per instance)
+  // matters: RecipeDetail's $effect depends on it, so a fresh inline arrow each render
+  // would null and re-fetch the hero on every reactive update.
+  const loadPhoto = (uri: string): Promise<string | null> =>
+    readResource(app, uri);
 
   let week = $state<Week | null>(null);
   let phase = $state<"loading" | "week" | "error">("loading");
@@ -354,6 +361,7 @@
   {:else if detail}
     <RecipeDetail
       recipe={detail}
+      {loadPhoto}
       onBack={backToWeek}
       backLabel="Back to the week"
     />

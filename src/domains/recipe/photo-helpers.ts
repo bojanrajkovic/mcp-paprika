@@ -67,6 +67,49 @@ export async function normalizePhoto(
 }
 
 /**
+ * Hard cap on a requested photo dimension (px), guarding the `ui://recipe/{uid}/photo`
+ * resource against an absurd `w`/`h` that would blow up the libvips allocation.
+ */
+export const MAX_PHOTO_DIMENSION = 4096;
+
+/**
+ * Default cap on the served photo's longest edge when the caller requests no
+ * dimensions — keeps an un-sized proxy read bounded instead of returning a
+ * multi-megabyte original.
+ */
+export const DEFAULT_PHOTO_MAX_EDGE = 1280;
+
+/**
+ * Resizes arbitrary input image bytes to a JPEG for the photo proxy resource, using
+ * the same sharp convention as {@link normalizePhoto} / `makeThumbnail`
+ * (`fit: "inside"`, no enlargement, EXIF orientation baked in via `.rotate()`):
+ *
+ * - both `width` and `height` → fit inside that box, preserving aspect;
+ * - only one axis → scale to it, the other axis computed proportionally (sharp
+ *   treats the omitted dimension as auto);
+ * - neither → cap the longest edge at {@link DEFAULT_PHOTO_MAX_EDGE}.
+ *
+ * `sharp` is imported lazily so only a real photo read pays the libvips load cost.
+ */
+export async function resizePhotoJpeg(
+  input: Buffer,
+  opts?: { readonly width?: number | undefined; readonly height?: number | undefined },
+): Promise<Buffer> {
+  const { default: sharp } = await import("sharp");
+  const width = opts?.width;
+  const height = opts?.height;
+  const [w, h] =
+    width === undefined && height === undefined
+      ? [DEFAULT_PHOTO_MAX_EDGE, DEFAULT_PHOTO_MAX_EDGE]
+      : [width ?? null, height ?? null];
+  return sharp(input)
+    .rotate()
+    .resize(w, h, { fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 82 })
+    .toBuffer();
+}
+
+/**
  * Uppercase hex SHA-256 of the given bytes — the casing Paprika emits. Used for
  * `recipe.photo_hash` (over the thumbnail bytes, verified exact) and the Photo
  * entity `hash` (over the full bytes — self-consistent, since Paprika stores the

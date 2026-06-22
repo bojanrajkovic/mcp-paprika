@@ -5,7 +5,7 @@ import type { RecipeUid } from "../ids.js";
 import type { RecipeState } from "../module.js";
 
 import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
-import { recipeToMarkdown } from "../recipe-markdown.js";
+import { recipePhotoResourceUri, recipeToMarkdown } from "../recipe-markdown.js";
 
 /**
  * `paprika://recipe/{uid}` — render a recipe as markdown. Categories are owned by
@@ -52,6 +52,13 @@ export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
       const photoUrl = recipe.imageUrl || recipe.photoUrl;
       if (photoUrl) {
         headerLines.push(`**Photo:** ${photoUrl}`);
+      }
+
+      // The photo proxy resource reads back the bytes even for an uploaded photo that
+      // has no public URL (#419) — surfaced so a client can fetch it without the URL.
+      const photoResourceUri = recipePhotoResourceUri(recipe);
+      if (photoResourceUri) {
+        headerLines.push(`**Photo resource:** \`${photoResourceUri}\``);
       }
 
       const content = `${headerLines.join("\n")}\n\n${recipeToMarkdown(recipe, categoryNames)}`;

@@ -3,23 +3,43 @@
   // ingredient / direction lists. Rendered over a widget's primary view when the user taps
   // a recipe (the dual-mode "browse → detail" pattern). Shared by the meal-week-planner and
   // the recipe-browse widget — both feed it the same read_recipe slice (RecipeDetailData), so
-  // the visual treatment lives once. `onBack` returns to the host view; this component owns no
-  // fetch.
+  // the visual treatment lives once. `onBack` returns to the host view; the only fetch it does is
+  // the hero photo, through the injected `loadPhoto` (so the component stays host-agnostic).
   import type { RecipeDetailData } from "./recipe-detail.js";
 
   import PillButton from "./PillButton.svelte";
 
   // `backLabel` is the back control's accessible name — each consumer names its own destination
   // ("Back to the week" / "Back to recipes"), since the visible glyph + "Back" can't say where.
+  // `loadPhoto` reads the photo proxy resource to a `data:` URI; omitted (or returning null) → no hero.
   let {
     recipe,
     onBack,
     backLabel = "Back",
+    loadPhoto,
   }: {
     recipe: RecipeDetailData;
     onBack: () => void;
     backLabel?: string;
+    loadPhoto?: (uri: string) => Promise<string | null>;
   } = $props();
+
+  // Hero photo: requested at a detail-pane width, reloaded whenever the recipe changes (the pane is
+  // reused across navigations). A token discards a load that resolves after the recipe swapped.
+  const HERO_REQUEST_PX = 1024;
+  let heroSrc = $state<string | null>(null);
+  $effect(() => {
+    const uri = recipe.photoResourceUri;
+    heroSrc = null;
+    if (uri === null || loadPhoto === undefined) return;
+    let cancelled = false;
+    void loadPhoto(`${uri}?w=${HERO_REQUEST_PX.toString()}`).then((src) => {
+      if (!cancelled) heroSrc = src;
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
 
   // read_recipe emits ingredients/directions as newline-delimited prose; split to lines,
   // dropping blanks, so each renders on its own row. Directions render as paragraphs (not an
@@ -49,6 +69,11 @@
 </header>
 
 <div class="detail">
+  {#if heroSrc}<img
+      class="hero"
+      src={heroSrc}
+      alt={`Photo of ${recipe.name}`}
+    />{/if}
   <h2 class="rname">{recipe.name}</h2>
   {#if meta.length > 0}<p class="meta">{meta.join(" · ")}</p>{/if}
 
@@ -108,6 +133,14 @@
     overflow-y: auto;
     padding: 4px 16px 20px;
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+  .hero {
+    display: block;
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin: 6px 0 10px;
   }
   .rname {
     font-size: 19px;

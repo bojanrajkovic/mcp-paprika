@@ -30,6 +30,7 @@ import { GENERATED_MAX_FULL_EDGE, normalizePhoto, sha256Hex } from "./photo-help
 import { PhotoStore } from "./photo/store.js";
 import { photoDiskDescriptor } from "./photo/types.js";
 import { recipeToRow, resolveCategoryRefs } from "./recipe-markdown.js";
+import { recipePhotoResource } from "./resources/photo-resource.js";
 import { recipeResource } from "./resources/recipe-resource.js";
 import { RecipeStore } from "./store.js";
 import { categoriesSync } from "./syncs/category-sync.js";
@@ -395,7 +396,7 @@ register(
           deleteCategoryTool,
           ...photoWriteTools,
         ],
-        resources: [recipeResource],
+        resources: [recipeResource, recipePhotoResource],
         syncs: [recipesSync(state), categoriesSync(state), photosSync(state)],
         flush: () =>
           ResultAsync.combine([
