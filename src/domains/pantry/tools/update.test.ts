@@ -36,6 +36,13 @@ describe("update_pantry_item tool", () => {
     expect(text).toContain("Butter");
     expect(kh.client().savePantryItems).toHaveBeenCalledOnce();
 
+    // The saved item rides structuredContent so the model can chain on its UID.
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { uid: string; ingredient: string; quantity: string | null };
+    expect(structured.uid).toBe("uid-1");
+    expect(structured.ingredient).toBe("Butter");
+    expect(structured.quantity).toBe("2 lb");
+
     const [callArgs] = vi.mocked(kh.client().savePantryItems).mock.calls[0]?.[0] ?? [];
     expect(callArgs).toBeDefined();
     expect(callArgs?.quantity).toBe("2 lb");
@@ -121,6 +128,9 @@ describe("update_pantry_item tool", () => {
     const text = getText(result);
 
     expect(text).toContain("No pantry item found");
+    // A not-found is an isError with no structuredContent under the declared schema.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
     expect(kh.state().store.size).toBe(0);
   });
@@ -201,6 +211,8 @@ describe("update_pantry_item tool", () => {
 
     expect(text).toContain("Failed to update pantry item");
     expect(text).toContain("server timeout");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     // The original item is still in the store.
     const after = kh.state().store.get("uid-1" as PantryItemUid);
     expect(after).toBeDefined();

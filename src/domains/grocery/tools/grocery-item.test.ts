@@ -451,6 +451,13 @@ describe("update_grocery_item tool", () => {
     const text = getText(result);
     expect(text).toContain("Apples");
 
+    // The saved row rides structuredContent so the model can chain on its UID.
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { uid: string; ingredient: string; quantity: string | null };
+    expect(structured.uid).toBe("ITEM-1");
+    expect(structured.ingredient).toBe("Apples");
+    expect(structured.quantity).toBe("10");
+
     const savedItems = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]?.[0] as ReadonlyArray<{
       ingredient: string;
       quantity: string;
@@ -550,6 +557,9 @@ describe("update_grocery_item tool", () => {
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no grocery item found");
+    // A not-found is an isError with no structuredContent under the declared schema.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 

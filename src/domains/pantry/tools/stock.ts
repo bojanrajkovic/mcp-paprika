@@ -5,9 +5,9 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemToMarkdown } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 export const markPantryItemOutOfStockInputSchema = z
@@ -33,6 +33,7 @@ export const markPantryItemOutOfStockTool = defineTool(
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     description: "Mark a pantry item as out of stock by UID (e.g. you've run out of it).",
     inputSchema: markPantryItemOutOfStockInputSchema,
+    outputSchema: pantryItemReadOutputSchema,
   },
   [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
@@ -41,7 +42,7 @@ export const markPantryItemOutOfStockTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return toolResult(
+        return errorResult(
           `No pantry item found with UID "${args.uid}" (it may not exist or was already deleted). Use \`list_pantry_items\` to find it.`,
         );
       }
@@ -51,14 +52,18 @@ export const markPantryItemOutOfStockTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-          return toolResult(`Failed to update pantry item: ${e.message}`);
+          return errorResult(`Failed to update pantry item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+
+      const structured = pantryItemToStructured(saved, ctx.deps.aisle);
+      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
-      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle), structured);
     };
   },
 );
@@ -74,6 +79,7 @@ export const restockPantryItemTool = defineTool(
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     description: "Mark a pantry item as back in stock by UID (e.g. you've restocked it).",
     inputSchema: restockPantryItemInputSchema,
+    outputSchema: pantryItemReadOutputSchema,
   },
   [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
@@ -82,7 +88,7 @@ export const restockPantryItemTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return toolResult(
+        return errorResult(
           `No pantry item found with UID "${args.uid}" (it may not exist or was already deleted). Use \`list_pantry_items\` to find it.`,
         );
       }
@@ -92,14 +98,18 @@ export const restockPantryItemTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-          return toolResult(`Failed to update pantry item: ${e.message}`);
+          return errorResult(`Failed to update pantry item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+
+      const structured = pantryItemToStructured(saved, ctx.deps.aisle);
+      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
-      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle), structured);
     };
   },
 );

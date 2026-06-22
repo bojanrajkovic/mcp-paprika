@@ -53,13 +53,19 @@ describe("reschedule_meal tool", () => {
       meals: [original],
     });
 
-    await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "2026-06-15" });
+    const result = await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "2026-06-15" });
 
     const stored = kh.state().store.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
     // Destination date is empty → first in its order_flag sequence (0). All other
     // non-date-derived fields are preserved.
     expect(stored).toEqual({ ...original, date: "2026-06-15 00:00:00", orderFlag: 0 });
+
+    // The rescheduled meal rides structuredContent so the model can chain on it.
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { uid: string; date: string };
+    expect(structured.uid).toBe(TEST_MEAL_UID);
+    expect(structured.date).toBe("2026-06-15");
   });
 
   it("moving onto a populated date — orderFlag becomes the destination date's max+1 (per-date)", async () => {
@@ -140,6 +146,11 @@ describe("reschedule_meal tool", () => {
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
     expect(kh.client().notifySync).not.toHaveBeenCalled();
     expect(getText(result)).toContain("Taco Tuesday");
+    // A same-date no-op is a real success → success-with-structured, not isError.
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { uid: string; name: string };
+    expect(structured.uid).toBe(TEST_MEAL_UID);
+    expect(structured.name).toBe("Taco Tuesday");
   });
 
   it("reports a not-found UID without saving", async () => {
@@ -154,6 +165,9 @@ describe("reschedule_meal tool", () => {
     expect(getText(result)).toContain(
       'No meal found with UID "ghost" (it may not exist or was already deleted). Use `read_meal_plan` to find it.',
     );
+    // A not-found is an isError with no structuredContent under the declared schema.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
@@ -167,6 +181,9 @@ describe("reschedule_meal tool", () => {
     const result = await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "not-a-date" });
 
     expect(getText(result)).toContain('Could not parse date "not-a-date"');
+    // A bad-arg is an isError with no structuredContent under the declared schema.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 

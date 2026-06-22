@@ -447,12 +447,19 @@ describe("update_meal — success paths", () => {
     const original = makeMeal({ uid: TEST_MEAL_UID, typeUid: DINNER_UID, type: 2 });
     kh.seed({ meals: [original], mealTypes: makeBuiltins(), recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })] });
 
-    await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { name: "Lunch" } } });
+    const result = await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { name: "Lunch" } } });
 
     const store = kh.state().store;
     const stored = store.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(LUNCH_UID);
     expect(stored?.type).toBe(1);
+
+    // The saved meal rides structuredContent so the model can chain on its UID.
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { uid: string; typeUid: string | null; typeName: string | null };
+    expect(structured.uid).toBe(TEST_MEAL_UID);
+    expect(structured.typeUid).toBe(LUNCH_UID);
+    expect(structured.typeName).toBe("Lunch");
   });
 
   it("freeform meal + recipe_uid → auto-resolved name from store, recipeUid set", async () => {
@@ -597,6 +604,9 @@ describe("update_meal — success paths", () => {
 
     expect(text).toContain("Cannot set name on the recipe-linked meal");
     expect(text).toContain("demote first");
+    // A precondition rejection is an isError with no structuredContent.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
     const store = kh.state().store;
     expect(store.get(TEST_MEAL_UID)?.name).toBe("Tacos");
@@ -620,6 +630,11 @@ describe("update_meal — success paths", () => {
     expect(kh.client().notifySync).not.toHaveBeenCalled();
     const text = getText(result);
     expect(text).toContain("Existing");
+    // A no-op is a real success → success-with-structured, not isError.
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { uid: string; name: string };
+    expect(structured.uid).toBe(TEST_MEAL_UID);
+    expect(structured.name).toBe("Existing");
   });
 });
 
@@ -641,6 +656,9 @@ describe("update_meal — failure/edge paths", () => {
     expect(text).toBe(
       'No meal found with UID "UNKNOWN-UID" (it may not exist or was already deleted). Use `read_meal_plan` to find it.',
     );
+    // A not-found is an isError with no structuredContent under the declared schema.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
@@ -668,6 +686,11 @@ describe("update_meal — failure/edge paths", () => {
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
     const expectedCard = mealToMarkdown(meal, "Dinner", null);
     expect(text).toBe(expectedCard);
+    // An idempotent no-op is a real success → success-with-structured.
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { uid: string; recipeUid: string | null };
+    expect(structured.uid).toBe(TEST_MEAL_UID);
+    expect(structured.recipeUid).toBeNull();
   });
 
   it("recipe meal + recipe_uid: null + no name → demotion error, no POST", async () => {
@@ -680,6 +703,9 @@ describe("update_meal — failure/edge paths", () => {
     expect(text).toBe(
       `Demoting a recipe meal to freeform requires an explicit name. Add 'name: "<your label>"' to the call.`,
     );
+    // A precondition rejection is an isError with no structuredContent.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 

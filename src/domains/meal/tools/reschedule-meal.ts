@@ -6,12 +6,18 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
-import { makeMealOrderFlagAssigner, renderMealCard } from "./helpers.js";
+import {
+  makeMealOrderFlagAssigner,
+  mealRowSchema,
+  mealToStructuredRow,
+  renderMealCard,
+  resolveMealTypeName,
+} from "./helpers.js";
 
 // `.strict()`. Rescheduling is its own act because moving a meal's date moves it
 // into the destination day's order_flag sequence (per-date), which a generic
@@ -46,6 +52,7 @@ export const rescheduleMealTool = defineTool(
       "Moving the date re-sequences the meal to the end of the destination day's order. To change a " +
       "meal's recipe link, freeform name, or scale instead, use update_meal.",
     inputSchema: rescheduleMealInputSchema,
+    outputSchema: mealRowSchema,
   },
   [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
@@ -55,24 +62,32 @@ export const rescheduleMealTool = defineTool(
       const existing = ctx.state.store.get(uid);
 
       if (existing === undefined) {
-        return toolResult(
+        return errorResult(
           `No meal found with UID "${uid}" (it may not exist or was already deleted). Use \`read_meal_plan\` to find it.`,
         );
       }
 
+      // The saved (or, on a no-op, existing) meal rides structuredContent so the
+      // model can chain update_meal / delete_meal without a re-read.
+      const typeName = resolveMealTypeName(ctx.deps["meal-type"]);
+
       // Normalize the destination date in its own calendar zone (see plan_meals).
       const normalizedDate = parseCalendarDayWire(args.date);
       if (normalizedDate === null) {
-        return toolResult(
+        return errorResult(
           `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
         );
       }
 
       const dateChanged = normalizedDate !== existing.date;
 
-      // Nothing to do: same date and no type co-change. Avoid a wasted POST + notifySync.
+      // Nothing to do: same date and no type co-change. A real success (nothing to
+      // save), so success-with-structured. Avoid a wasted POST + notifySync.
       if (!dateChanged && args.type === undefined) {
-        return toolResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+        return toolResult(
+          renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
+          mealToStructuredRow(existing, typeName(existing)),
+        );
       }
 
       // Resolve the optional type co-change LAST — after the date validation above. An
@@ -83,7 +98,7 @@ export const rescheduleMealTool = defineTool(
       if (args.type !== undefined) {
         const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
         if (!result.ok) {
-          return toolResult(result.message);
+          return errorResult(result.message);
         }
         // Custom mealtypes carry originalType: null; Meal.type is vestigial when
         // type_uid is set (see plan_meals for the full rationale).
@@ -110,15 +125,19 @@ export const rescheduleMealTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, uid }, "saveMeals failed");
-          return toolResult(`Failed to reschedule meal: ${e.message}`);
+          return errorResult(`Failed to reschedule meal: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
-      const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
-      if (commitErr) return commitErr;
       const saved = savedItems[0]!;
 
-      return toolResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
+      const structured = mealToStructuredRow(saved, typeName(saved));
+      const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems), {
+        structuredContent: structured,
+      });
+      if (commitErr) return commitErr;
+
+      return toolResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]), structured);
     };
   },
 );

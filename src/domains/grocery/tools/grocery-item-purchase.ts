@@ -6,7 +6,7 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
-import { groceryItemToMarkdown } from "../grocery-helpers.js";
+import { groceryItemRowSchema, groceryItemToMarkdown, groceryItemToRow } from "../grocery-helpers.js";
 import { GroceryItemUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -30,6 +30,7 @@ export const markGroceryItemPurchasedTool = defineTool(
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     description: "Mark a grocery item as purchased (checked off) by UID.",
     inputSchema: markGroceryItemPurchasedInputSchema,
+    outputSchema: groceryItemRowSchema,
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
@@ -51,10 +52,14 @@ export const markGroceryItemPurchasedTool = defineTool(
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
+
+      const structured = groceryItemToRow(saved, ctx.deps.aisle);
+      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
-      return toolResult(groceryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(groceryItemToMarkdown(saved, ctx.deps.aisle), structured);
     };
   },
 );

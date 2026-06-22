@@ -18,6 +18,7 @@ import { mealStartGuard } from "./guards.js";
 import {
   makeMealOrderFlagAssigner,
   mealListOutputSchema,
+  mealRowSchema,
   mealToStructuredRow,
   renderMealCard,
   resolveMealTypeName,
@@ -352,6 +353,7 @@ export const updateMealTool = defineTool(
       "merge: omitted fields are preserved. To clear scale, pass scale: null. To change the meal's date, " +
       "use reschedule_meal. The is_ingredient and deleted fields are not updatable via this tool.",
     inputSchema: updateMealInputSchema.shape,
+    outputSchema: mealRowSchema,
   },
   [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
@@ -362,10 +364,14 @@ export const updateMealTool = defineTool(
       const existing = ctx.state.store.get(uid);
 
       if (existing === undefined) {
-        return toolResult(
+        return errorResult(
           `No meal found with UID "${uid}" (it may not exist or was already deleted). Use \`read_meal_plan\` to find it.`,
         );
       }
+
+      // The saved (or, on a no-op, existing) meal rides structuredContent so the
+      // model can chain reschedule_meal / delete_meal without a re-read.
+      const typeName = resolveMealTypeName(ctx.deps["meal-type"]);
       // Resolve recipe_uid and name interaction. The structural union ensures we
       // never see (recipe_uid: <UID>, name: <X>) together — that combination
       // matches no variant and is rejected at parse time.
@@ -382,12 +388,16 @@ export const updateMealTool = defineTool(
             demoteOp.type === undefined &&
             demoteOp.scale === undefined
           ) {
-            // AC3.9: idempotent no-op — meal already freeform, nothing else changing
-            return toolResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+            // Idempotent no-op — meal already freeform, nothing else changing. A
+            // real success (nothing to save), so success-with-structured.
+            return toolResult(
+              renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
+              mealToStructuredRow(existing, typeName(existing)),
+            );
           }
           if (existing.recipeUid !== null && demoteOp.name === undefined) {
-            // AC3.10: demotion requires explicit name when meal is currently recipe-linked
-            return toolResult(
+            // Demotion requires explicit name when meal is currently recipe-linked.
+            return errorResult(
               `Demoting a recipe meal to freeform requires an explicit name. ` +
                 `Add 'name: "<your label>"' to the call.`,
             );
@@ -407,7 +417,7 @@ export const updateMealTool = defineTool(
           if (newLink !== existing.recipeUid) {
             const recipe = ctx.deps.recipe.get(newLink);
             if (recipe === undefined) {
-              return toolResult(
+              return errorResult(
                 `recipe_uid "${newLink}" is not known to the local recipe store; ` +
                   `wait for the next sync and retry.`,
               );
@@ -424,7 +434,7 @@ export const updateMealTool = defineTool(
         // meals would never render in Paprika.app.
         const nameOp = op as z.infer<typeof nameUpdateVariant>;
         if (existing.recipeUid !== null) {
-          return toolResult(
+          return errorResult(
             `Cannot set name on the recipe-linked meal "${existing.name}". ` +
               `Names auto-resolve from the recipe. To use a custom label, demote first via ` +
               `update_meal({uid, update: {recipe_uid: null, name: "<your label>"}}).`,
@@ -442,7 +452,7 @@ export const updateMealTool = defineTool(
       if (op.type !== undefined) {
         const result = await resolveOrCreateMealType(ctx.deps["meal-type"], op.type);
         if (!result.ok) {
-          return toolResult(result.message);
+          return errorResult(result.message);
         }
         // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
         // `type_uid` is set (see plan_meals comment for the full rationale).
@@ -475,21 +485,28 @@ export const updateMealTool = defineTool(
         updated.typeUid === existing.typeUid &&
         updated.scale === existing.scale
       ) {
-        return toolResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+        return toolResult(
+          renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
+          mealToStructuredRow(existing, typeName(existing)),
+        );
       }
 
       const saved = (await ctx.infra.client.saveMeals([updated])).match(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid }, "saveMeals failed");
-          return toolResult(`Failed to update meal: ${e.message}`);
+          return errorResult(`Failed to update meal: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved));
+
+      const structured = mealToStructuredRow(saved, typeName(saved));
+      const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
-      return toolResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
+      return toolResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]), structured);
     };
   },
 );

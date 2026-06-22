@@ -27,11 +27,17 @@ describe("mark_grocery_item_purchased tool", () => {
     vi.mocked(kh.client().saveGroceryItems).mockReturnValue(okAsync([{ ...item, purchased: true }]));
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
-    const text = await kh.callToolText("mark_grocery_item_purchased", { uid: "ITEM-1" });
+    const result = await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-1" });
+    const text = getText(result);
 
     expect(text).toContain("Milk");
     expect(text).toContain("Yes"); // Purchased: Yes
     expect(kh.client().saveGroceryItems).toHaveBeenCalledWith([expect.objectContaining({ purchased: true })]);
+    // The purchased row rides structuredContent so the model can chain on its UID.
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as { uid: string; purchased: boolean };
+    expect(structured.uid).toBe("ITEM-1");
+    expect(structured.purchased).toBe(true);
   });
 
   it("unknown uid returns not-found error without calling the client", async () => {

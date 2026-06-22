@@ -9,7 +9,12 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, type ErrorResult, errorResult, toolResult } from "../../../shared/tools.js";
 import { NO_AISLE_UID } from "../../aisle/ids.js";
-import { groceryItemRowSchema, groceryItemsToRows, groceryItemToMarkdown } from "../grocery-helpers.js";
+import {
+  groceryItemRowSchema,
+  groceryItemsToRows,
+  groceryItemToMarkdown,
+  groceryItemToRow,
+} from "../grocery-helpers.js";
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -248,6 +253,7 @@ export const updateGroceryItemTool = defineTool(
       "Update a grocery item's quantity, aisle, or notes by UID. Only provided fields are changed; " +
       "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",
     inputSchema: updateGroceryItemInputSchema,
+    outputSchema: groceryItemRowSchema,
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
@@ -255,7 +261,7 @@ export const updateGroceryItemTool = defineTool(
     return async (args) => {
       const existing = ctx.state.items.store.get(args.uid);
       if (existing === undefined) {
-        return toolResult(
+        return errorResult(
           `No grocery item found with UID "${args.uid}" (it may not exist or was already deleted). Use \`read_grocery_list\` to inspect its list.`,
         );
       }
@@ -264,7 +270,7 @@ export const updateGroceryItemTool = defineTool(
         args.aisle !== undefined
           ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
               (v) => v,
-              (message) => toolResult(message),
+              (message) => errorResult(message),
             )
           : undefined;
       if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
@@ -285,14 +291,20 @@ export const updateGroceryItemTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid: args.uid }, "saveGroceryItems failed");
-          return toolResult(`Failed to update grocery item: ${e.message}`);
+          return errorResult(`Failed to update grocery item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
+
+      // The saved item rides structuredContent (and the degraded commit branch),
+      // so the model can chain on its UID without a re-read.
+      const structured = groceryItemToRow(saved, ctx.deps.aisle);
+      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
-      return toolResult(groceryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(groceryItemToMarkdown(saved, ctx.deps.aisle), structured);
     };
   },
 );
