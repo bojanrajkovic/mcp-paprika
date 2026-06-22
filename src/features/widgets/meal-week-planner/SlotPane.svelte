@@ -116,7 +116,9 @@
   .meal-slot {
     padding: 10px 16px;
     display: flex;
-    align-items: flex-start;
+    /* baseline so the smaller meal-type label sits on the same text baseline as the meal name (or
+       the placeholder dash), instead of a hand-tuned top nudge that drifts as either size changes. */
+    align-items: baseline;
     gap: 14px;
     border-top: 1px solid var(--line);
   }
@@ -127,7 +129,6 @@
     letter-spacing: 0.03em;
     width: 64px;
     flex: none;
-    padding-top: 3px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -181,8 +182,10 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
+  /* Match .ms-name's weight: a freeform meal is still a meal name, not lighter than a linked one. */
   .ms-free {
     font-size: 14px;
+    font-weight: 550;
     padding: 2px 0;
   }
 

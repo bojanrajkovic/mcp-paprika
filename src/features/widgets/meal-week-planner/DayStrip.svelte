@@ -169,7 +169,7 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--muted);
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
   }
   .dc-num {
     font-size: 13px;
