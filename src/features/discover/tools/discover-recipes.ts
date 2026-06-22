@@ -115,16 +115,16 @@ export const discoverRecipesTool = defineTool(
       }
 
       // Build the structured rows through the recipe contract (it resolves each row's
-      // category names against recipe's own store), then layer the similarity score on
-      // each. The text line resolves category names through the same contract for its
-      // own display.
+      // category names against recipe's own store) once, then layer the similarity score
+      // on each. The text line reuses the row's already-resolved `categories`, so the
+      // structured and text categories can't drift and each hit resolves names once.
       const rows = ctx.deps.recipe.toRows(enriched.map((entry) => entry.recipe));
       const items: Array<z.infer<typeof discoverRowSchema>> = [];
       const lines: Array<string> = [];
       enriched.forEach((entry, index) => {
-        items.push({ ...rows[index]!, score: entry.result.score });
-        const categoryNames = [...ctx.deps.recipe.resolveCategoryNames(entry.recipe.categories)];
-        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, categoryNames, ctx.deps.recipe));
+        const row = rows[index]!;
+        items.push({ ...row, score: entry.result.score });
+        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, row.categories, ctx.deps.recipe));
       });
 
       return toolResult(lines.join("\n\n"), { items });

@@ -1,20 +1,11 @@
 import { z } from "zod";
 
+import type { AisleDisplaySource } from "../aisle/api.js";
 import type { AisleUid } from "../aisle/ids.js";
 import type { GroceryItem } from "./grocery-item/types.js";
 import type { GroceryList } from "./grocery-list/types.js";
 
 import { GroceryItemUidSchema, GroceryListUidSchema } from "./ids.js";
-
-/**
- * The aisle-catalog slice these renderers read: `displayName(item)` resolves an
- * item's aisle through the live catalog with the item's denormalized copy as the
- * fallback. Callers pass `ctx.deps.aisle` (the aisle contract carries the method);
- * the resolution contract lives on `AisleApi.displayName`.
- */
-export interface AisleDisplaySource {
-  displayName(item: { readonly aisleUid: AisleUid; readonly aisle: string }): string;
-}
 
 /**
  * The structured-output row for one grocery item (ADR-0019, R1, B1/#321) — the

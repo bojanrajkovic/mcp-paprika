@@ -44,3 +44,10 @@ export interface AisleApi {
    */
   deleteAisle(uid: AisleUid): Promise<Result<void, string>>;
 }
+
+/**
+ * The aisle-catalog slice the grocery/pantry renderers read: just `displayName`.
+ * Callers pass `ctx.deps.aisle` (the full contract satisfies it); the helpers
+ * narrow to this so they depend on the resolution method alone, not the whole api.
+ */
+export type AisleDisplaySource = Pick<AisleApi, "displayName">;

@@ -193,7 +193,7 @@ interface ErasedSync {
 }
 
 /**
- * What a module's `.build((state, infra) => …)` callback returns. `api` must satisfy
+ * What a module's `.build((state, infra, deps) => …)` callback returns. `api` must satisfy
  * the contract the module registered for its own id; `tools`/`resources`/`onReady`
  * get a ctx narrowed to `State` + the `dependsOn` tuple — INFERRED, so the author
  * writes no per-module ctx alias; `flush` is optional.
