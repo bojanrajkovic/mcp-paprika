@@ -292,7 +292,7 @@ describe("discover_recipes tool", () => {
       kh.seed({ recipes: [makeRecipe()] });
       const result = await kh.callTool("discover_recipes", { query: "nothing" });
       expect(result.isError).toBeFalsy();
-      expect(result.structuredContent).toEqual({ items: [] });
+      expect(result.structuredContent).toEqual({ context: { source: "discover", query: "nothing" }, items: [] });
     });
 
     it("not configured is an error directing to search_recipes (isError, no structuredContent)", async () => {

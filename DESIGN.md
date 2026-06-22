@@ -203,6 +203,7 @@ The surface has two button families: the consent screen's full-width action butt
 - **Ghost (consent Deny):** Transparent with ink text and a 1px `line-2` border, same size as Primary. Deny is given equal visual weight to Allow — the screen does not steer.
 - **Pills (widget actions):** 12px/600 text, padding ~5px 11px, fully round, 1px `line` border, transparent fill. Variants: **neutral** (muted → ink on hover, hover wash — grocery's Clear/Keep), **accent** (`paprika` outline + text — pantry's Restock), **danger** (muted → alert-red on hover — pantry's Out), **danger-strong** (alert-red outline + text at rest — grocery's clear-confirm).
 - **Focus:** Pills and rows show a 2px `paprika` focus ring, offset 2px. Always visible on keyboard focus; never suppressed.
+- **Adaptive outline border:** A button or control outline that sits on a non-base surface (an expanded detail strip, which uses the `hover` background) borders with `1px solid color-mix(in oklch, var(--ink) 22%, transparent)` — a percentage of the theme's own ink — not the fixed `line` token. `line` is tuned for separators on the base surface and washes out against the darker `hover` fill, especially in dark mode; mixing from ink keeps the outline legible on either surface, light or dark. Prefer it over `line` for control outlines off the base surface.
 
 ### Chips / Badges
 
@@ -222,6 +223,14 @@ The surface has two button families: the consent screen's full-width action butt
 - **Style:** Full-width rows on `paper`, padding 11px 16px — never boxed cards, and **no per-row divider**. The ingredient name leads; a ` · quantity` follows in muted tabular figures (the separator is a real space on both sides of the `·`, so a done strike-through runs straight through it).
 - **Done state:** The name strikes through and dims to `faint` (a `color-mix` line color, never a harsh strike); a grocery checkbox (6px-radius, 2px border) fills with `fresh-green` and shows a green tick; an in-flight write shows a small `fresh-green` spinner.
 - **Grouped by aisle:** Each category is bracketed by a **full-width hairline separator** above its sticky, uppercase 12px `muted` heading (with a count as flavor text beside it); rows within a group flow without internal lines. One separator per category, not a line per row. The heading and its count baseline-align.
+
+### Rating Dots (signature)
+
+A quieter, on-brand alternative to star glyphs: five small (~5px) dots, right-aligned on a browse row, filled to the recipe's 0–5 rating in `paprika`; unfilled dots are the same color at 0.2 opacity. Rating reads as a compact density mark rather than a literal row of stars. The group carries an accessible name ("Rated N of 5"); the dots themselves are decorative.
+
+### Placeholder Tile (signature)
+
+A 48px rounded (8px) color tile standing in for a recipe photo until real thumbnails exist. Its hue is derived deterministically from the recipe name's character codes, mapped into the **food range** — hue 38–130 (ambers through greens) — with lightness and chroma fixed per theme (L ~0.7 light / ~0.32 dark, C 0.06). The reserved ranges keep it from colliding with meaning: **hue 22–35** is the paprika/brand red (never a tile), and **hue 130+** trends to the success green. The result is a palette of food-adjacent hues that read as intentional, not as a default gray. Any widget generating color-coded placeholder tiles follows this range.
 
 ### Toast
 

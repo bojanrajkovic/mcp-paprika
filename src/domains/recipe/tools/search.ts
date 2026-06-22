@@ -10,7 +10,7 @@ import type { Recipe } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, toolResult } from "../../../shared/tools.js";
 import { parseDuration } from "../../../utils/duration.js";
-import { recipeMetadataLines, recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
+import { browseContextSchema, recipeMetadataLines, recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 export const searchRecipesInputSchema = z
@@ -42,8 +42,11 @@ export const searchRecipesInputSchema = z
 
 // Structured-output payload (ADR-0019, R1): the matched recipe rows (capped at
 // `limit`) plus `total`, the full match count before the cap — so the model can
-// tell its results were truncated.
+// tell its results were truncated. `context` carries the source + the query term
+// for the recipe-browse widget's header; the widget respects search ordering (no
+// client re-sort).
 export const searchRecipesOutputSchema = z.object({
+  context: browseContextSchema,
   items: z.array(recipeRowSchema),
   total: z.number().int().nonnegative(),
 });
@@ -67,6 +70,9 @@ export const searchRecipesTool = defineTool(
       "only time constraints are given.",
     inputSchema: searchRecipesInputSchema,
     outputSchema: searchRecipesOutputSchema,
+    // Hosts with the apps surface render this result as the recipe-browser widget; others
+    // show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/recipe-browser" },
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
@@ -100,6 +106,12 @@ export const searchRecipesTool = defineTool(
           if (!hasQuery && !hasIngredients && !hasTime) {
             return errorResult("Provide at least one of: query, ingredients, or a max prep/cook/total time.");
           }
+
+          // The recipe-browse widget's source envelope: the free-text query (when present)
+          // backs the "Results for '…'" header; an ingredient/time-only search carries none.
+          const browseContext = hasQuery
+            ? { source: "search" as const, query: args.query! }
+            : { source: "search" as const };
 
           // Build candidate set from the search/getAll path.
           let queryResults: Array<{ recipe: Recipe; score?: number }>;
@@ -154,7 +166,11 @@ export const searchRecipesTool = defineTool(
             if (args.maxCook !== undefined) criteria.push(`maxCook "${args.maxCook}"`);
             if (args.maxTotal !== undefined) criteria.push(`maxTotal "${args.maxTotal}"`);
             // No match is a valid empty success, not an error.
-            return toolResult(`No recipes found matching ${criteria.join(", ")}.`, { items: [], total: 0 });
+            return toolResult(`No recipes found matching ${criteria.join(", ")}.`, {
+              context: browseContext,
+              items: [],
+              total: 0,
+            });
           }
 
           // Resolve category names once per row, feeding both the text and the
@@ -175,7 +191,7 @@ export const searchRecipesTool = defineTool(
             );
           }
 
-          return toolResult(lines.join("\n\n---\n\n"), { items, total });
+          return toolResult(lines.join("\n\n---\n\n"), { context: browseContext, items, total });
         },
         (errorMsg) => errorResult(errorMsg),
       );

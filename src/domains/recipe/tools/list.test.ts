@@ -97,6 +97,7 @@ describe("list_recipes tool", () => {
           categories: [cat.uid],
           rating: 4,
           totalTime: "1 hour",
+          servings: "8",
           isPinned: true,
         }),
       ],
@@ -109,13 +110,14 @@ describe("list_recipes tool", () => {
       total: number;
       offset: number;
     };
-    expect(payload).toMatchObject({ total: 1, offset: 0 });
+    expect(payload).toMatchObject({ context: { source: "list" }, total: 1, offset: 0 });
     expect(payload.items[0]).toMatchObject({
       uid: "r-1",
       name: "Cake",
       categories: ["Dessert"],
       rating: 4,
       totalTime: "1 hour",
+      servings: "8",
       isPinned: true,
     });
   });
