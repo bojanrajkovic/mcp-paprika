@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { ResultAsync } from "neverthrow";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
-import type { MealApi } from "./api.js";
+import type { MealApi, MealCreateError } from "./api.js";
 import type { Meal } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
@@ -88,11 +88,11 @@ register(
       const createMeals: MealApi["createMeals"] = (meals) =>
         client
           .saveMeals(meals)
-          .mapErr((e) => e.message)
+          .mapErr((e): MealCreateError => ({ phase: "save", message: e.message, saved: [] }))
           .andThen((saved) =>
             commitMealsBatch(saved)
               .map(() => saved)
-              .mapErr((e) => e.message),
+              .mapErr((e): MealCreateError => ({ phase: "commit", message: e.message, saved })),
           );
 
       return {
