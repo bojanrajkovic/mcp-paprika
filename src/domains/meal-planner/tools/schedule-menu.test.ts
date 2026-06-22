@@ -180,8 +180,11 @@ describe("schedule_menu — menu resolution", () => {
       menus: [makeMenu({ uid: MENU_UID, name: "Multi-Day", days: 3 })],
       menuItems: [],
     });
-    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
-    expect(text).toBe('Menu "Multi-Day" has no items to add to the planner.');
+    const result = await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+    expect(getText(result)).toBe('Menu "Multi-Day" has no items to add to the planner.');
+    // Nothing was created → a not-a-result branch under the declared outputSchema.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 });
@@ -229,7 +232,16 @@ describe("schedule_menu — materialization", () => {
     expect(text).toContain("## 2026-05-27 (Day 1)");
     expect(text).toContain("## 2026-05-29 (Day 3)");
     expect(text).toContain("- **Dinner:** (Not) Butter Chicken");
-    expect(text).not.toMatch(/`[0-9A-F-]{36}`/); // no meal UIDs
+    expect(text).not.toMatch(/`[0-9A-F-]{36}`/); // no meal UIDs in the text
+
+    // The new meal UIDs ride structuredContent — the text omits them entirely, so this
+    // is the only channel the model can chain reschedule_meal / delete_meal on.
+    const structured = result.structuredContent as {
+      items: ReadonlyArray<{ uid: string; recipeUid: string | null; typeName: string | null }>;
+    };
+    expect(structured.items).toHaveLength(2);
+    expect(structured.items.map((i) => i.uid).sort()).toEqual(payload.map((m) => m.uid).sort());
+    expect(structured.items.every((i) => i.typeName === "Dinner")).toBe(true);
   });
 
   it("two items on the SAME day → flags 0 and 1 (per-date sequence within the batch)", async () => {
@@ -458,8 +470,11 @@ describe("schedule_menu — rejection paths", () => {
 
     vi.mocked(kh.client().saveMeals).mockReturnValue(errAsync(new Error("network down")));
 
-    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
-    expect(text).toContain("Failed to add menu to planner: network down");
+    const result = await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+    expect(getText(result)).toContain("Failed to add menu to planner: network down");
+    // The save failed and nothing was created → isError, no structuredContent.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     // Nothing landed in the local store.
     const mealSelf = kh.stateOf("meal") as MealState;
     expect(mealSelf.store.getInDateRange().total).toBe(0);

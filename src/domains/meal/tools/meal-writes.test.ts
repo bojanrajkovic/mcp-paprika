@@ -77,6 +77,15 @@ describe("plan_meals tool — success paths", () => {
     expect(storedMeal).toBeDefined();
     expect(storedMeal?.name).toBe("Tacos");
     expect(storedMeal?.recipeUid).toBe(TACOS_UID);
+
+    // The new meal UID rides structuredContent so the model can chain on it.
+    const structured = result.structuredContent as {
+      items: ReadonlyArray<{ uid: string; recipeUid: string | null; typeName: string | null }>;
+    };
+    expect(structured.items).toHaveLength(1);
+    expect(structured.items[0]!.uid).toBe(wireMeal.uid);
+    expect(structured.items[0]!.recipeUid).toBe(TACOS_UID);
+    expect(structured.items[0]!.typeName).toBe("Dinner");
   });
 
   it("name only (no recipe_uid) → freeform meal with recipeUid: null", async () => {
@@ -356,6 +365,9 @@ describe("plan_meals tool — failure paths", () => {
     const text = getText(result);
 
     expect(text).toContain('Item 0: could not parse date "not-a-date"');
+    // A not-a-result branch under the declared outputSchema is isError (no structuredContent).
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
     expect(kh.state().store.size).toBe(storeBefore);
   });

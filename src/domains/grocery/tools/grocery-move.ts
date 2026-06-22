@@ -6,9 +6,11 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, confirmOrCancel, toolResult } from "../../../shared/tools.js";
+import { confirmGate } from "../../../shared/elicit.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../../pantry/ids.js";
+import { addPantryItemsOutputSchema, pantryItemToRow } from "../../pantry/pantry-helpers.js";
 import { GroceryItemUidSchema } from "../ids.js";
 import { groceryStartGuard, pantrySyncedGuard } from "./guards.js";
 
@@ -35,6 +37,7 @@ export const moveToPantryTool = defineTool(
     inputSchema: {
       uids: z.array(GroceryItemUidSchema).min(1).describe("Grocery item UIDs to move to pantry"),
     },
+    outputSchema: addPantryItemsOutputSchema,
   },
   [groceryStartGuard, pantrySyncedGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
@@ -49,18 +52,24 @@ export const moveToPantryTool = defineTool(
         seen.add(uid);
         const item = ctx.state.items.store.get(uid);
         if (!item) {
-          return toolResult(
+          return errorResult(
             `No grocery item found with UID "${uid}" (it may not exist or was already deleted). Use \`read_grocery_list\` to inspect its list.`,
           );
         }
         items.push(item);
       }
 
-      const stop = await confirmOrCancel(ctx.server.server, {
+      // Confirm gate run directly (not via confirmOrCancel) so a decline returns a
+      // valid empty-items success rather than a structuredContent-less toolResult,
+      // which would fail validation under the declared outputSchema. Fail-open on an
+      // un-elicitable / accepting client: proceed.
+      const confirm = await confirmGate(ctx.server.server, {
         message: `Move ${items.length.toString()} item(s) to the pantry? They'll leave the grocery list.`,
-        cancelled: `Cancelled — nothing was moved to the pantry.`,
+        log,
       });
-      if (stop) return stop;
+      if (confirm === "declined") {
+        return toolResult(`Cancelled — nothing was moved to the pantry.`, { items: [] });
+      }
 
       // Step 2: Build PantryItem objects from GroceryItem fields
       const pantryItems: Array<PantryItem> = items.map((gi) => ({
@@ -85,24 +94,33 @@ export const moveToPantryTool = defineTool(
       const createResult = await ctx.deps.pantry.createItems(pantryItems);
       return createResult.match(
         async (savedPantry) => {
+          // The CREATED pantry side rides structuredContent so the model can chain
+          // update_pantry_item / mark_pantry_item_out_of_stock on what it just moved.
+          const structured = { items: savedPantry.map((p) => pantryItemToRow(p, ctx.deps.aisle)) };
+
           // Step 4: THEN DELETE — soft-delete grocery items
           const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
           const savedGrocery = (await ctx.infra.client.saveGroceryItems(trashedGrocery)).match(
             (v) => v,
             (e) => {
-              // Partial failure: pantry items created but grocery delete failed.
-              // Return structured message so user knows the state.
+              // Partial-but-real success: the pantry items were created (the entity
+              // this tool mints), so this stays success-with-structured — only the
+              // grocery DELETE failed. Marking it isError would discard the created
+              // pantry UIDs and read as a failed move.
               log.error({ err: e, uids: args.uids }, "saveGroceryItems (delete) failed after pantry create");
               const pantryUids = savedPantry.map((p) => p.uid).join(", ");
               return toolResult(
                 `Partial failure: ${savedPantry.length.toString()} pantry item(s) were created (UIDs: ${pantryUids}), ` +
                   `but the grocery item delete failed: ${e.message}. ` +
                   `The items may exist in both grocery and pantry. You can manually delete the grocery items.`,
+                structured,
               );
             },
           );
           if ("content" in savedGrocery) return savedGrocery;
-          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedGrocery));
+          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedGrocery), {
+            structuredContent: structured,
+          });
           if (commitErr) return commitErr;
 
           // Step 5: Success response
@@ -110,17 +128,22 @@ export const moveToPantryTool = defineTool(
           const pantryUids = savedPantry.map((p) => p.uid).join(", ");
           return toolResult(
             `Moved ${items.length.toString()} item(s) to pantry: ${movedNames}.\nNew pantry UIDs: ${pantryUids}`,
+            structured,
           );
         },
         async (error) => {
           log.error({ uids: args.uids, phase: error.phase }, `createItems failed (${error.phase})`);
           if (error.phase === "save") {
-            return toolResult(`Failed to create pantry items: ${error.message}. No grocery items were deleted.`);
+            // Nothing was created server-side → a genuine not-a-result.
+            return errorResult(`Failed to create pantry items: ${error.message}. No grocery items were deleted.`);
           }
+          // Commit phase: the pantry items DID land on the server, so this is the
+          // degraded-success path — the created UIDs ride structuredContent.
           const pantryUids = error.saved.map((p) => p.uid).join(", ");
           return toolResult(
             `Pantry items were created on the server (UIDs: ${pantryUids}) but the local cache commit failed: ${error.message}. ` +
               `Grocery items were NOT deleted. The pantry items will appear after the next sync cycle.`,
+            { items: error.saved.map((p) => pantryItemToRow(p, ctx.deps.aisle)) },
           );
         },
       );

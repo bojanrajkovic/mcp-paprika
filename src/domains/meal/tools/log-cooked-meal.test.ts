@@ -42,9 +42,10 @@ describe("log_cooked_meal tool", () => {
       meals: [],
     });
 
-    await kh.callTool("log_cooked_meal", { recipe_uid: TACOS_UID });
+    const result = await kh.callTool("log_cooked_meal", { recipe_uid: TACOS_UID });
 
     const savedMeals = vi.mocked(kh.client().saveMeals).mock.calls[0]![0] as ReadonlyArray<{
+      uid: string;
       recipeUid: string;
       name: string;
       date: string;
@@ -57,6 +58,15 @@ describe("log_cooked_meal tool", () => {
     expect(meal.date).toBe(todayWire()); // today at midnight
     expect(meal.typeUid).toBe(DINNER_UID);
     expect(meal.type).toBe(2);
+
+    // The new meal UID rides structuredContent (a one-element list) so the model can chain on it.
+    const structured = result.structuredContent as {
+      items: ReadonlyArray<{ uid: string; recipeUid: string | null; typeName: string | null }>;
+    };
+    expect(structured.items).toHaveLength(1);
+    expect(structured.items[0]!.uid).toBe(meal.uid);
+    expect(structured.items[0]!.recipeUid).toBe(TACOS_UID);
+    expect(structured.items[0]!.typeName).toBe("Dinner");
   });
 
   it("honors an explicit date and type", async () => {
@@ -111,6 +121,9 @@ describe("log_cooked_meal tool", () => {
     const result = await kh.callTool("log_cooked_meal", { recipe_uid: "recipe-ghost" as RecipeUid });
 
     expect(getText(result)).toContain("is not known to the local recipe store");
+    // An unknown recipe is a not-a-result branch → isError, no structuredContent.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 

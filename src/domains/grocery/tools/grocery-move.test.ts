@@ -34,6 +34,9 @@ describe("move_grocery_items_to_pantry tool", () => {
     const text = getText(result);
 
     expect(text).toContain("Cancelled");
+    // A decline is a valid empty success under the declared outputSchema, not isError.
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({ items: [] });
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
@@ -123,6 +126,12 @@ describe("move_grocery_items_to_pantry tool", () => {
 
     // Grocery item removed from the store (committed via commitGroceryItemsBatch)
     expect(kh.state().items.store.get("ITEM-1" as GroceryItemUid)).toBeUndefined();
+
+    // The CREATED pantry side rides structuredContent so the model can chain on it.
+    const structured = result.structuredContent as { items: ReadonlyArray<{ uid: string; ingredient: string }> };
+    expect(structured.items).toHaveLength(1);
+    expect(structured.items[0]!.uid).toBe("PANTRY-ITEM-1");
+    expect(structured.items[0]!.ingredient).toBe("Apples");
   });
 
   it("batch of 3 UIDs calls savePantryItems once then saveGroceryItems once (create-first)", async () => {
@@ -195,6 +204,9 @@ describe("move_grocery_items_to_pantry tool", () => {
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("already deleted");
+    // Unknown/already-deleted UID is a not-a-result branch → isError, no structuredContent.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
@@ -246,6 +258,12 @@ describe("move_grocery_items_to_pantry tool", () => {
     expect(kh.client().saveGroceryItems).toHaveBeenCalledOnce();
     // Grocery item still in the store (failed grocery delete)
     expect(kh.state().items.store.get("PFAIL-1" as GroceryItemUid)).toBeDefined();
+
+    // Pantry was created — the entity this tool mints — so this is success-with-structured,
+    // NOT isError, and the created pantry UID rides the structured channel.
+    expect(result.isError).toBeFalsy();
+    const structured = result.structuredContent as { items: ReadonlyArray<{ uid: string }> };
+    expect(structured.items.map((i) => i.uid)).toEqual(["PANTRY-UID-PFAIL"]);
   });
 
   it("pantry-not-synced guard returns pantry sync message", async () => {
@@ -279,6 +297,9 @@ describe("move_grocery_items_to_pantry tool", () => {
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no grocery item found");
+    // Unknown UID before any create → isError, no structuredContent.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
@@ -338,6 +359,9 @@ describe("move_grocery_items_to_pantry tool", () => {
     expect(text.toLowerCase()).toContain("failed to create pantry items");
     expect(text.toLowerCase()).toContain("pantry api down");
     expect(text.toLowerCase()).toContain("no grocery items were deleted");
+    // Save phase: nothing was created server-side → isError, no structuredContent.
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
     // Grocery item still present (not deleted)
     expect(kh.state().items.store.get("PFAIL-3" as GroceryItemUid)).toBeDefined();
