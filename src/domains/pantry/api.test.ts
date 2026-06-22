@@ -10,12 +10,12 @@ import { makePantryItem } from "../../../test/domains/pantry/__fixtures__/pantry
 import { useKernelHarness } from "../../../test/support/kernel-harness.js";
 
 /**
- * Drives `PantryApi.itemsToRows` against the real built module: the cross-domain row
+ * Drives `PantryApi.toRows` against the real built module: the cross-domain row
  * projection that grocery's move consumes via `ctx.deps.pantry`. The harness builds the
  * pantry module with its real aisle dep, so the method resolves aisle display names
  * through the live catalog exactly as it does in production.
  */
-describe("PantryApi.itemsToRows", () => {
+describe("PantryApi.toRows", () => {
   const kh = useKernelHarness<PantryState>("pantry");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
@@ -27,7 +27,7 @@ describe("PantryApi.itemsToRows", () => {
     });
     const api = kh.apiOf("pantry") as PantryApi;
 
-    const rows = api.itemsToRows([
+    const rows = api.toRows([
       makePantryItem({
         uid: "p-milk" as PantryItemUid,
         ingredient: "Milk",
@@ -56,6 +56,6 @@ describe("PantryApi.itemsToRows", () => {
   it("returns an empty array for no items", () => {
     kh.seed({ aisles: [], pantry: [] });
     const api = kh.apiOf("pantry") as PantryApi;
-    expect(api.itemsToRows([])).toEqual([]);
+    expect(api.toRows([])).toEqual([]);
   });
 });

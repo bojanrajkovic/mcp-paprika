@@ -17,7 +17,7 @@ import {
 import {
   groceryListReadOutputSchema,
   groceryListToMarkdown,
-  groceryListToStructured,
+  groceryListToReadStructured,
   sortGroceryItemsForChecklist,
 } from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
@@ -123,7 +123,7 @@ export const readGroceryListTool = defineTool(
       );
       return toolResult(
         groceryListToMarkdown(resolved.entity, items, ctx.deps.aisle),
-        groceryListToStructured(resolved.entity, items, ctx.deps.aisle),
+        groceryListToReadStructured(resolved.entity, items, ctx.deps.aisle),
       );
     };
   },
@@ -172,7 +172,7 @@ export const createGroceryListTool = defineTool(
 
       return (await ctx.infra.client.saveGroceryList(newList)).match(
         async (saved) => {
-          const structured = groceryListToStructured(saved, [], ctx.deps.aisle);
+          const structured = groceryListToReadStructured(saved, [], ctx.deps.aisle);
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved), {
             structuredContent: structured,
           });
@@ -220,7 +220,7 @@ export const renameGroceryListTool = defineTool(
         const items = ctx.state.items.store.getByListUid(existing.uid);
         return toolResult(
           groceryListToMarkdown(existing, items, ctx.deps.aisle),
-          groceryListToStructured(existing, items, ctx.deps.aisle),
+          groceryListToReadStructured(existing, items, ctx.deps.aisle),
         );
       }
 
@@ -240,7 +240,7 @@ export const renameGroceryListTool = defineTool(
       return (await ctx.infra.client.saveGroceryList(renamed)).match(
         async (saved) => {
           const items = ctx.state.items.store.getByListUid(saved.uid);
-          const structured = groceryListToStructured(saved, items, ctx.deps.aisle);
+          const structured = groceryListToReadStructured(saved, items, ctx.deps.aisle);
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved), {
             structuredContent: structured,
           });

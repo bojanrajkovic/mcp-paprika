@@ -11,13 +11,7 @@ import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
-import {
-  makeMealOrderFlagAssigner,
-  mealRowSchema,
-  mealToStructuredRow,
-  renderMealCard,
-  resolveMealTypeName,
-} from "./helpers.js";
+import { makeMealOrderFlagAssigner, mealRowSchema, mealToRow, renderMealCard, resolveMealTypeName } from "./helpers.js";
 
 // `.strict()`. Rescheduling is its own act because moving a meal's date moves it
 // into the destination day's order_flag sequence (per-date), which a generic
@@ -86,7 +80,7 @@ export const rescheduleMealTool = defineTool(
       if (!dateChanged && args.type === undefined) {
         return toolResult(
           renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
-          mealToStructuredRow(existing, typeName(existing)),
+          mealToRow(existing, typeName(existing)),
         );
       }
 
@@ -131,7 +125,7 @@ export const rescheduleMealTool = defineTool(
       if ("content" in savedItems) return savedItems;
       const saved = savedItems[0]!;
 
-      const structured = mealToStructuredRow(saved, typeName(saved));
+      const structured = mealToRow(saved, typeName(saved));
       const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems), {
         structuredContent: structured,
       });

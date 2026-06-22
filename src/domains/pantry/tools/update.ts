@@ -8,7 +8,7 @@ import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { normalizeWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToStructured } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToReadStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 // Strict (exported for direct Zod-validation tests). `inStock` was promoted to
@@ -128,7 +128,7 @@ export const updatePantryItemTool = defineTool(
       );
       if ("content" in saved) return saved;
 
-      const structured = pantryItemToStructured(saved, ctx.deps.aisle);
+      const structured = pantryItemToReadStructured(saved, ctx.deps.aisle);
       const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved), {
         structuredContent: structured,
       });

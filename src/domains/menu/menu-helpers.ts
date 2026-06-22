@@ -75,7 +75,7 @@ export function menuItemsToRows(
 }
 
 /** Map a `Menu` plus its items into the structured read payload. */
-export function menuToStructured(
+export function menuToReadStructured(
   menu: Readonly<Menu>,
   items: ReadonlyArray<Readonly<MenuItem>>,
   mealTypes: ReadonlyArray<Readonly<MealType>>,
@@ -97,7 +97,7 @@ export function menuToStructured(
  *
  * Each item line shows the resolved meal-type name and the recipe display name
  * (already denormalized on `item.name`). The menu UID and the per-item
- * menuitem/recipe UIDs travel on the structured channel ({@link menuToStructured})
+ * menuitem/recipe UIDs travel on the structured channel ({@link menuToReadStructured})
  * and the resource header — the human lines carry no identifiers.
  *
  * Pure — takes the `mealTypes` catalog array for `typeUid`→name/order resolution.

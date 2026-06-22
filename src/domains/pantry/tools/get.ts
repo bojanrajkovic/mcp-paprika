@@ -4,7 +4,7 @@ import type { PantryState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToStructured } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToReadStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
@@ -50,7 +50,7 @@ export const getPantryItemTool = defineTool(
       if ("result" in resolved) return resolved.result;
       return toolResult(
         pantryItemToMarkdown(resolved.entity, ctx.deps.aisle),
-        pantryItemToStructured(resolved.entity, ctx.deps.aisle),
+        pantryItemToReadStructured(resolved.entity, ctx.deps.aisle),
       );
     };
   },

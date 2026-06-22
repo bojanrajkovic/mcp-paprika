@@ -16,7 +16,7 @@ import type { Meal } from "./types.js";
  *   - `orderFlagAssigner` — the stateful per-date `order_flag` assigner
  *     (`makeMealOrderFlagAssigner`, backed by `MealStore.getMaxOrderFlagOn`);
  *   - `createMeals` — the batch write (`client.saveMeals` + `commitMealsBatch`);
- *   - `toStructuredRows` — projects saved meals into their structured rows, resolving
+ *   - `toRows` — projects saved meals into their structured rows, resolving
  *     each type name through meal's own meal-type dep, so the coordinator builds its
  *     structured response without reaching meal's internal row helper.
  * `delete_meal_type` reports how many meals will lose their type label:
@@ -49,7 +49,7 @@ export interface MealApi extends HasSynced {
    * build the structured response for the meals it just created, so the meal-type
    * dependency stays private to meal.
    */
-  toStructuredRows(meals: ReadonlyArray<Meal>): ReadonlyArray<MealRow>;
+  toRows(meals: ReadonlyArray<Meal>): ReadonlyArray<MealRow>;
   /**
    * How many meals (planned or logged) reference a meal type. Informational —
    * `delete_meal_type` warns-and-proceeds with this count; meal history is

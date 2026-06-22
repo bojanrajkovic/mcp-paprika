@@ -245,7 +245,7 @@ export const scheduleMenuTool = defineTool(
         // rows are built through the meal contract so the meal-type catalog stays meal's.
         (savedMeals) =>
           toolResult(renderPlannerAdds(menu.name, startDay, materialized), {
-            items: [...ctx.deps.meal.toStructuredRows(savedMeals)],
+            items: [...ctx.deps.meal.toRows(savedMeals)],
           }),
         (message) => {
           log.error({ uid: menu.uid, count: builtItems.length }, "saveMeals failed");

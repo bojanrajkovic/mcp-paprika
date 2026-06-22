@@ -67,7 +67,7 @@ export function pantryItemToRow(item: PantryItem, aisles: AisleDisplaySource): P
 
 /** Map a `PantryItem` into its structured read payload, resolving the aisle name through
  * the live catalog (the same resolution {@link pantryItemToMarkdown} uses). */
-export function pantryItemToStructured(item: PantryItem, aisles: AisleDisplaySource): PantryItemReadStructured {
+export function pantryItemToReadStructured(item: PantryItem, aisles: AisleDisplaySource): PantryItemReadStructured {
   return { ...pantryItemToRow(item, aisles), purchaseDate: item.purchaseDate };
 }
 

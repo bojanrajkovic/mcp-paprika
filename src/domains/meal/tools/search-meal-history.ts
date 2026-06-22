@@ -12,7 +12,7 @@ import { parseInstant } from "../../../utils/dates.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
-import { mealListOutputSchema, mealToStructuredRow, renderMealsGroupedByDate, resolveMealTypeName } from "./helpers.js";
+import { mealListOutputSchema, mealToRow, renderMealsGroupedByDate, resolveMealTypeName } from "./helpers.js";
 
 export const searchMealHistoryInputSchema = z
   .object({
@@ -196,7 +196,7 @@ export const searchMealHistoryTool = defineTool(
       const header = `**${countLabel}${scope} (${rangeLabel})**${lastMade !== null ? ` · last made ${lastMade}` : ""}`;
 
       const resolveTypeName = resolveMealTypeName(ctx.deps["meal-type"]);
-      const items = meals.map((meal) => mealToStructuredRow(meal, resolveTypeName(meal)));
+      const items = meals.map((meal) => mealToRow(meal, resolveTypeName(meal)));
       return toolResult(`${header}\n${renderMealsGroupedByDate(meals, ctx.deps["meal-type"])}`, {
         items,
         total,

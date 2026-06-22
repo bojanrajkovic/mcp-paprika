@@ -19,7 +19,7 @@ import {
   makeMealOrderFlagAssigner,
   mealListOutputSchema,
   mealRowSchema,
-  mealToStructuredRow,
+  mealToRow,
   renderMealCard,
   resolveMealTypeName,
 } from "./helpers.js";
@@ -265,7 +265,7 @@ export const planMealsTool = defineTool(
       // The new meal UIDs ride structuredContent (and the degraded commit branch),
       // so the model can chain reschedule_meal / update_meal / delete_meal without a re-read.
       const typeName = resolveMealTypeName(ctx.deps["meal-type"]);
-      const structured = { items: savedItems.map((m) => mealToStructuredRow(m, typeName(m))) };
+      const structured = { items: savedItems.map((m) => mealToRow(m, typeName(m))) };
       const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems), {
         structuredContent: structured,
       });
@@ -392,7 +392,7 @@ export const updateMealTool = defineTool(
             // real success (nothing to save), so success-with-structured.
             return toolResult(
               renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
-              mealToStructuredRow(existing, typeName(existing)),
+              mealToRow(existing, typeName(existing)),
             );
           }
           if (existing.recipeUid !== null && demoteOp.name === undefined) {
@@ -487,7 +487,7 @@ export const updateMealTool = defineTool(
       ) {
         return toolResult(
           renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
-          mealToStructuredRow(existing, typeName(existing)),
+          mealToRow(existing, typeName(existing)),
         );
       }
 
@@ -500,7 +500,7 @@ export const updateMealTool = defineTool(
       );
       if ("content" in saved) return saved;
 
-      const structured = mealToStructuredRow(saved, typeName(saved));
+      const structured = mealToRow(saved, typeName(saved));
       const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved), {
         structuredContent: structured,
       });

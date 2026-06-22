@@ -110,7 +110,7 @@ export function sortGroceryItemsForChecklist(
 }
 
 /** Map a `GroceryList` plus its items into the structured read payload. */
-export function groceryListToStructured(
+export function groceryListToReadStructured(
   list: GroceryList,
   items: ReadonlyArray<GroceryItem>,
   aisles: AisleDisplaySource,
@@ -121,7 +121,7 @@ export function groceryListToStructured(
 /**
  * Renders a grocery list as markdown with metadata and a table of items. The list
  * UID and the per-item UIDs travel on the structured channel
- * ({@link groceryListToStructured}) and the resource header, so the human text
+ * ({@link groceryListToReadStructured}) and the resource header, so the human text
  * carries no identifiers.
  */
 export function groceryListToMarkdown(

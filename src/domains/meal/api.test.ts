@@ -12,12 +12,12 @@ import { MealUidSchema } from "./ids.js";
 const DINNER_UID = MealTypeUidSchema.parse("11111111-1111-4111-8111-111111111111");
 
 /**
- * Drives `MealApi.toStructuredRows` against the real built module: the cross-domain row
+ * Drives `MealApi.toRows` against the real built module: the cross-domain row
  * projection schedule_menu consumes via `ctx.deps.meal`. The harness builds the meal
  * module with its real meal-type dep, so the method resolves type names through the
  * live catalog exactly as it does in production.
  */
-describe("MealApi.toStructuredRows", () => {
+describe("MealApi.toRows", () => {
   const kh = useKernelHarness("meal");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
@@ -39,7 +39,7 @@ describe("MealApi.toStructuredRows", () => {
       scale: null,
     });
 
-    expect(api.toStructuredRows([meal])).toEqual([
+    expect(api.toRows([meal])).toEqual([
       {
         uid: meal.uid,
         date: "2026-06-15",
@@ -64,12 +64,12 @@ describe("MealApi.toStructuredRows", () => {
       type: 2,
     });
 
-    expect(api.toStructuredRows([meal])[0]?.typeName).toBeNull();
+    expect(api.toRows([meal])[0]?.typeName).toBeNull();
   });
 
   it("returns an empty array for no meals", () => {
     kh.seed({ mealTypes: [], meals: [] });
     const api = kh.apiOf("meal") as MealApi;
-    expect(api.toStructuredRows([])).toEqual([]);
+    expect(api.toRows([])).toEqual([]);
   });
 });

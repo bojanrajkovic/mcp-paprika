@@ -96,7 +96,7 @@ export const moveToPantryTool = defineTool(
         async (savedPantry) => {
           // The CREATED pantry side rides structuredContent so the model can chain
           // update_pantry_item / mark_pantry_item_out_of_stock on what it just moved.
-          const structured = { items: [...ctx.deps.pantry.itemsToRows(savedPantry)] };
+          const structured = { items: [...ctx.deps.pantry.toRows(savedPantry)] };
 
           // Step 4: THEN DELETE — soft-delete grocery items
           const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
@@ -143,7 +143,7 @@ export const moveToPantryTool = defineTool(
           return toolResult(
             `Pantry items were created on the server (UIDs: ${pantryUids}) but the local cache commit failed: ${error.message}. ` +
               `Grocery items were NOT deleted. The pantry items will appear after the next sync cycle.`,
-            { items: [...ctx.deps.pantry.itemsToRows(error.saved)] },
+            { items: [...ctx.deps.pantry.toRows(error.saved)] },
           );
         },
       );

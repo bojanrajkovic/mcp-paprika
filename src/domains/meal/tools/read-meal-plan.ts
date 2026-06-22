@@ -7,7 +7,7 @@ import type { MealState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { toolResult } from "../../../shared/tools.js";
 import { mealStartGuard } from "./guards.js";
-import { mealListOutputSchema, mealToStructuredRow, renderMealsGroupedByDate, resolveMealTypeName } from "./helpers.js";
+import { mealListOutputSchema, mealToRow, renderMealsGroupedByDate, resolveMealTypeName } from "./helpers.js";
 
 export const readMealPlanInputSchema = z
   .object({
@@ -78,7 +78,7 @@ export const readMealPlanTool = defineTool(
         `**Meal plan: ${since.toFormat("yyyy-MM-dd")} – ${until.toFormat("yyyy-MM-dd")}** ` +
         `(${count.toString()} meal${count === 1 ? "" : "s"})`;
       const resolveTypeName = resolveMealTypeName(ctx.deps["meal-type"]);
-      const items = ascending.map((meal) => mealToStructuredRow(meal, resolveTypeName(meal)));
+      const items = ascending.map((meal) => mealToRow(meal, resolveTypeName(meal)));
       return toolResult(`${header}\n${renderMealsGroupedByDate(ascending, ctx.deps["meal-type"])}`, { items });
     };
   },

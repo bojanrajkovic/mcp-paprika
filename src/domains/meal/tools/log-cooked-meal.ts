@@ -16,7 +16,7 @@ import { mealStartGuard } from "./guards.js";
 import {
   makeMealOrderFlagAssigner,
   mealListOutputSchema,
-  mealToStructuredRow,
+  mealToRow,
   renderMealCard,
   resolveMealTypeName,
 } from "./helpers.js";
@@ -121,7 +121,7 @@ export const logCookedMealTool = defineTool(
       // The new meal UID rides structuredContent (and the degraded commit branch),
       // so the model can chain reschedule_meal / update_meal / delete_meal without a re-read.
       const typeName = resolveMealTypeName(ctx.deps["meal-type"]);
-      const structured = { items: [mealToStructuredRow(saved, typeName(saved))] };
+      const structured = { items: [mealToRow(saved, typeName(saved))] };
       const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems), {
         structuredContent: structured,
       });

@@ -109,7 +109,7 @@ register(
           // Resolve the aisle display name through pantry's own aisle dep so the
           // catalog dependency stays private — grocery's move calls this instead of
           // importing pantryItemToRow and passing ctx.deps.aisle itself.
-          itemsToRows: (items) => items.map((i) => pantryItemToRow(i, deps.aisle)),
+          toRows: (items) => items.map((i) => pantryItemToRow(i, deps.aisle)),
         },
         writes: { commitPantryItem, commitPantryItemsBatch },
         tools: [

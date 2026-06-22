@@ -15,7 +15,7 @@ import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { MealStore } from "./store.js";
 import { mealSync } from "./sync.js";
-import { mealToStructuredRow, resolveMealTypeName } from "./tools/helpers.js";
+import { mealToRow, resolveMealTypeName } from "./tools/helpers.js";
 import { logCookedMealTool } from "./tools/log-cooked-meal.js";
 import { deleteMealTool, planMealsTool, updateMealTool } from "./tools/meal-writes.js";
 import { readMealPlanTool } from "./tools/read-meal-plan.js";
@@ -110,10 +110,10 @@ register(
           createMeals,
           // Resolve each meal's type name through meal's own meal-type dep so the
           // catalog dependency stays private — schedule_menu calls this instead of
-          // importing mealToStructuredRow/resolveMealTypeName and passing the catalog itself.
-          toStructuredRows: (meals) => {
+          // importing mealToRow/resolveMealTypeName and passing the catalog itself.
+          toRows: (meals) => {
             const typeName = resolveMealTypeName(deps["meal-type"]);
-            return meals.map((m) => mealToStructuredRow(m, typeName(m)));
+            return meals.map((m) => mealToRow(m, typeName(m)));
           },
           countByTypeUid: (uid) => state.store.getAll().filter((m) => m.typeUid === uid).length,
         },

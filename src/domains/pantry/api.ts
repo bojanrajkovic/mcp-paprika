@@ -14,7 +14,7 @@ import type { PantryItem } from "./types.js";
  *     API-create failure from local-commit failure so grocery can keep its
  *     create-first/delete-second ordering and partial-failure messaging;
  *   - `countItemsInAisle` — the reference count `delete_aisle`'s guard blocks on;
- *   - `itemsToRows` — projects pantry items into their list-row payloads, resolving the
+ *   - `toRows` — projects pantry items into their list-row payloads, resolving the
  *     aisle display name through pantry's own aisle dep, so grocery's move builds its
  *     structured response without reaching pantry's internal row helper.
  */
@@ -40,7 +40,7 @@ export interface PantryApi extends HasSynced {
    * `move_grocery_items_to_pantry` uses it to build the structured response for the
    * items it just created, so the aisle dependency stays private to pantry.
    */
-  itemsToRows(items: ReadonlyArray<PantryItem>): ReadonlyArray<PantryItemRow>;
+  toRows(items: ReadonlyArray<PantryItem>): ReadonlyArray<PantryItemRow>;
 }
 
 /** The phase that failed inside `createItems`, with the underlying error message. */
