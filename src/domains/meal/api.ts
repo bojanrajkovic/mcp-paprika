@@ -15,7 +15,9 @@ import type { Meal } from "./types.js";
  *   - `hasSynced` (inherited from {@link HasSynced}) — the coordinator's meal-store start gate;
  *   - `orderFlagAssigner` — the stateful per-date `order_flag` assigner
  *     (`makeMealOrderFlagAssigner`, backed by `MealStore.getMaxOrderFlagOn`);
- *   - `createMeals` — the batch write (`client.saveMeals` + `commitMealsBatch`);
+ *   - `createMeals` — the batch write (`client.saveMeals` + `commitMealsBatch`),
+ *     distinguishing save failure from commit failure so `schedule_menu` can keep
+ *     the created meal UIDs on a commit-only divergence;
  *   - `toRows` — projects saved meals into their structured rows, resolving
  *     each type name through meal's own meal-type dep, so the coordinator builds its
  *     structured response without reaching meal's internal row helper.
@@ -35,14 +37,18 @@ export interface MealApi extends HasSynced {
    */
   orderFlagAssigner(): (date: string) => number;
   /**
-   * Persist a batch of new/edited meals: POST them to Paprika, then commit each
-   * to the local cache and store through the meal commit chokepoint. Returns the
-   * server-saved meals on success, or a user-facing error message on a write
-   * failure (mirrors the live tool's `toMessage` formatting). Internalizes the
-   * `infra.client.saveMeals` + `commitMealsBatch` sequence so the coordinator
-   * never reaches the meal store or cache directly.
+   * Persist a batch of new meals: POST them to Paprika, then commit to the local
+   * cache and store through the meal commit chokepoint. Returns the server-saved
+   * meals on success. On failure, the error names the phase — `"save"` (the POST
+   * failed; nothing was created server-side, so the caller can surface a genuine
+   * error) or `"commit"` (the POST succeeded but the local commit failed; the
+   * meals exist server-side and appear after the next sync, so the caller must
+   * NOT report them as failed) — and carries the saved meals so the caller can
+   * surface their UIDs. Internalizes the `infra.client.saveMeals` +
+   * `commitMealsBatch` sequence so the coordinator never reaches the meal store
+   * or cache directly.
    */
-  createMeals(meals: ReadonlyArray<Meal>): ResultAsync<ReadonlyArray<Meal>, string>;
+  createMeals(meals: ReadonlyArray<Meal>): ResultAsync<ReadonlyArray<Meal>, MealCreateError>;
   /**
    * Project meals into their structured rows, resolving each meal's type name through
    * the live meal-type catalog (meal's own declared dep). `schedule_menu` uses it to
@@ -56,4 +62,12 @@ export interface MealApi extends HasSynced {
    * append-only, so references never block a type's deletion.
    */
   countByTypeUid(uid: MealTypeUid): number;
+}
+
+/** The phase that failed inside `createMeals`, with the underlying error message. */
+export interface MealCreateError {
+  readonly phase: "save" | "commit";
+  readonly message: string;
+  /** The server-saved meals — empty on a `"save"` failure, populated on `"commit"`. */
+  readonly saved: ReadonlyArray<Meal>;
 }

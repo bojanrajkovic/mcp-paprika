@@ -235,8 +235,9 @@ export const scheduleMenuTool = defineTool(
       }));
 
       // The meal contract internalizes the live `client.saveMeals` + `commitMealsBatch`
-      // sequence and returns a Result; a write failure carries the same toMessage-style
-      // text the live tool rendered. The coordinator never touches the meal store/cache.
+      // sequence and distinguishes save failure (nothing created server-side → isError)
+      // from commit failure (meals exist on Paprika → degraded success so the model can
+      // chain reschedule_meal / delete_meal on the created UIDs without retrying the POST).
       const result = await ctx.deps.meal.createMeals(builtItems);
       return result.match(
         // The new meal UIDs ride structuredContent — schedule_menu's text omits them
@@ -247,9 +248,19 @@ export const scheduleMenuTool = defineTool(
           toolResult(renderPlannerAdds(menu.name, startDay, materialized), {
             items: [...ctx.deps.meal.toRows(savedMeals)],
           }),
-        (message) => {
-          log.error({ uid: menu.uid, count: builtItems.length }, "saveMeals failed");
-          return errorResult(`Failed to add menu to planner: ${message}`);
+        (error) => {
+          log.error({ uid: menu.uid, count: builtItems.length, phase: error.phase }, "createMeals failed");
+          if (error.phase === "save") {
+            return errorResult(`Failed to add menu to planner: ${error.message}`);
+          }
+          // Commit phase: the meals DID land on Paprika — marking isError would invite a
+          // harmful duplicate-write retry. Return a degraded success so the created UIDs
+          // ride structuredContent; they will appear in the planner after the next sync.
+          return toolResult(
+            `${error.saved.length.toString()} meal(s) from "${menu.name}" were added to Paprika but the local ` +
+              `cache commit failed: ${error.message}. The meals will appear in the planner after the next sync cycle.`,
+            { items: [...ctx.deps.meal.toRows(error.saved)] },
+          );
         },
       );
     };

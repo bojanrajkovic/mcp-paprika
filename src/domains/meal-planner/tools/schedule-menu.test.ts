@@ -457,7 +457,7 @@ describe("schedule_menu — rejection paths", () => {
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
-  it("saveMeals errs → error message, nothing committed", async () => {
+  it("saveMeals errs → save phase: isError, no structuredContent, nothing committed", async () => {
     kh.seed({
       recipes: [
         makeRecipe({ uid: BUTTER_CHICKEN_UID, name: "(Not) Butter Chicken" }),
@@ -472,11 +472,45 @@ describe("schedule_menu — rejection paths", () => {
 
     const result = await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(getText(result)).toContain("Failed to add menu to planner: network down");
-    // The save failed and nothing was created → isError, no structuredContent.
+    // Save phase: nothing was created server-side → isError, no structuredContent.
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toBeUndefined();
     // Nothing landed in the local store.
     const mealSelf = kh.stateOf("meal") as MealState;
     expect(mealSelf.store.getInDateRange().total).toBe(0);
+  });
+
+  it("commitMealsBatch fails → commit phase: degraded success with meal UIDs in structuredContent", async () => {
+    kh.seed({
+      recipes: [
+        makeRecipe({ uid: BUTTER_CHICKEN_UID, name: "(Not) Butter Chicken" }),
+        makeRecipe({ uid: HONEY_MUSTARD_UID, name: "20 Minute Honey Mustard Chicken" }),
+      ],
+      ...multiDayMenuSeed(),
+      mealTypes: makeBuiltins(),
+      meals: [],
+    });
+
+    vi.mocked(kh.client().saveMeals).mockImplementation((items: ReadonlyArray<Meal>) => okAsync(items));
+    // Spy on the meal cache's flush to simulate a disk failure after the POST succeeds.
+    const mealState = kh.stateOf("meal") as MealState;
+    vi.spyOn(mealState.cache, "flush").mockReturnValueOnce(
+      errAsync({ context: "meal:flush", message: "disk full", cause: null }),
+    );
+
+    const result = await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+
+    // Commit phase: meals exist on Paprika → NOT isError; retrying would duplicate them.
+    expect(result.isError).toBeUndefined();
+    // The created UIDs ride structuredContent so the model can chain delete_meal / reschedule_meal.
+    expect(result.structuredContent).toBeDefined();
+    const structured = result.structuredContent as { items: ReadonlyArray<{ uid: string }> };
+    expect(structured.items).toHaveLength(2);
+    // Text warns about the local divergence without calling it a failure.
+    const text = getText(result);
+    expect(text).toContain("were added to Paprika");
+    expect(text).toContain("local cache commit failed");
+    expect(text).toContain("disk full");
+    expect(text).toContain("next sync cycle");
   });
 });
