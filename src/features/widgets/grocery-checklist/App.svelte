@@ -8,6 +8,7 @@
   import GroupedList from "../shared/GroupedList.svelte";
   import ItemRow from "../shared/ItemRow.svelte";
   import PillButton from "../shared/PillButton.svelte";
+  import Spinner from "../shared/Spinner.svelte";
   import StatusScreen from "../shared/StatusScreen.svelte";
   import Toast from "../shared/Toast.svelte";
   import WidgetShell from "../shared/WidgetShell.svelte";
@@ -316,7 +317,7 @@
     >
       <span class="box">
         {#if item._busy}
-          <span class="spin"></span>
+          <Spinner size={15} color="var(--success)" />
         {:else}
           <svg viewBox="0 0 16 16" aria-hidden="true"
             ><path class="tick" d="M3.5 8.5l3 3 6-6.5" /></svg
@@ -435,20 +436,6 @@
   .row.done .tick {
     stroke-dashoffset: 0;
     transition: stroke-dashoffset 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.02s;
-  }
-
-  .spin {
-    width: 15px;
-    height: 15px;
-    border: 2px solid color-mix(in oklch, var(--success) 35%, transparent);
-    border-top-color: var(--success);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .hint {

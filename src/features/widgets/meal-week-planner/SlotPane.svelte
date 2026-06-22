@@ -5,6 +5,7 @@
   // a `—` placeholder and a "Plan ↗" pill that routes planning to the assistant. App owns the
   // fetch and the slot-building; this only renders and reports taps.
   import PillButton from "../shared/PillButton.svelte";
+  import Spinner from "../shared/Spinner.svelte";
 
   // The minimal meal shape a slot row renders (a structural subset of App's Meal).
   interface SlotMeal {
@@ -62,7 +63,7 @@
               >
                 <span class="ms-text">{meal.name}</span>
                 {#if loadingUid === meal.uid}
-                  <span class="spin" aria-hidden="true"></span>
+                  <Spinner size={13} />
                 {:else}
                   <svg class="ms-chev" viewBox="0 0 16 16" aria-hidden="true"
                     ><path d="M6 3.5 10.5 8 6 12.5" /></svg
@@ -190,25 +191,5 @@
   .dash {
     font-size: 14px;
     color: var(--faint);
-  }
-
-  .spin {
-    flex: none;
-    width: 13px;
-    height: 13px;
-    border: 2px solid color-mix(in oklch, var(--accent) 35%, transparent);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .spin {
-      animation-duration: 0.001ms;
-    }
   }
 </style>
