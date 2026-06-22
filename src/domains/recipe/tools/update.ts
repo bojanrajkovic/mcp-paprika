@@ -5,9 +5,9 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeToMarkdown } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToMarkdown, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // Strict schema (exported for direct Zod-validation tests). `.strict()` is
@@ -50,6 +50,7 @@ export const updateRecipeTool = defineTool(
       "status, or trash state — use rate_recipe, categorize_recipe, favorite_recipe / unfavorite_recipe, " +
       "and trash_recipe / restore_recipe for those.",
     inputSchema: updateRecipeInputSchema,
+    outputSchema: recipeReadOutputSchema,
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
@@ -58,7 +59,7 @@ export const updateRecipeTool = defineTool(
       const existing = ctx.state.recipe.store.get(args.uid);
 
       if (!existing) {
-        return toolResult(
+        return errorResult(
           `No recipe found with UID "${args.uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
         );
       }
@@ -87,15 +88,19 @@ export const updateRecipeTool = defineTool(
         (v) => v,
         (e) => {
           log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return toolResult(`Failed to update recipe: ${e.message}`);
+          return errorResult(`Failed to update recipe: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
+      const structured = recipeToReadStructured(saved, categoryNames);
+      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), {
+        structuredContent: structured,
+        selfHealing: false,
+      });
       if (commitErr) return commitErr;
 
-      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-      return toolResult(recipeToMarkdown(saved, categoryNames));
+      return toolResult(recipeToMarkdown(saved, categoryNames), structured);
     };
   },
 );

@@ -5,6 +5,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("trash_recipe tool", () => {
   const kh = useKernelHarness<RecipeState>("recipe");
@@ -17,11 +18,14 @@ describe("trash_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(trashed));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("trash_recipe", { uid: recipe.uid });
+    const result = await kh.callTool("trash_recipe", { uid: recipe.uid });
 
-    expect(text).toContain("Pasta Carbonara");
-    expect(text.toLowerCase()).toContain("trash");
+    expect(getText(result)).toContain("Pasta Carbonara");
+    expect(getText(result).toLowerCase()).toContain("trash");
     expect(kh.state().recipe.store.get(recipe.uid)?.inTrash).toBe(true);
+    // The prose ack stays, but the now-trashed recipe rides structuredContent.
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: recipe.uid, name: "Pasta Carbonara" });
   });
 
   it("calls saveRecipe with inTrash: true and notifySync exactly once", async () => {
@@ -47,36 +51,42 @@ describe("trash_recipe tool", () => {
     expect(kh.state().recipe.store.get(recipe.uid)?.inTrash).toBe(true);
   });
 
-  it("UID not found returns a not-found message and skips the API call", async () => {
+  it("UID not found is an isError result with no structuredContent and skips the API call", async () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("trash_recipe", { uid: "nonexistent-uid" });
+    const result = await kh.callTool("trash_recipe", { uid: "nonexistent-uid" });
 
-    expect(text.toLowerCase()).toContain("no recipe found");
+    expect(getText(result).toLowerCase()).toContain("no recipe found");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("recipe already in trash returns an already-in-trash message", async () => {
+  it("recipe already in trash is an isError result with no structuredContent", async () => {
     const nonTrashedRecipe = makeRecipe({ name: "Pasta Bolognese" });
     const trashedRecipe = makeRecipe({ name: "Trashed Recipe", inTrash: true });
     kh.seed({ recipes: [nonTrashedRecipe, trashedRecipe] });
 
-    const text = await kh.callToolText("trash_recipe", { uid: trashedRecipe.uid });
+    const result = await kh.callTool("trash_recipe", { uid: trashedRecipe.uid });
 
-    expect(text.toLowerCase()).toContain("already in the trash");
+    expect(getText(result).toLowerCase()).toContain("already in the trash");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe errs — returns a failure message", async () => {
+  it("saveRecipe errs — an isError result with no structuredContent", async () => {
     const recipe = makeRecipe();
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("API timeout")));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("trash_recipe", { uid: recipe.uid });
+    const result = await kh.callTool("trash_recipe", { uid: recipe.uid });
 
-    expect(text).toContain("Failed to delete");
-    expect(text).toContain("API timeout");
+    expect(getText(result)).toContain("Failed to delete");
+    expect(getText(result)).toContain("API timeout");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it("cold-start guard fires before any store lookup", async () => {

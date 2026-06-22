@@ -5,6 +5,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 import { rateRecipeInputSchema } from "./rate.js";
 
 describe("rate_recipe tool", () => {
@@ -24,15 +25,29 @@ describe("rate_recipe tool", () => {
     expect(kh.client().saveRecipe).toHaveBeenCalledWith(expect.objectContaining({ rating: 4 }));
   });
 
-  it("unknown uid returns not-found message without calling saveRecipe", async () => {
+  it("carries structuredContent with the rated recipe's machine fields", async () => {
+    const recipe = makeRecipe({ rating: 0 });
+    const updated = makeRecipe({ uid: recipe.uid, rating: 4 });
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
+    kh.seed({ recipes: [recipe] });
+
+    const result = await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 4 });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: updated.uid, rating: 4 });
+  });
+
+  it("unknown uid is an isError result with no structuredContent and skips saveRecipe", async () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("rate_recipe", { uid: "nonexistent-uid", rating: 3 });
+    const result = await kh.callTool("rate_recipe", { uid: "nonexistent-uid", rating: 3 });
 
-    expect(text).toContain(
+    expect(getText(result)).toContain(
       'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted). Use `search_recipes` to find it.',
     );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
@@ -65,10 +80,12 @@ describe("rate_recipe tool", () => {
     kh.seed({ recipes: [recipe] });
     const before = kh.state().recipe.store.get(recipe.uid)?.rating;
 
-    const text = await kh.callToolText("rate_recipe", { uid: recipe.uid, rating: 3 });
+    const result = await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 3 });
 
-    expect(text).toContain("Failed to rate recipe");
-    expect(text).toContain("Network error");
+    expect(getText(result)).toContain("Failed to rate recipe");
+    expect(getText(result)).toContain("Network error");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.state().recipe.store.get(recipe.uid)?.rating).toBe(before);
   });
 

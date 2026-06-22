@@ -5,6 +5,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 import { pinRecipeInputSchema, unpinRecipeInputSchema } from "./pin.js";
 
 describe("pin_recipe tool", () => {
@@ -36,26 +37,42 @@ describe("pin_recipe tool", () => {
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
-  it("unknown UID returns not-found message and skips the API call", async () => {
+  it("carries structuredContent with the pinned recipe's machine fields", async () => {
+    const recipe = makeRecipe({ isPinned: false });
+    const updated = makeRecipe({ uid: recipe.uid, isPinned: true });
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
+    kh.seed({ recipes: [recipe] });
+
+    const result = await kh.callTool("pin_recipe", { uid: recipe.uid });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: updated.uid, isPinned: true });
+  });
+
+  it("unknown UID is an isError result with no structuredContent and skips the API call", async () => {
     kh.seed({ recipes: [makeRecipe()] });
 
-    const text = await kh.callToolText("pin_recipe", { uid: "nonexistent-uid" });
+    const result = await kh.callTool("pin_recipe", { uid: "nonexistent-uid" });
 
-    expect(text).toContain(
+    expect(getText(result)).toContain(
       'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted). Use `search_recipes` to find it.',
     );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe errs — returns a failure message", async () => {
+  it("saveRecipe errs — an isError result with no structuredContent", async () => {
     const recipe = makeRecipe({ isPinned: false });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("pin_recipe", { uid: recipe.uid });
+    const result = await kh.callTool("pin_recipe", { uid: recipe.uid });
 
-    expect(text).toContain("Failed to pin recipe");
-    expect(text).toContain("Network error");
+    expect(getText(result)).toContain("Failed to pin recipe");
+    expect(getText(result)).toContain("Network error");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it("cold-start guard fires before any store lookup", async () => {
@@ -99,26 +116,42 @@ describe("unpin_recipe tool", () => {
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
-  it("unknown UID returns not-found message and skips the API call", async () => {
+  it("carries structuredContent with the unpinned recipe's machine fields", async () => {
+    const recipe = makeRecipe({ isPinned: true });
+    const updated = makeRecipe({ uid: recipe.uid, isPinned: false });
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
+    kh.seed({ recipes: [recipe] });
+
+    const result = await kh.callTool("unpin_recipe", { uid: recipe.uid });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: updated.uid, isPinned: false });
+  });
+
+  it("unknown UID is an isError result with no structuredContent and skips the API call", async () => {
     kh.seed({ recipes: [makeRecipe()] });
 
-    const text = await kh.callToolText("unpin_recipe", { uid: "nonexistent-uid" });
+    const result = await kh.callTool("unpin_recipe", { uid: "nonexistent-uid" });
 
-    expect(text).toContain(
+    expect(getText(result)).toContain(
       'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted). Use `search_recipes` to find it.',
     );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe errs — returns a failure message", async () => {
+  it("saveRecipe errs — an isError result with no structuredContent", async () => {
     const recipe = makeRecipe({ isPinned: true });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("unpin_recipe", { uid: recipe.uid });
+    const result = await kh.callTool("unpin_recipe", { uid: recipe.uid });
 
-    expect(text).toContain("Failed to unpin recipe");
-    expect(text).toContain("Network error");
+    expect(getText(result)).toContain("Failed to unpin recipe");
+    expect(getText(result)).toContain("Network error");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it("cold-start guard fires before any store lookup", async () => {

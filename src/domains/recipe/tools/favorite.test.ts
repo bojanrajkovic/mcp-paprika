@@ -5,6 +5,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 import { favoriteRecipeInputSchema, unfavoriteRecipeInputSchema } from "./favorite.js";
 
 describe("favorite_recipe tool", () => {
@@ -48,27 +49,43 @@ describe("favorite_recipe tool", () => {
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
-  it("unknown UID returns not-found message and skips the API call", async () => {
+  it("carries structuredContent with the favorited recipe's machine fields", async () => {
+    const recipe = makeRecipe({ onFavorites: false });
+    const updated = makeRecipe({ uid: recipe.uid, onFavorites: true });
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
+    kh.seed({ recipes: [recipe] });
+
+    const result = await kh.callTool("favorite_recipe", { uid: recipe.uid });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: updated.uid, onFavorites: true });
+  });
+
+  it("unknown UID is an isError result with no structuredContent and skips the API call", async () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("favorite_recipe", { uid: "nonexistent-uid" });
+    const result = await kh.callTool("favorite_recipe", { uid: "nonexistent-uid" });
 
-    expect(text).toContain(
+    expect(getText(result)).toContain(
       'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted). Use `search_recipes` to find it.',
     );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe errs — returns a failure message", async () => {
+  it("saveRecipe errs — an isError result with no structuredContent", async () => {
     const recipe = makeRecipe({ onFavorites: false });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("favorite_recipe", { uid: recipe.uid });
+    const result = await kh.callTool("favorite_recipe", { uid: recipe.uid });
 
-    expect(text).toContain("Failed to favorite recipe");
-    expect(text).toContain("Network error");
+    expect(getText(result)).toContain("Failed to favorite recipe");
+    expect(getText(result)).toContain("Network error");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it("cold-start guard fires before any store lookup", async () => {
@@ -125,27 +142,43 @@ describe("unfavorite_recipe tool", () => {
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
-  it("unknown UID returns not-found message and skips the API call", async () => {
+  it("carries structuredContent with the unfavorited recipe's machine fields", async () => {
+    const recipe = makeRecipe({ onFavorites: true });
+    const updated = makeRecipe({ uid: recipe.uid, onFavorites: false });
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
+    kh.seed({ recipes: [recipe] });
+
+    const result = await kh.callTool("unfavorite_recipe", { uid: recipe.uid });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: updated.uid, onFavorites: false });
+  });
+
+  it("unknown UID is an isError result with no structuredContent and skips the API call", async () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("unfavorite_recipe", { uid: "nonexistent-uid" });
+    const result = await kh.callTool("unfavorite_recipe", { uid: "nonexistent-uid" });
 
-    expect(text).toContain(
+    expect(getText(result)).toContain(
       'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted). Use `search_recipes` to find it.',
     );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe errs — returns a failure message", async () => {
+  it("saveRecipe errs — an isError result with no structuredContent", async () => {
     const recipe = makeRecipe({ onFavorites: true });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("unfavorite_recipe", { uid: recipe.uid });
+    const result = await kh.callTool("unfavorite_recipe", { uid: recipe.uid });
 
-    expect(text).toContain("Failed to unfavorite recipe");
-    expect(text).toContain("Network error");
+    expect(getText(result)).toContain("Failed to unfavorite recipe");
+    expect(getText(result)).toContain("Network error");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it("cold-start guard fires before any store lookup", async () => {

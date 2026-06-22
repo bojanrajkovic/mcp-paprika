@@ -6,6 +6,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
 import { restoreRecipeInputSchema } from "./restore.js";
 
@@ -28,11 +29,13 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync({ ...trashed, inTrash: false }));
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
-    const text = await kh.callToolText("restore_recipe", { uid: trashed.uid });
+    const result = await kh.callTool("restore_recipe", { uid: trashed.uid });
 
     expect(kh.client().getRecipe).toHaveBeenCalledWith(trashed.uid);
-    expect(text).toContain("Old Soup");
+    expect(getText(result)).toContain("Old Soup");
     expect(kh.client().saveRecipe).toHaveBeenCalledWith(expect.objectContaining({ inTrash: false }));
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: trashed.uid, onFavorites: trashed.onFavorites });
   });
 
   it("restores a recipe trashed app-side that the local store would miss", async () => {
@@ -54,12 +57,15 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(live));
     kh.seed({ recipes: [live] }); // store holds it as active — exact match, reconcile is a no-op
 
-    const text = await kh.callToolText("restore_recipe", { uid: live.uid });
+    const result = await kh.callTool("restore_recipe", { uid: live.uid });
 
-    expect(text).toContain("already in your active library");
+    expect(getText(result)).toContain("already in your active library");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
     // hash + inTrash match the local store → reconcile is a no-op → no notification
     expect(kh.resourceListChanged()).not.toHaveBeenCalled();
+    // The already-active no-op is a SUCCESS carrying the live recipe, not an error.
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: live.uid, name: "Active Recipe" });
   });
 
   it("already-active heals a stale local copy that still shows the recipe trashed", async () => {
@@ -84,9 +90,13 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().getRecipe).mockReturnValue(errAsync(notFound("nonexistent-uid")));
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
-    const text = await kh.callToolText("restore_recipe", { uid: "nonexistent-uid" });
+    const result = await kh.callTool("restore_recipe", { uid: "nonexistent-uid" });
 
-    expect(text).toContain('No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).');
+    expect(getText(result)).toContain(
+      'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).',
+    );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
@@ -112,10 +122,12 @@ describe("restore_recipe tool", () => {
     );
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
-    const text = await kh.callToolText("restore_recipe", { uid: "some-uid" });
+    const result = await kh.callTool("restore_recipe", { uid: "some-uid" });
 
-    expect(text.toLowerCase()).toContain("failed to look up");
-    expect(text).not.toContain("already in your active library");
+    expect(getText(result).toLowerCase()).toContain("failed to look up");
+    expect(getText(result)).not.toContain("already in your active library");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
     // unknown truth — leave local state untouched
     expect(kh.resourceListChanged()).not.toHaveBeenCalled();

@@ -5,6 +5,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 import { updateRecipeInputSchema } from "./update.js";
 
 describe("update_recipe tool", () => {
@@ -53,26 +54,42 @@ describe("update_recipe tool", () => {
     expect(callArgs?.servings).toBe("4");
   });
 
-  it("UID not found returns a not-found message and skips the API call", async () => {
+  it("carries structuredContent with the saved recipe's machine fields", async () => {
+    const recipe = makeRecipe({ name: "Old Name" });
+    const updated = makeRecipe({ ...recipe, name: "New Name" });
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
+    kh.seed({ recipes: [recipe] });
+
+    const result = await kh.callTool("update_recipe", { uid: recipe.uid, name: "New Name" });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: updated.uid, name: "New Name" });
+  });
+
+  it("UID not found is an isError result with no structuredContent and skips the API call", async () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("update_recipe", { uid: "nonexistent-uid", name: "New" });
+    const result = await kh.callTool("update_recipe", { uid: "nonexistent-uid", name: "New" });
 
-    expect(text.toLowerCase()).toContain("no recipe found");
+    expect(getText(result).toLowerCase()).toContain("no recipe found");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe errs — returns an error message and store is not updated", async () => {
+  it("saveRecipe errs — an isError result with no structuredContent and store is not updated", async () => {
     const recipe = makeRecipe();
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Conflict")));
     kh.seed({ recipes: [recipe] });
     const before = kh.state().recipe.store.size;
 
-    const text = await kh.callToolText("update_recipe", { uid: recipe.uid, name: "New" });
+    const result = await kh.callTool("update_recipe", { uid: recipe.uid, name: "New" });
 
-    expect(text).toContain("Failed to update");
-    expect(text).toContain("Conflict");
+    expect(getText(result)).toContain("Failed to update");
+    expect(getText(result)).toContain("Conflict");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     // Store unchanged: no commit happened.
     expect(kh.state().recipe.store.size).toBe(before);
   });
