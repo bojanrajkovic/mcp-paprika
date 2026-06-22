@@ -17,6 +17,7 @@ import { pantryItemToRow } from "./pantry-helpers.js";
 import { PantryStore } from "./store.js";
 import { pantrySync } from "./sync.js";
 import { addPantryItemsTool } from "./tools/batch-add.js";
+import { clearOutOfStockPantryItemsTool } from "./tools/clear.js";
 import { deletePantryItemTool } from "./tools/delete.js";
 import { getPantryItemTool } from "./tools/get.js";
 import { listPantryItemsTool } from "./tools/list.js";
@@ -119,6 +120,7 @@ register(
           updatePantryItemTool,
           ...pantryStockTools,
           deletePantryItemTool,
+          clearOutOfStockPantryItemsTool,
         ],
         syncs: [pantrySync(state)],
         flush: () => state.cache.flush(),
