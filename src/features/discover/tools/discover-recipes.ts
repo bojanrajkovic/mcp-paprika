@@ -5,7 +5,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverState } from "../module.js";
 
-import { recipeMetadataLines, recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
+import { browseContextSchema, recipeMetadataLines, recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, toolResult } from "../../../shared/tools.js";
 
@@ -34,7 +34,12 @@ export const discoverRecipesInputSchema = {
 // nothing is a valid empty success; "not configured" / not-yet-synced / search
 // failure are errorResults (the tool can't fulfil the request).
 const discoverRowSchema = recipeRowSchema.extend({ score: z.number().describe("Cosine similarity, 0–1.") });
-export const discoverRecipesOutputSchema = z.object({ items: z.array(discoverRowSchema) });
+// `context` carries the source + query for the recipe-browse widget's "Recipes for you"
+// header; the widget never re-sorts discover results — the semantic ranking is the value.
+export const discoverRecipesOutputSchema = z.object({
+  context: browseContextSchema,
+  items: z.array(discoverRowSchema),
+});
 
 /**
  * `discover_recipes` — semantic search over the vector index this module owns
@@ -84,6 +89,9 @@ export const discoverRecipesTool = defineTool(
         return errorResult("Recipe store is not yet synced. Try again in a few seconds.");
       }
 
+      // The recipe-browse widget's source envelope — discover always has a query.
+      const browseContext = { source: "discover" as const, query: args.query };
+
       const results = (await vectorStore.search(args.query, args.topK, args.minScore)).match(
         (v) => v,
         (e) => {
@@ -94,7 +102,7 @@ export const discoverRecipesTool = defineTool(
       if ("content" in results) return results;
       if (results.length === 0) {
         // No semantic match is a valid empty success.
-        return toolResult("No recipes found matching that description.", { items: [] });
+        return toolResult("No recipes found matching that description.", { context: browseContext, items: [] });
       }
 
       // Enrich results and filter out recipes that are gone or trashed.
@@ -111,7 +119,7 @@ export const discoverRecipesTool = defineTool(
       }
 
       if (enriched.length === 0) {
-        return toolResult("No recipes found matching that description.", { items: [] });
+        return toolResult("No recipes found matching that description.", { context: browseContext, items: [] });
       }
 
       // Build the structured rows through the recipe contract (it resolves each row's
@@ -127,7 +135,7 @@ export const discoverRecipesTool = defineTool(
         lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, row.categories));
       });
 
-      return toolResult(lines.join("\n\n"), { items });
+      return toolResult(lines.join("\n\n"), { context: browseContext, items });
     };
   },
 );

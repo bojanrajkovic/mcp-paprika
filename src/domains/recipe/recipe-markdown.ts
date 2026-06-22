@@ -22,6 +22,7 @@ export const recipeRowSchema = z.object({
   prepTime: z.string().nullable(),
   cookTime: z.string().nullable(),
   totalTime: z.string().nullable(),
+  servings: z.string().nullable(),
   isPinned: z.boolean(),
   onGroceryList: z.boolean(),
 });
@@ -38,10 +39,24 @@ export function recipeToRow(recipe: Recipe, categoryNames: Array<string>): Recip
     prepTime: recipe.prepTime,
     cookTime: recipe.cookTime,
     totalTime: recipe.totalTime,
+    servings: recipe.servings,
     isPinned: recipe.isPinned,
     onGroceryList: recipe.onGroceryList,
   };
 }
+
+/**
+ * The source-identity envelope on the browse tools' structured output. The recipe-browse
+ * widget declares on `list_recipes`, `search_recipes`, and `discover_recipes` alike, so a
+ * result must say which it came from — the widget adapts only its header copy ("My recipes"
+ * / "Results for '…'" / "Recipes for you") and gates the rating/alpha sort to `list` (search
+ * and discover carry their own ordering). `query` carries the originating term for the
+ * search/discover header without the widget parsing tool arguments.
+ */
+export const browseContextSchema = z.object({
+  source: z.enum(["list", "search", "discover"]),
+  query: z.string().optional(),
+});
 
 /**
  * The structured-output payload for `read_recipe` / `create_recipe` (ADR-0019, R1,

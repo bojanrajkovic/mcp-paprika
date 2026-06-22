@@ -34,13 +34,22 @@ const recipeRows = [
 
 describe("recipe/category list structured output validates through the SDK (R1, #319)", () => {
   it("listRecipesOutputSchema accepts the rows recipeToRow produces (array<string> categories)", async () => {
-    const result = await callStructuredProbe(listRecipesOutputSchema, { items: recipeRows, total: 2, offset: 0 });
+    const result = await callStructuredProbe(listRecipesOutputSchema, {
+      context: { source: "list" },
+      items: recipeRows,
+      total: 2,
+      offset: 0,
+    });
     expect(result.isError).toBeFalsy();
     expect((result.structuredContent as { items: unknown[] }).items).toHaveLength(2);
   });
 
   it("searchRecipesOutputSchema accepts items plus the total match count", async () => {
-    const result = await callStructuredProbe(searchRecipesOutputSchema, { items: recipeRows, total: 5 });
+    const result = await callStructuredProbe(searchRecipesOutputSchema, {
+      context: { source: "search", query: "cake" },
+      items: recipeRows,
+      total: 5,
+    });
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ total: 5 });
   });

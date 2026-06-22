@@ -42,7 +42,10 @@ describe("#320 catalog/discover structured output validates through the SDK (R1)
 
   it("discoverRecipesOutputSchema accepts the shared recipe row plus a score (extend)", async () => {
     const row = { ...recipeToRow(makeRecipe({ uid: "r-1" as RecipeUid, name: "Cake" }), ["Dessert"]), score: 0.91 };
-    const result = await callStructuredProbe(discoverRecipesOutputSchema, { items: [row] });
+    const result = await callStructuredProbe(discoverRecipesOutputSchema, {
+      context: { source: "discover", query: "cake" },
+      items: [row],
+    });
     expect(result.isError).toBeFalsy();
     expect((result.structuredContent as { items: unknown[] }).items).toHaveLength(1);
   });
