@@ -65,6 +65,9 @@ export const discoverRecipesTool = defineTool(
       "Discover recipes using semantic search. Finds recipes matching a natural language description of what you're looking for.",
     inputSchema: discoverRecipesInputSchema,
     outputSchema: discoverRecipesOutputSchema,
+    // Hosts with the apps surface render this result as the recipe-browser widget; others
+    // show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/recipe-browser" },
   },
   (ctx: DomainCtx<DiscoverState, "recipe">) => {
     const log = ctx.infra.log.child({ component: "discover_recipes" });

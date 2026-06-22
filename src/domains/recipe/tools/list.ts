@@ -44,6 +44,9 @@ export const listRecipesTool = defineTool(
         .describe("Maximum number of recipes to return (default: 25, max: 50)"),
     },
     outputSchema: listRecipesOutputSchema,
+    // Hosts with the apps surface render this result as the recipe-browser widget; others
+    // show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/recipe-browser" },
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {

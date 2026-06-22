@@ -70,6 +70,9 @@ export const searchRecipesTool = defineTool(
       "only time constraints are given.",
     inputSchema: searchRecipesInputSchema,
     outputSchema: searchRecipesOutputSchema,
+    // Hosts with the apps surface render this result as the recipe-browser widget; others
+    // show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/recipe-browser" },
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
