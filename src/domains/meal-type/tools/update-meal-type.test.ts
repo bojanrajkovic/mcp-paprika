@@ -5,6 +5,7 @@ import type { MealType } from "../types.js";
 
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("update_meal_type tool", () => {
   const kh = useKernelHarness<MealTypeState>("meal-type");
@@ -26,21 +27,26 @@ describe("update_meal_type tool", () => {
 
   it("returns not-found for an unknown UID", async () => {
     seedCatalog();
-    const text = await kh.callToolText("update_meal_type", { uid: "nope", name: "Supper" });
-    expect(text).toContain('No meal type found with UID "nope"');
+    const result = await kh.callTool("update_meal_type", { uid: "nope", name: "Supper" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain('No meal type found with UID "nope"');
   });
 
   it("requires at least one editable field", async () => {
     const { brunch } = seedCatalog();
-    const text = await kh.callToolText("update_meal_type", { uid: brunch.uid });
-    expect(text).toContain("Nothing to update");
+    const result = await kh.callTool("update_meal_type", { uid: brunch.uid });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("Nothing to update");
   });
 
-  it("renames and recolors in one call, preserving originalType", async () => {
-    const { dinner } = seedCatalog();
+  it("renames and recolors in one call, echoing the whole catalog over structuredContent", async () => {
+    const { breakfast, dinner, brunch } = seedCatalog();
 
-    const text = await kh.callToolText("update_meal_type", { uid: dinner.uid, name: "Supper", color: "#4A90D9" });
+    const result = await kh.callTool("update_meal_type", { uid: dinner.uid, name: "Supper", color: "#4A90D9" });
 
+    const text = getText(result);
     expect(text).toContain('renamed to "Supper"');
     expect(text).toContain("recolored to #4A90D9");
     const updated = kh.state().store.get(dinner.uid);
@@ -52,12 +58,23 @@ describe("update_meal_type tool", () => {
     // Menu resources render meal-type names from this catalog live, so the
     // commit must tell subscribed clients to refresh.
     expect(kh.resourceListChanged()).toHaveBeenCalled();
+    // The whole post-rename catalog (same shape list_meal_types produces) rides structuredContent.
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      items: [
+        { uid: breakfast.uid, name: "Breakfast", originalType: 0 },
+        { uid: dinner.uid, name: "Supper", originalType: 2 },
+        { uid: brunch.uid, name: "Brunch", originalType: null },
+      ],
+    });
   });
 
   it("rejects a rename that collides with another type's name", async () => {
     const { brunch } = seedCatalog();
-    const text = await kh.callToolText("update_meal_type", { uid: brunch.uid, name: "dinner" });
-    expect(text).toContain('A meal type named "Dinner" already exists');
+    const result = await kh.callTool("update_meal_type", { uid: brunch.uid, name: "dinner" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain('A meal type named "Dinner" already exists');
     expect(kh.client().saveMealTypes).not.toHaveBeenCalled();
   });
 
@@ -74,8 +91,10 @@ describe("update_meal_type tool", () => {
 
   it("reports no changes when nothing differs", async () => {
     const { brunch } = seedCatalog();
-    const text = await kh.callToolText("update_meal_type", { uid: brunch.uid, name: "Brunch", color: "#000000" });
-    expect(text).toContain("No changes");
+    const result = await kh.callTool("update_meal_type", { uid: brunch.uid, name: "Brunch", color: "#000000" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("No changes");
     expect(kh.client().saveMealTypes).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ import type { Aisle } from "../types.js";
 
 import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("update_aisle tool", () => {
   const kh = useKernelHarness<AisleState>("aisle");
@@ -27,22 +28,26 @@ describe("update_aisle tool", () => {
 
   it("returns not-found for an unknown UID", async () => {
     seedCatalog();
-    const text = await kh.callToolText("update_aisle", { uid: "nope", name: "Veg" });
-    expect(text).toContain('No aisle found with UID "nope"');
+    const result = await kh.callTool("update_aisle", { uid: "nope", name: "Veg" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain('No aisle found with UID "nope"');
   });
 
   it("requires at least one of name/position", async () => {
     const { produce } = seedCatalog();
-    const text = await kh.callToolText("update_aisle", { uid: produce.uid });
-    expect(text).toContain("Nothing to update");
+    const result = await kh.callTool("update_aisle", { uid: produce.uid });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("Nothing to update");
   });
 
-  it("renames an aisle without renumbering the rest of the catalog", async () => {
-    const { produce } = seedCatalog();
+  it("renames an aisle, echoing the whole catalog over structuredContent", async () => {
+    const { produce, dairy, frozen } = seedCatalog();
 
-    const text = await kh.callToolText("update_aisle", { uid: produce.uid, name: "Fresh Produce" });
+    const result = await kh.callTool("update_aisle", { uid: produce.uid, name: "Fresh Produce" });
 
-    expect(text).toContain('renamed to "Fresh Produce"');
+    expect(getText(result)).toContain('renamed to "Fresh Produce"');
     expect(kh.state().store.get(produce.uid)?.name).toBe("Fresh Produce");
     // Only the renamed aisle is saved — order flags untouched.
     const saveAisles = vi.mocked(kh.client().saveAisles);
@@ -53,12 +58,23 @@ describe("update_aisle tool", () => {
     // Grocery-list resources render aisle names from this catalog live, so the
     // commit must tell subscribed clients to refresh.
     expect(kh.resourceListChanged()).toHaveBeenCalled();
+    // The whole post-rename catalog (same shape list_aisles produces) rides structuredContent.
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      items: [
+        { uid: produce.uid, name: "Fresh Produce" },
+        { uid: dairy.uid, name: "Dairy" },
+        { uid: frozen.uid, name: "Frozen" },
+      ],
+    });
   });
 
   it("rejects a rename that collides with another aisle's name", async () => {
     const { produce } = seedCatalog();
-    const text = await kh.callToolText("update_aisle", { uid: produce.uid, name: "dairy" });
-    expect(text).toContain('An aisle named "Dairy" already exists');
+    const result = await kh.callTool("update_aisle", { uid: produce.uid, name: "dairy" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain('An aisle named "Dairy" already exists');
     expect(kh.client().saveAisles).not.toHaveBeenCalled();
   });
 
@@ -92,8 +108,10 @@ describe("update_aisle tool", () => {
 
   it("reports no changes when name and position already match", async () => {
     const { produce } = seedCatalog();
-    const text = await kh.callToolText("update_aisle", { uid: produce.uid, name: "Produce" });
-    expect(text).toContain("No changes");
+    const result = await kh.callTool("update_aisle", { uid: produce.uid, name: "Produce" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("No changes");
     expect(kh.client().saveAisles).not.toHaveBeenCalled();
   });
 
@@ -127,9 +145,11 @@ describe("update_aisle tool", () => {
       errAsync({ kind: "http", status: 500, message: "boom" } as never),
     );
 
-    const text = await kh.callToolText("update_aisle", { uid: produce.uid, name: "Veg" });
+    const result = await kh.callTool("update_aisle", { uid: produce.uid, name: "Veg" });
 
-    expect(text).toContain("Failed to update aisle");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("Failed to update aisle");
     expect(kh.state().store.get(produce.uid)?.name).toBe("Produce");
   });
 });

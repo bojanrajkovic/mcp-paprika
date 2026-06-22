@@ -1,16 +1,18 @@
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { TypedCallToolResult } from "../../../shared/tools.js";
 import type { MealTypeUid } from "../../meal-type/ids.js";
 import type { RecipeUid } from "../../recipe/ids.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState, MenuWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema } from "../ids.js";
+import { menuReadOutputSchema, menuToStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // `.strict()` — `day` was promoted to move_menu_item (a day-move carries
@@ -40,19 +42,20 @@ export const updateMenuItemTool = defineTool(
       "name from the new recipe. To move an item to a different day, use move_menu_item. The menu link " +
       "(menu_uid) is not editable via this tool — delete and re-add to move an item between menus.",
     inputSchema: updateMenuItemInputSchema,
+    outputSchema: menuReadOutputSchema,
   },
   [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "update_menu_item" });
-    return async (args) => {
+    return async (args): Promise<TypedCallToolResult<z.infer<typeof menuReadOutputSchema>>> => {
       if (args.type === undefined && args.recipe_uid === undefined) {
-        return toolResult("Nothing to update. Provide at least one of type or recipe_uid.");
+        return errorResult("Nothing to update. Provide at least one of type or recipe_uid.");
       }
 
       const uid = args.uid;
       const existing = ctx.state.items.store.get(uid);
       if (existing === undefined) {
-        return toolResult(
+        return errorResult(
           `No menu item found with UID "${uid}" (it may not exist or was already deleted). Use \`read_menu\` to inspect its menu.`,
         );
       }
@@ -62,7 +65,7 @@ export const updateMenuItemTool = defineTool(
       if (args.recipe_uid !== undefined) {
         const recipe = ctx.deps.recipe.get(args.recipe_uid);
         if (recipe === undefined) {
-          return toolResult(
+          return errorResult(
             `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
               `wait for the next sync and retry.`,
           );
@@ -78,7 +81,7 @@ export const updateMenuItemTool = defineTool(
       if (args.type !== undefined) {
         const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
         if (!result.ok) {
-          return toolResult(result.message);
+          return errorResult(result.message);
         }
         newTypeUid = result.resolved.uid;
       }
@@ -93,14 +96,38 @@ export const updateMenuItemTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid }, "saveMenuItems (update_menu_item) failed");
-          return toolResult(`Failed to update menu item: ${e.message}`);
+          return errorResult(`Failed to update menu item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
+
+      // The ack echoes the WHOLE parent menu (the item is one row of it), so the model
+      // sees the menu the edited item now belongs to. An orphaned item (null menuUid)
+      // has no parent menu to echo — it cannot satisfy the schema, so it is an error.
+      if (saved.menuUid === null) {
+        return errorResult(
+          `Menu item "${saved.name}" was updated, but it has no parent menu to return. Use \`read_menu\` to inspect it.`,
+        );
+      }
+      const parent = ctx.state.menus.store.get(saved.menuUid);
+      if (parent === undefined) {
+        return errorResult(
+          `Menu item "${saved.name}" was updated, but its parent menu (UID "${saved.menuUid}") is not known locally; ` +
+            `wait for the next sync, then use \`read_menu\`.`,
+        );
+      }
+
+      // Snapshot the parent menu's items with the saved item substituted in — the
+      // structured payload reflects the edit whether or not the local commit lands
+      // (the store still holds the pre-edit item until commitMenuItem runs).
+      const items = ctx.state.items.store.getByMenuUid(parent.uid).map((it) => (it.uid === saved.uid ? saved : it));
+      const structured = menuToStructured(parent, items, ctx.deps["meal-type"].getAll());
+      const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
-      return toolResult(`Menu item "${saved.name}" updated.`);
+      return toolResult(`Menu item "${saved.name}" updated.`, structured);
     };
   },
 );

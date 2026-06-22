@@ -16,6 +16,15 @@ export const listAislesOutputSchema = z.object({
 });
 
 /**
+ * Build the {@link listAislesOutputSchema} rows from the aisle catalog — sorted by
+ * order then name, one `{uid, name}` per aisle. Shared by `list_aisles` and
+ * `update_aisle` so the two echo the identical full-catalog shape.
+ */
+export function buildAisleRows(state: AisleState): z.infer<typeof listAislesOutputSchema>["items"] {
+  return sortCatalog(state.store.getAll()).map((a) => ({ uid: a.uid, name: a.name }));
+}
+
+/**
  * `list_aisles` — list the aisle catalog. Aisle is a Reference-class entity:
  * list tool + managed lifecycle (auto-create via `ensureAisle`, `update_aisle`,
  * `delete_aisle`), no resource surface.
@@ -41,9 +50,8 @@ export const listAislesTool = defineTool(
           { items: [] },
         );
       }
-      const items = aisles.map((a) => ({ uid: a.uid, name: a.name }));
       const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
-      return toolResult(lines.join("\n"), { items });
+      return toolResult(lines.join("\n"), { items: buildAisleRows(ctx.state) });
     };
   },
 );

@@ -79,9 +79,10 @@ describe("category write tools", () => {
   });
 
   describe("update_category", () => {
-    it("renames a category", async () => {
+    it("renames a category, echoing the whole catalog over structuredContent", async () => {
       const cat = makeCategory({ uid: "c" as CategoryUid, name: "Old" });
-      kh.seed({ recipes: [makeRecipe()], categories: [cat] });
+      const other = makeCategory({ uid: "o" as CategoryUid, name: "Other" });
+      kh.seed({ recipes: [makeRecipe({ categories: ["c" as CategoryUid] })], categories: [cat, other] });
       vi.mocked(kh.client().saveCategory).mockImplementation((c) => okAsync(c));
 
       const result = await kh.callTool("update_category", { uid: "c", name: "New" });
@@ -90,6 +91,15 @@ describe("category write tools", () => {
       expect(posted?.name).toBe("New");
       expect(posted?.uid).toBe("c");
       expect(getText(result)).toContain("Updated category");
+      // The whole post-rename catalog (same shape list_categories produces, name-sorted,
+      // with recipe counts + parent FKs) rides structuredContent.
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({
+        items: [
+          { uid: "c", name: "New", recipeCount: 1, parentUid: null },
+          { uid: "o", name: "Other", recipeCount: 0, parentUid: null },
+        ],
+      });
     });
 
     it("re-parents to root when parentUid is null", async () => {
@@ -110,6 +120,8 @@ describe("category write tools", () => {
       const result = await kh.callTool("update_category", { uid: "c", parentUid: "c" });
 
       expect(kh.client().saveCategory).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
       expect(getText(result)).toContain("cannot be its own parent");
     });
 
@@ -123,6 +135,8 @@ describe("category write tools", () => {
       const result = await kh.callTool("update_category", { uid: "a", parentUid: "c" });
 
       expect(kh.client().saveCategory).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
       expect(getText(result)).toContain("cycle");
     });
 
@@ -133,6 +147,8 @@ describe("category write tools", () => {
       const result = await kh.callTool("update_category", { uid: "c" });
 
       expect(kh.client().saveCategory).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
       expect(getText(result)).toContain("Nothing to update");
     });
 
@@ -142,6 +158,8 @@ describe("category write tools", () => {
       const result = await kh.callTool("update_category", { uid: "missing", name: "X" });
 
       expect(kh.client().saveCategory).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
       expect(getText(result)).toContain('No category found with UID "missing"');
     });
   });

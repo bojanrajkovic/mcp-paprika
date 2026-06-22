@@ -359,12 +359,15 @@ describe("update_menu_item tool", () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1" });
     seedBase(kh, { menuItems: [item] });
 
-    const text = await kh.callToolText("update_menu_item", { uid: "mi-1" });
-    expect(text).toContain("Nothing to update");
+    const result = await kh.callTool("update_menu_item", { uid: "mi-1" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("Nothing to update");
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 
-  it("merges a type change, preserving the recipe link, name, and day", async () => {
+  it("merges a type change, echoing the whole parent menu over structuredContent", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
     const item = makeMenuItem({
       uid: "mi-1" as MenuItemUid,
       menuUid: "m-1",
@@ -374,41 +377,68 @@ describe("update_menu_item tool", () => {
       typeUid: "dinner-uid",
       orderFlag: 0,
     });
-    seedBase(kh, { menuItems: [item] });
+    seedBase(kh, { menus: [menu], menuItems: [item] });
     vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
-    await kh.callTool("update_menu_item", { uid: "mi-1", type: { name: "Breakfast" } });
+    const result = await kh.callTool("update_menu_item", { uid: "mi-1", type: { name: "Breakfast" } });
 
     const saved = (vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[])[0]!;
     expect(saved.typeUid).toBe("breakfast-uid");
     expect(saved.day).toBe(1); // unchanged — day-moves go through move_menu_item
     expect(saved.recipeUid).toBe(TACOS_UID); // preserved
     expect(saved.name).toBe("Tacos"); // preserved
+    // The whole parent menu (with the edited item substituted in) rides structuredContent.
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      uid: "m-1",
+      name: "Holiday",
+      items: [{ uid: "mi-1", name: "Tacos", typeName: "Breakfast", recipeUid: TACOS_UID }],
+    });
   });
 
   it("re-resolves the display name when recipe_uid changes", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
     const item = makeMenuItem({
       uid: "mi-1" as MenuItemUid,
       menuUid: "m-1",
       recipeUid: TACOS_UID,
       name: "Tacos",
     });
-    seedBase(kh, { menuItems: [item] });
+    seedBase(kh, { menus: [menu], menuItems: [item] });
     vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
-    await kh.callTool("update_menu_item", { uid: "mi-1", recipe_uid: SOUP_UID });
+    const result = await kh.callTool("update_menu_item", { uid: "mi-1", recipe_uid: SOUP_UID });
 
     const saved = (vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[])[0]!;
     expect(saved.recipeUid).toBe(SOUP_UID);
     expect(saved.name).toBe("Soup"); // refreshed from recipe store
+    // The structured echo reflects the refreshed name + recipe link.
+    expect(result.structuredContent).toMatchObject({
+      uid: "m-1",
+      items: [{ uid: "mi-1", name: "Soup", recipeUid: SOUP_UID }],
+    });
+  });
+
+  it("an orphaned item (null menuUid) is an isError — no parent menu to echo", async () => {
+    const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: null, name: "Leftovers" });
+    seedBase(kh, { menuItems: [item] });
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
+
+    const result = await kh.callTool("update_menu_item", { uid: "mi-1", type: { name: "Dinner" } });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("has no parent menu to return");
   });
 
   it("rejects an unknown recipe_uid without saving", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1" });
     seedBase(kh, { menuItems: [item] });
 
-    const text = await kh.callToolText("update_menu_item", { uid: "mi-1", recipe_uid: "recipe-ghost" as RecipeUid });
-    expect(text).toContain("is not known to the local recipe store");
+    const result = await kh.callTool("update_menu_item", { uid: "mi-1", recipe_uid: "recipe-ghost" as RecipeUid });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain("is not known to the local recipe store");
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 
@@ -431,8 +461,10 @@ describe("update_menu_item tool", () => {
   it("reports a UID miss without saving", async () => {
     seedBase(kh, {});
 
-    const text = await kh.callToolText("update_menu_item", { uid: "ghost", type: { name: "Dinner" } });
-    expect(text).toContain(
+    const result = await kh.callTool("update_menu_item", { uid: "ghost", type: { name: "Dinner" } });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(getText(result)).toContain(
       'No menu item found with UID "ghost" (it may not exist or was already deleted). Use `read_menu` to inspect its menu.',
     );
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();

@@ -1,7 +1,7 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { TypedCallToolResult } from "../../../shared/tools.js";
 import type { Category } from "../category/types.js";
 import type { CategoryUid } from "../ids.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
@@ -10,6 +10,7 @@ import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { CategoryUidSchema } from "../ids.js";
 import { categoryStartGuard } from "./guards.js";
+import { buildCategoryRows, listCategoriesOutputSchema } from "./list-categories.js";
 
 function categorySummary(state: RecipeState, category: Category): string {
   const parent = category.parentUid ? state.category.store.get(category.parentUid) : undefined;
@@ -127,6 +128,7 @@ export const updateCategoryTool = defineTool(
         .optional()
         .describe("New parent UID, or null for top-level (omit to leave the parent unchanged)"),
     },
+    outputSchema: listCategoriesOutputSchema,
   },
   [categoryStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
@@ -134,23 +136,23 @@ export const updateCategoryTool = defineTool(
     return async (args) => {
       const existing = ctx.state.category.store.get(args.uid);
       if (existing === undefined)
-        return toolResult(
+        return errorResult(
           `No category found with UID "${args.uid}" (it may not exist or was already deleted). Use \`list_categories\` to find it.`,
         );
 
       if (args.name === undefined && args.parentUid === undefined) {
-        return toolResult("Nothing to update: provide `name`, `parentUid`, or both.");
+        return errorResult("Nothing to update: provide `name`, `parentUid`, or both.");
       }
 
       if (typeof args.parentUid === "string") {
         if (args.parentUid === args.uid) {
-          return toolResult("A category cannot be its own parent.");
+          return errorResult("A category cannot be its own parent.");
         }
         if (ctx.state.category.store.get(args.parentUid) === undefined) {
-          return toolResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
+          return errorResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
         }
         if (wouldCreateCycle(ctx.state, args.uid, args.parentUid)) {
-          return toolResult("That move would create a cycle: the chosen parent is a descendant of this category.");
+          return errorResult("That move would create a cycle: the chosen parent is a descendant of this category.");
         }
       }
 
@@ -161,17 +163,23 @@ export const updateCategoryTool = defineTool(
       };
 
       return (await ctx.infra.client.saveCategory(updated)).match(
-        async (saved): Promise<CallToolResult> => {
+        async (saved): Promise<TypedCallToolResult<z.infer<typeof listCategoriesOutputSchema>>> => {
           // commitCategoryUpsert persists locally and emits `category-changed` on
           // the kernel re-index seam so discover re-embeds the category's recipes
           // (a rename changes the display name baked into their embedding text).
-          const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
+          // The whole post-commit catalog rides structuredContent (the same full-list
+          // shape list_categories produces), so the model sees the reordered tree.
+          const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved), {
+            structuredContent: { items: buildCategoryRows(ctx.state) },
+          });
           if (commitErr) return commitErr;
-          return toolResult(`Updated category ${categorySummary(ctx.state, saved)}`);
+          return toolResult(`Updated category ${categorySummary(ctx.state, saved)}`, {
+            items: buildCategoryRows(ctx.state),
+          });
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "saveCategory failed");
-          return toolResult(`Failed to update category: ${e.message}`);
+          return errorResult(`Failed to update category: ${e.message}`);
         },
       );
     };

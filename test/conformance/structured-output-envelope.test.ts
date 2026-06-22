@@ -65,6 +65,9 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
     // R1 — the grocery/pantry/meal write-acks that echo a resolvable entity
     // (mark_grocery_item_purchased, mark_pantry_item_out_of_stock, reschedule_meal,
     // restock_pantry_item, update_grocery_item, update_meal, update_pantry_item).
+    // R1 — the menu and catalog write-acks that echo their whole container
+    // (move_menu_item, update_menu, update_menu_item echo the parent menu; update_aisle,
+    // update_category, update_meal_type echo the full reordered catalog list).
     // Add each later batch's tool names as they land.
     expect(withSchema).toEqual([
       "add_grocery_items",
@@ -89,6 +92,7 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "mark_grocery_item_purchased",
       "mark_pantry_item_out_of_stock",
       "move_grocery_items_to_pantry",
+      "move_menu_item",
       "pin_recipe",
       "plan_meals",
       "rate_recipe",
@@ -108,8 +112,13 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "trash_recipe",
       "unfavorite_recipe",
       "unpin_recipe",
+      "update_aisle",
+      "update_category",
       "update_grocery_item",
       "update_meal",
+      "update_meal_type",
+      "update_menu",
+      "update_menu_item",
       "update_pantry_item",
       "update_recipe",
     ]);

@@ -1,19 +1,21 @@
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { TypedCallToolResult } from "../../../shared/tools.js";
 import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
+  errorResult,
   resolveLookup,
   resolveOrPick,
   toolResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuToMarkdown } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToMarkdown, menuToStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -43,13 +45,14 @@ export const updateMenuTool = defineTool(
       days: z.number().int().positive().optional().describe("New day span (>= 1)"),
       notes: z.string().optional().describe("New free-text notes"),
     },
+    outputSchema: menuReadOutputSchema,
   },
   [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "update_menu" });
     return async (args) => {
       if (args.name === undefined && args.days === undefined && args.notes === undefined) {
-        return toolResult("Nothing to update. Provide at least one of name, days, or notes.");
+        return errorResult("Nothing to update. Provide at least one of name, days, or notes.");
       }
 
       const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
@@ -79,7 +82,7 @@ export const updateMenuTool = defineTool(
             .findByName(newName)
             .find((m) => m.name.toLowerCase() === newName.toLowerCase() && m.uid !== existing.uid);
           if (conflict !== undefined) {
-            return toolResult(
+            return errorResult(
               `A menu named "${conflict.name}" already exists (UID: ${conflict.uid}). Choose a different name.`,
             );
           }
@@ -98,7 +101,7 @@ export const updateMenuTool = defineTool(
             .slice()
             .sort((a, b) => a.day - b.day)
             .map((item) => `- "${item.name}" on day ${item.day.toString()}`);
-          return toolResult(
+          return errorResult(
             `Cannot shrink "${existing.name}" to ${args.days.toString()} day(s): ` +
               `${conflicts.length.toString()} planned recipe(s) fall on later days ` +
               `(planned recipes currently span ${maxDay.toString()} day(s)).\n` +
@@ -116,21 +119,20 @@ export const updateMenuTool = defineTool(
       };
 
       return (await ctx.infra.client.saveMenus([merged])).match(
-        async (saved) => {
+        async (saved): Promise<TypedCallToolResult<z.infer<typeof menuReadOutputSchema>>> => {
           const persisted = saved[0] ?? merged;
-          const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
+          const items = ctx.state.items.store.getByMenuUid(persisted.uid);
+          const mealTypes = ctx.deps["meal-type"].getAll();
+          const structured = menuToStructured(persisted, items, mealTypes);
+          const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted), {
+            structuredContent: structured,
+          });
           if (commitErr) return commitErr;
-          return toolResult(
-            menuToMarkdown(
-              persisted,
-              ctx.state.items.store.getByMenuUid(persisted.uid),
-              ctx.deps["meal-type"].getAll(),
-            ),
-          );
+          return toolResult(menuToMarkdown(persisted, items, mealTypes), structured);
         },
         async (e) => {
           log.error({ err: e, uid: existing.uid }, "saveMenus (update_menu) failed");
-          return toolResult(`Failed to update menu: ${e.message}`);
+          return errorResult(`Failed to update menu: ${e.message}`);
         },
       );
     };
