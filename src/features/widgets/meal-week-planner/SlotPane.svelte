@@ -81,11 +81,14 @@
 </div>
 
 <style>
+  /* Content-sized, not an internal scroll region: the slot pane overflows WidgetShell's
+     `max-height: 100dvh` cap visibly so the host's max-content autoResize measures the widget's
+     true height and grows the iframe. `flex: 1; overflow-y: auto` here pins the iframe at the
+     min-height floor (the cap defeats the measurement). The day's slots are bounded, so no
+     internal scroll is needed — a very tall day grows the iframe and the host page scrolls. */
   .day-detail {
+    flex: none;
     padding: 16px 0;
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
   .dd-label {

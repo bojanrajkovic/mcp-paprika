@@ -67,7 +67,12 @@
 </div>
 
 <style>
+  /* Content-sized + non-shrinking: the detail overflows WidgetShell's `max-height: 100dvh` cap
+     visibly so the host's max-content autoResize measures the full recipe height and grows the
+     iframe, rather than scrolling inside the cap (which pins the iframe at the min-height floor).
+     A long recipe grows the iframe; the host page scrolls. */
   header {
+    flex: none;
     display: flex;
     align-items: center;
     padding: 12px 16px 8px;
@@ -90,9 +95,7 @@
   }
 
   .detail {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
+    flex: none;
     padding: 4px 16px 20px;
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }

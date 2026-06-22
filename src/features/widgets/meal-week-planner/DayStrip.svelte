@@ -83,7 +83,10 @@
 </div>
 
 <style>
+  /* flex: none — see the SlotPane/App note: these rows size to content and overflow the shell's
+     viewport cap visibly so the host's max-content autoResize measures the true height. */
   .week-nav {
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -132,6 +135,7 @@
   }
 
   .day-strip {
+    flex: none;
     display: flex;
     padding: 10px 12px 6px;
     gap: 4px;
