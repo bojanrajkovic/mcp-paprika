@@ -231,28 +231,28 @@
     node.scrollTop = listScroll;
   }
 
-  async function addToGrocery(recipe: BrowseRecipe) {
-    // The grocery list isn't rendered here, so there's no optimistic state to revert — await the
-    // call and toast the outcome.
-    const res = await callTool(app, "add_recipe_to_grocery_list", {
-      recipe: { uid: recipe.uid },
-    });
-    if (res.isError)
-      showToast("Couldn’t add to your grocery list — try again.");
-    else showToast(`Added ${recipe.name} to your grocery list.`, "info");
+  // Both grocery-add and meal-plan need work the widget can't do from a browse row, so they hand
+  // off to the chat thread (the ↗ on the buttons signals the context switch). add_recipe_to_grocery_list
+  // needs the recipe's ingredients parsed into items (quantity separated, section headers dropped)
+  // and merged against what's already on the list — the assistant's job, not the widget's. plan_meals
+  // needs a date and a meal type the widget has no picker for. The assistant has the context for both.
+  function askAssistant(text: string, toastMsg: string) {
+    app.sendMessage({ role: "user", content: [{ type: "text", text }] });
+    showToast(toastMsg, "info");
   }
 
-  // plan_meals needs a recipe + date + meal type — the widget can't supply the latter two without
-  // a date picker and a meal-type selector, so it hands the planning to the chat thread, which
-  // has the scheduling context.
+  function addToGrocery(recipe: BrowseRecipe) {
+    askAssistant(
+      `Add the ingredients from ${recipe.name} to my grocery list.`,
+      "Asked the assistant to add this to your grocery list.",
+    );
+  }
+
   function planMeal(recipe: BrowseRecipe) {
-    app.sendMessage({
-      role: "user",
-      content: [
-        { type: "text", text: `Help me plan a meal with ${recipe.name}.` },
-      ],
-    });
-    showToast("Asked the assistant to help plan this.", "info");
+    askAssistant(
+      `Help me plan a meal with ${recipe.name}.`,
+      "Asked the assistant to help plan this.",
+    );
   }
 
   function backToBrowse() {

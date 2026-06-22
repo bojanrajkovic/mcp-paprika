@@ -1,9 +1,9 @@
 <script lang="ts">
   // The expanded strip under a tapped row: the prep/cook/serves metadata (prep and cook
   // SEPARATED here — the collapsed row shows only one), then the three actions. "Read recipe"
-  // reads the full recipe inline (a spinner while in flight); "Add to grocery" calls the tool
-  // and toasts; "Plan meal" hands off to the chat thread (the ↗ marks the context switch — the
-  // widget can't supply plan_meals' date + meal-type without a picker).
+  // reads the full recipe inline (a spinner while in flight); "Add to grocery" and "Plan meal"
+  // hand off to the chat thread (the ↗ marks the context switch) — both need work the widget
+  // can't do from a browse row (ingredient parsing; a date + meal-type picker).
   import Spinner from "../shared/Spinner.svelte";
 
   interface StripRecipe {
@@ -42,7 +42,7 @@
       {#if loading}<Spinner size={13} color="var(--accent-ink)" />{/if}
       <span>Read recipe</span>
     </button>
-    <button class="act" onclick={onGrocery}>Add to grocery</button>
+    <button class="act" onclick={onGrocery}>Add to grocery ↗</button>
     <button class="act" onclick={onPlan}>Plan meal ↗</button>
   </div>
 </div>
