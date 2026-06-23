@@ -232,14 +232,16 @@ The bytes are not in the catalog. The collection read (`GET /sync/photos/`) retu
 only the six-field metadata rows (`uid`, `recipe_uid`, `filename`, `name`,
 `order_flag`, `hash`) — no URL. To fetch the image, read the **singular** photo URL
 (`GET /sync/photo/{uid}/`), whose response carries a short-lived **presigned S3
-`photo_url`** (`…uploads.paprikaapp.com…`) pointing at the full-resolution bytes;
-fetch that URL for the image itself. This two-step shape is not in our captured
-corpus (the captures cover the write path only); it is reconstructed from the
-public reverse-engineering of the API and is exercised in tests with hand-rolled
-handlers rather than a HAR fixture. The recipe-level `photo_url` field is distinct
-and is empty for uploaded photos — which is exactly why uploaded photos need this
-per-photo read to surface at all (#419). The proxy resource that consumes it lives
-in `src/domains/recipe/resources/photo-resource.ts`; see `docs/architecture.md`.
+`photo_url`** (path-style `http://s3.amazonaws.com/uploads.paprikaapp.com/…`) pointing
+at the full-resolution bytes; fetch that URL for the image itself. This two-step shape
+is not in our captured corpus (the captures cover the write path only) and so has no
+HAR fixture — tests use hand-rolled handlers — but it is **verified against the live
+API**: the `GET` returns the presigned `photo_url` and the bytes fetch clean through the
+SSRF-guarded path (a public S3 host, so the unicast guard admits it). The recipe-level
+`photo_url` field is distinct and is empty for uploaded photos — which is exactly why
+uploaded photos need this per-photo read to surface at all (#419). The proxy resource
+that consumes it lives in `src/domains/recipe/resources/photo-resource.ts`; see
+`docs/architecture.md`.
 
 ### Grocery ingredient auto-creation
 
