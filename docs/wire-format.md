@@ -239,8 +239,8 @@ HAR fixture — tests use hand-rolled handlers — but it is **verified against 
 API**: the `GET` returns the presigned `photo_url` and the bytes fetch clean through the
 SSRF-guarded path (a public S3 host, so the unicast guard admits it). The recipe-level
 `photo_url` field is distinct and is empty for uploaded photos — which is exactly why
-uploaded photos need this per-photo read to surface at all (#419). The proxy resource
-that consumes it lives in `src/domains/recipe/resources/photo-resource.ts`; see
+uploaded photos need this per-photo read to surface at all. The proxy resource that
+consumes it lives in `src/domains/recipe/resources/photo-resource.ts`; see
 `docs/architecture.md`.
 
 ### Grocery ingredient auto-creation
