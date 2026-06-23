@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
+import type { RecipeUid } from "./ids.js";
+
 import { makeCategory, makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
-import { recipeMetadataLines, recipeToMarkdown, resolveCategoryRefs } from "./recipe-markdown.js";
+import {
+  recipeMetadataLines,
+  recipePhotoResourceUri,
+  recipeToMarkdown,
+  recipeToReadStructured,
+  recipeToRow,
+  resolveCategoryRefs,
+} from "./recipe-markdown.js";
 
 describe("shared helper functions", () => {
   describe("recipeToMarkdown renders a recipe as human-readable markdown", () => {
@@ -257,6 +266,55 @@ describe("shared helper functions", () => {
       const result = resolveCategoryRefs([cat1, cat2], [cat1.uid, "Breakfast", "Unknown"]);
       expect(result.uids).toEqual([cat1.uid, cat2.uid]);
       expect(result.unknown).toEqual(["Unknown"]);
+    });
+  });
+
+  describe("recipePhotoResourceUri", () => {
+    it("returns the photo resource URI for an uploaded photo (photoLarge set)", () => {
+      const recipe = makeRecipe({ uid: "r1" as RecipeUid, photoLarge: "photo-a.jpg", imageUrl: "" });
+      expect(recipePhotoResourceUri(recipe)).toBe("ui://recipe/r1/photo");
+    });
+
+    it("returns the URI for a web-imported recipe (imageUrl only)", () => {
+      const recipe = makeRecipe({ uid: "r2" as RecipeUid, photoLarge: null, imageUrl: "https://x/y.jpg" });
+      expect(recipePhotoResourceUri(recipe)).toBe("ui://recipe/r2/photo");
+    });
+
+    it("returns null when the recipe has no photo of any kind", () => {
+      const recipe = makeRecipe({
+        uid: "r3" as RecipeUid,
+        photo: null,
+        photoLarge: null,
+        imageUrl: "",
+        photoUrl: null,
+      });
+      expect(recipePhotoResourceUri(recipe)).toBeNull();
+    });
+
+    it("returns null when only the thumbnail `photo` is set (resolver can't serve a bare thumbnail)", () => {
+      const recipe = makeRecipe({
+        uid: "r4" as RecipeUid,
+        photo: "thumb.jpg",
+        photoLarge: null,
+        imageUrl: "",
+        photoUrl: null,
+      });
+      expect(recipePhotoResourceUri(recipe)).toBeNull();
+    });
+
+    it("is surfaced on the browse row and the single-recipe read structured output", () => {
+      const withPhoto = makeRecipe({ uid: "r1" as RecipeUid, photoLarge: "photo-a.jpg", imageUrl: "" });
+      const without = makeRecipe({
+        uid: "r3" as RecipeUid,
+        photo: null,
+        photoLarge: null,
+        imageUrl: "",
+        photoUrl: null,
+      });
+      expect(recipeToRow(withPhoto, []).photoResourceUri).toBe("ui://recipe/r1/photo");
+      expect(recipeToRow(without, []).photoResourceUri).toBeNull();
+      expect(recipeToReadStructured(withPhoto, []).photoResourceUri).toBe("ui://recipe/r1/photo");
+      expect(recipeToReadStructured(without, []).photoResourceUri).toBeNull();
     });
   });
 });

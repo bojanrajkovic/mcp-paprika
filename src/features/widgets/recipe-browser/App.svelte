@@ -11,9 +11,11 @@
   import Toast from "../shared/Toast.svelte";
   import WidgetShell from "../shared/WidgetShell.svelte";
   import {
+    blobDataUri,
     callTool,
     connectHost,
     errorText,
+    readResource,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
   import { motion } from "../shared/motion.js";
@@ -35,6 +37,7 @@
     cookTime: string | null;
     totalTime: string | null;
     servings: string | null;
+    photoResourceUri: string | null;
   }
   type Source = "list" | "search" | "discover";
   interface Browse {
@@ -303,8 +306,18 @@
       cookTime: typeof o["cookTime"] === "string" ? o["cookTime"] : null,
       totalTime: typeof o["totalTime"] === "string" ? o["totalTime"] : null,
       servings: typeof o["servings"] === "string" ? o["servings"] : null,
+      photoResourceUri:
+        typeof o["photoResourceUri"] === "string"
+          ? o["photoResourceUri"]
+          : null,
     };
   }
+
+  // The row/detail photo loader: read the photo proxy resource and turn its blob into an image
+  // `data:` URI (or null on failure). The image policy lives here, where the proxy is known to
+  // serve a photo; closes over `app`, passed to children so they stay host-agnostic.
+  const loadPhoto = async (uri: string): Promise<string | null> =>
+    blobDataUri(await readResource(app, uri), "image/jpeg");
 </script>
 
 <WidgetShell dark={theme === "dark"}>
@@ -319,6 +332,7 @@
   {:else if detail}
     <RecipeDetail
       recipe={detail}
+      {loadPhoto}
       onBack={backToBrowse}
       backLabel="Back to recipes"
     />
@@ -410,6 +424,7 @@
               open={openUid === r.uid}
               {photos}
               dark={theme === "dark"}
+              {loadPhoto}
               onToggle={() => toggleRow(r.uid)}
             />
             {#if openUid === r.uid}

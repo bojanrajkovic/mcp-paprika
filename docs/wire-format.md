@@ -226,6 +226,23 @@ Deleting a photo is the soft-delete pattern again: a **data-only tombstone** (no
 image part) at the singular photo URL with every field echoed, `deleted: true`,
 and the _original_ create-time hash preserved.
 
+### Reading a photo's bytes back
+
+The bytes are not in the catalog. The collection read (`GET /sync/photos/`) returns
+only the six-field metadata rows (`uid`, `recipe_uid`, `filename`, `name`,
+`order_flag`, `hash`) — no URL. To fetch the image, read the **singular** photo URL
+(`GET /sync/photo/{uid}/`), whose response carries a short-lived **presigned S3
+`photo_url`** (path-style `http://s3.amazonaws.com/uploads.paprikaapp.com/…`) pointing
+at the full-resolution bytes; fetch that URL for the image itself. This two-step shape
+is not in our captured corpus (the captures cover the write path only) and so has no
+HAR fixture — tests use hand-rolled handlers — but it is **verified against the live
+API**: the `GET` returns the presigned `photo_url` and the bytes fetch clean through the
+SSRF-guarded path (a public S3 host, so the unicast guard admits it). The recipe-level
+`photo_url` field is distinct and is empty for uploaded photos — which is exactly why
+uploaded photos need this per-photo read to surface at all. The proxy resource that
+consumes it lives in `src/domains/recipe/resources/photo-resource.ts`; see
+`docs/architecture.md`.
+
 ### Grocery ingredient auto-creation
 
 The capture corpus also revealed that the grocery ingredient catalog is not a

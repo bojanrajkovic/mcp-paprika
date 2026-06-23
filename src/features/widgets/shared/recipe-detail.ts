@@ -11,6 +11,7 @@ export interface RecipeDetailData {
   readonly totalTime: string | null;
   readonly ingredients: string; // newline-delimited, as read_recipe emits
   readonly directions: string; // newline-delimited
+  readonly photoResourceUri: string | null; // ui://recipe/{uid}/photo, or null when no photo
 }
 
 const strOrNull = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
@@ -38,5 +39,6 @@ export function parseRecipeDetail(data: Record<string, unknown> | undefined): Re
     totalTime: strOrNull(data["totalTime"]),
     ingredients: data["ingredients"],
     directions: data["directions"],
+    photoResourceUri: strOrNull(data["photoResourceUri"]),
   };
 }

@@ -42,6 +42,37 @@ export function errorText(result: ReceivedResult | null | undefined): string | n
   return text && text.trim() !== "" ? text : null;
 }
 
+/** One content block from a `resources/read` — a text or blob resource content. Untrusted host payload. */
+export type ResourceContent = NonNullable<Awaited<ReturnType<App["readServerResource"]>>["contents"]>[number];
+
+/**
+ * Read a server resource through the host bridge and return its first content block, or `null` when
+ * the read rejects or the resource is empty. Content-type-agnostic: the caller decides what to do with
+ * the block — a blob becomes a media `src` via {@link blobDataUri}, a text block is read directly. The
+ * image policy lives at the call site, not here, so a future non-image consumer needs no branching.
+ */
+export async function readResource(app: App, uri: string): Promise<ResourceContent | null> {
+  try {
+    const result = await app.readServerResource({ uri });
+    return result.contents?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build a `data:` URI from a blob resource content for a media `src` (an `<img>`, `<audio>`, …), using
+ * the content's own mimeType, or `fallbackMimeType` when the server didn't set one (a `data:` URI needs
+ * a type). Returns `null` when the content is missing or carries no usable blob — so the caller falls
+ * back to its placeholder rather than crash on a malformed host payload (the SDK doesn't validate it).
+ */
+export function blobDataUri(content: ResourceContent | null, fallbackMimeType: string): string | null {
+  if (!content || !("blob" in content) || typeof content.blob !== "string" || content.blob === "") return null;
+  const mimeType =
+    typeof content.mimeType === "string" && content.mimeType !== "" ? content.mimeType : fallbackMimeType;
+  return `data:${mimeType};base64,${content.blob}`;
+}
+
 /**
  * Wire a widget to its host in one call: register the tool-result handler, adopt the host's style
  * tokens + typeface ({@link applyHostStyles}) on connect AND on every host-context change, and hand the

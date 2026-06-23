@@ -141,6 +141,14 @@ const ERROR_ENVELOPE_SCHEMA = z.object({
 /** Matches Paprika's not-found error messages ("Recipe not found.", etc.). */
 const NOT_FOUND_MESSAGE = /not found/i;
 
+/**
+ * The per-photo read response carries a presigned `photo_url` (short-lived S3 URL)
+ * for the full-resolution bytes — distinct from the catalog GET (`/photos/`), whose
+ * 6-field rows carry no URL. Only `photo_url` is consumed; `.passthrough()` ignores
+ * the rest of the echoed metadata.
+ */
+const PHOTO_DOWNLOAD_SCHEMA = z.object({ photo_url: z.string().min(1) }).passthrough();
+
 function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
   return {
     uid: recipe.uid,
@@ -490,6 +498,19 @@ export class PaprikaClient {
 
   listPantry(): ResultAsync<Array<PantryItem>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/pantry/`, z.array(PantryItemSchema));
+  }
+
+  /**
+   * Resolves the presigned download URL for a photo's full-resolution bytes. A GET to
+   * the singular `/sync/photo/{uid}/` endpoint (the same path the upload POSTs to —
+   * recipes and photos use path-UID URLs, see the CLAUDE.md "two URL conventions"
+   * edge) returns the photo's metadata including a short-lived presigned `photo_url`
+   * pointing at cloud storage; the bytes themselves are NOT in this response. The
+   * caller fetches that URL through the SSRF-guarded `fetchImageBytes`. The catalog
+   * read (`listPhotos`) does not carry `photo_url`; only this per-photo read does.
+   */
+  getPhotoDownloadUrl(photoUid: string): ResultAsync<string, PaprikaClientError> {
+    return this.request("GET", `${API_BASE}/photo/${photoUid}/`, PHOTO_DOWNLOAD_SCHEMA).map((p) => p.photo_url);
   }
 
   /**

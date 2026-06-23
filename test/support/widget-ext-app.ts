@@ -23,6 +23,7 @@ export interface FakeApp {
   connect: ReturnType<typeof vi.fn>;
   getHostContext: ReturnType<typeof vi.fn>;
   callServerTool: ReturnType<typeof vi.fn>;
+  readServerResource: ReturnType<typeof vi.fn>;
 }
 
 /**
@@ -73,6 +74,7 @@ export function useExtApp(initialCtx: unknown = { theme: "light" }): UseExtAppRe
     connect: vi.fn(() => Promise.resolve()),
     getHostContext: vi.fn(() => currentCtx),
     callServerTool: vi.fn(() => Promise.resolve({ content: [] })),
+    readServerResource: vi.fn(() => Promise.resolve({ contents: [] })),
   };
 
   const extApps: FakeExtAppsRuntime = {
