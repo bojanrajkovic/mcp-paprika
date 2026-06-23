@@ -1,0 +1,9 @@
+# Recipe domain
+
+## Purpose
+
+The recipe domain — the one domain that owns three Paprika entities (recipes, categories, photos), with no separate category or photo module. The layout and granularity rules it follows are the parent `../CLAUDE.md`; the current shape (the recipe data model, photos, and the `ui://recipe/{uid}/photo` proxy) is `../../../docs/architecture.md`, and the photo wire formats are `../../../docs/wire-format.md`. This file is only the reactively-accreted sharp edges.
+
+## Sharp edges
+
+- **Three sharp JPEG encoders coexist in the photo path and look mergeable, but the load-bearing difference is decode-fan-out, not the `.jpeg()` quality.** `normalizePhoto` (`photo-helpers.ts`) is the **upload** path: it decodes the input once (`sharp(input).rotate()`) and `.clone()`s that single rotated base into **two** parallel encodes — the `full` image (→ the Photo entity / `recipe.photo_large`, quality 85, optional `maxFullEdge` cap) and the ~280px `thumbnail` (→ `recipe.photo`, quality 80). `resizePhotoJpeg` (same file) is the **read** path behind the `ui://recipe/{uid}/photo` proxy: one already-stored image → one encode at a caller-requested `w`/`h` (quality 82). `makeThumbnail` (`../../shared/image.ts`) is the third — a thumbnail-only encode for the `generate_recipe_photo` preview. They share a surface shape (`sharp().rotate().resize({ fit: "inside", withoutEnlargement: true }).jpeg().toBuffer()`), so the urge to fold them into one function is real — don't. Merging would force the single-output read path to carry the two-output `.clone()` machinery, or make the upload path decode the source twice; the decode-once-then-fan-out in `normalizePhoto` is the whole point and can't live in a one-in-one-out helper. The only thing worth extracting would be a trivial `encodeJpeg(buf, opts)` primitive, and that win doesn't pay for the indirection.
