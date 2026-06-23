@@ -60,9 +60,9 @@ function blobResult(uri: URL, bytes: Buffer): ReadResourceResult {
 
 /**
  * `ui://recipe/{uid}/photo/{n}{?w,h}` — serve a recipe's photo bytes for a host to
- * render (ADR-0019). It closes the asymmetry where a user-UPLOADED photo had no read
- * surface (#419): uploaded photos carry no public URL, so the bytes are resolved
- * server-side — the per-photo presigned S3 URL via the sync-authenticated client,
+ * render in a sandboxed widget iframe. It closes the asymmetry where a user-UPLOADED
+ * photo has no read surface: uploaded photos carry no public URL, so the bytes are
+ * resolved server-side — the per-photo presigned S3 URL via the sync-authenticated client,
  * fetched through the SSRF-guarded `fetchImageBytes` — while a web-imported recipe
  * falls back to its source `imageUrl`/`photoUrl` through the same fetch. A sandboxed
  * widget iframe can only load `data:`/same-origin, so this proxy is the only way it

@@ -55,7 +55,7 @@ export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
       }
 
       // The photo proxy resource reads back the bytes even for an uploaded photo that
-      // has no public URL (#419) — surfaced so a client can fetch it without the URL.
+      // has no public URL — surfaced so a client can fetch it without the URL.
       const photoResourceUri = recipePhotoResourceUri(recipe);
       if (photoResourceUri) {
         headerLines.push(`**Photo resource:** \`${photoResourceUri}\``);
