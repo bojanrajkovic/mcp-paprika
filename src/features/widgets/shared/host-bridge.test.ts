@@ -10,7 +10,7 @@ import type { App } from "@modelcontextprotocol/ext-apps";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { flushMicrotasks, useExtApp } from "../../../../test/support/widget-ext-app.js";
-import { callTool, connectHost, errorText, readResource } from "./host-bridge.js";
+import { blobDataUri, callTool, connectHost, errorText, readResource } from "./host-bridge.js";
 
 // host-style.ts calls document.documentElement.style.setProperty; stub the minimum needed.
 const setProperty = vi.fn();
@@ -161,34 +161,21 @@ describe("errorText", () => {
 // readResource
 // ---------------------------------------------------------------------------
 describe("readResource", () => {
-  it("returns a data: URI built from the blob and mimeType", async () => {
+  it("returns the first content block, content-type-agnostic", async () => {
     const { app } = useExtApp();
-    app.readServerResource.mockResolvedValueOnce({
-      contents: [{ uri: "ui://recipe/r1/photo", mimeType: "image/jpeg", blob: "QUJD" }],
-    });
+    const block = { uri: "ui://recipe/r1/photo", mimeType: "image/jpeg", blob: "QUJD" };
+    app.readServerResource.mockResolvedValueOnce({ contents: [block, { uri: "x", text: "second" }] });
 
     const result = await readResource(app as unknown as App, "ui://recipe/r1/photo");
 
     expect(app.readServerResource).toHaveBeenCalledWith({ uri: "ui://recipe/r1/photo" });
-    expect(result).toBe("data:image/jpeg;base64,QUJD");
+    expect(result).toEqual(block);
   });
 
-  it("defaults the mimeType to image/jpeg when absent", async () => {
-    const { app } = useExtApp();
-    app.readServerResource.mockResolvedValueOnce({ contents: [{ uri: "u", blob: "QUJD" }] });
-    expect(await readResource(app as unknown as App, "u")).toBe("data:image/jpeg;base64,QUJD");
-  });
-
-  it("falls back to image/jpeg for a non-image mimeType (host can't steer the data: type)", async () => {
-    const { app } = useExtApp();
-    app.readServerResource.mockResolvedValueOnce({ contents: [{ uri: "u", mimeType: "text/html", blob: "QUJD" }] });
-    expect(await readResource(app as unknown as App, "u")).toBe("data:image/jpeg;base64,QUJD");
-  });
-
-  it("returns null for a text (non-blob) content", async () => {
+  it("returns a text content block unchanged (no image assumption)", async () => {
     const { app } = useExtApp();
     app.readServerResource.mockResolvedValueOnce({ contents: [{ uri: "u", text: "hi" }] });
-    expect(await readResource(app as unknown as App, "u")).toBeNull();
+    expect(await readResource(app as unknown as App, "u")).toEqual({ uri: "u", text: "hi" });
   });
 
   it("returns null when there are no contents", async () => {
@@ -201,5 +188,32 @@ describe("readResource", () => {
     const { app } = useExtApp();
     app.readServerResource.mockRejectedValueOnce(new Error("not found"));
     expect(await readResource(app as unknown as App, "u")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// blobDataUri
+// ---------------------------------------------------------------------------
+describe("blobDataUri", () => {
+  it("builds a data: URI from the blob using the content's own mimeType", () => {
+    expect(blobDataUri({ uri: "u", mimeType: "image/png", blob: "QUJD" }, "image/jpeg")).toBe(
+      "data:image/png;base64,QUJD",
+    );
+  });
+
+  it("uses the fallback mimeType when the server didn't set one", () => {
+    expect(blobDataUri({ uri: "u", blob: "QUJD" }, "image/jpeg")).toBe("data:image/jpeg;base64,QUJD");
+  });
+
+  it("is content-type-agnostic (any media family, fallback chosen by the caller)", () => {
+    expect(blobDataUri({ uri: "u", mimeType: "audio/mpeg", blob: "QUJD" }, "audio/mpeg")).toBe(
+      "data:audio/mpeg;base64,QUJD",
+    );
+  });
+
+  it("returns null for a text (non-blob) content, for null, and for an empty blob", () => {
+    expect(blobDataUri({ uri: "u", text: "hi" }, "image/jpeg")).toBeNull();
+    expect(blobDataUri(null, "image/jpeg")).toBeNull();
+    expect(blobDataUri({ uri: "u", blob: "" }, "image/jpeg")).toBeNull();
   });
 });

@@ -11,6 +11,7 @@
   import Toast from "../shared/Toast.svelte";
   import WidgetShell from "../shared/WidgetShell.svelte";
   import {
+    blobDataUri,
     callTool,
     connectHost,
     errorText,
@@ -312,10 +313,11 @@
     };
   }
 
-  // The row/detail photo loader: read the photo proxy resource and hand back a `data:` URI (or
-  // null on failure). Closes over `app`; passed to children so they stay host-agnostic.
-  const loadPhoto = (uri: string): Promise<string | null> =>
-    readResource(app, uri);
+  // The row/detail photo loader: read the photo proxy resource and turn its blob into an image
+  // `data:` URI (or null on failure). The image policy lives here, where the proxy is known to
+  // serve a photo; closes over `app`, passed to children so they stay host-agnostic.
+  const loadPhoto = async (uri: string): Promise<string | null> =>
+    blobDataUri(await readResource(app, uri), "image/jpeg");
 </script>
 
 <WidgetShell dark={theme === "dark"}>

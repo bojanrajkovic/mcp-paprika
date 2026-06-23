@@ -42,26 +42,35 @@ export function errorText(result: ReceivedResult | null | undefined): string | n
   return text && text.trim() !== "" ? text : null;
 }
 
+/** One content block from a `resources/read` — a text or blob resource content. Untrusted host payload. */
+export type ResourceContent = NonNullable<Awaited<ReturnType<App["readServerResource"]>>["contents"]>[number];
+
 /**
- * Read a server resource through the host bridge and return it as a `data:` URI ready for an
- * `` `src`, or `null` when the read fails or carries no blob. Used to pull a recipe's photo
- * bytes (`ui://recipe/{uid}/photo`) into a sandboxed iframe, which can't load an external image
- * URL directly. Untrusted host payload — the blob must be a non-empty string and the mimeType is
- * accepted only when it is an `image/*` type (else it falls back to `image/jpeg`), so a host
- * cannot steer the `data:` URI to a non-image type; any transport rejection or missing blob
- * degrades to `null` so the caller falls back to its placeholder.
+ * Read a server resource through the host bridge and return its first content block, or `null` when
+ * the read rejects or the resource is empty. Content-type-agnostic: the caller decides what to do with
+ * the block — a blob becomes a media `src` via {@link blobDataUri}, a text block is read directly. The
+ * image policy lives at the call site, not here, so a future non-image consumer needs no branching.
  */
-export async function readResource(app: App, uri: string): Promise<string | null> {
+export async function readResource(app: App, uri: string): Promise<ResourceContent | null> {
   try {
     const result = await app.readServerResource({ uri });
-    const content = result.contents?.[0];
-    if (!content || !("blob" in content) || typeof content.blob !== "string" || content.blob === "") return null;
-    const mimeType =
-      typeof content.mimeType === "string" && content.mimeType.startsWith("image/") ? content.mimeType : "image/jpeg";
-    return `data:${mimeType};base64,${content.blob}`;
+    return result.contents?.[0] ?? null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Build a `data:` URI from a blob resource content for a media `src` (an `<img>`, `<audio>`, …), using
+ * the content's own mimeType, or `fallbackMimeType` when the server didn't set one (a `data:` URI needs
+ * a type). Returns `null` when the content is missing or carries no usable blob — so the caller falls
+ * back to its placeholder rather than crash on a malformed host payload (the SDK doesn't validate it).
+ */
+export function blobDataUri(content: ResourceContent | null, fallbackMimeType: string): string | null {
+  if (!content || !("blob" in content) || typeof content.blob !== "string" || content.blob === "") return null;
+  const mimeType =
+    typeof content.mimeType === "string" && content.mimeType !== "" ? content.mimeType : fallbackMimeType;
+  return `data:${mimeType};base64,${content.blob}`;
 }
 
 /**

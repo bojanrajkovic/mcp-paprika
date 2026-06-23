@@ -9,6 +9,7 @@
   import Toast from "../shared/Toast.svelte";
   import WidgetShell from "../shared/WidgetShell.svelte";
   import {
+    blobDataUri,
     callTool,
     connectHost,
     errorText,
@@ -47,11 +48,11 @@
 
   let { app }: { app: App } = $props();
 
-  // The recipe-detail hero photo loader. A stable identity (defined once per instance)
-  // matters: RecipeDetail's $effect depends on it, so a fresh inline arrow each render
-  // would null and re-fetch the hero on every reactive update.
-  const loadPhoto = (uri: string): Promise<string | null> =>
-    readResource(app, uri);
+  // The recipe-detail hero photo loader — reads the photo proxy and turns its blob into an image
+  // `data:` URI. A stable identity (defined once per instance) matters: RecipeDetail's $effect
+  // depends on it, so a fresh inline arrow each render would null and re-fetch the hero every update.
+  const loadPhoto = async (uri: string): Promise<string | null> =>
+    blobDataUri(await readResource(app, uri), "image/jpeg");
 
   let week = $state<Week | null>(null);
   let phase = $state<"loading" | "week" | "error">("loading");
