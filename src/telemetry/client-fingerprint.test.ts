@@ -119,4 +119,31 @@ describe("recordClientConnection", () => {
     expect(clientAttrs(stub({ name: "x", version: "1" }, {}))).toEqual({});
     expect(clientFingerprint(stub({ name: "x", version: "1" }, {}))).toBeUndefined();
   });
+
+  it("is idempotent per server — a re-sent initialized notification does not double-count", async () => {
+    const server = stub({ name: "idem-probe", version: "1.0.0" }, {});
+    recordClientConnection(server, { transport: "stdio" });
+    recordClientConnection(server, { transport: "stdio" });
+
+    const points = await telemetry.sumPoints("mcp_paprika.client.connections", {
+      [ATTR_CLIENT_NAME]: "idem-probe",
+    });
+    expect(points).toHaveLength(1);
+    expect(points[0]!.value).toBe(1);
+    expect(
+      telemetry.spansNamed(CONNECT_SPAN).filter((s) => s.attributes[ATTR_CLIENT_NAME] === "idem-probe"),
+    ).toHaveLength(1);
+  });
+
+  it("length-caps the client name used as a metric label", () => {
+    const longName = "x".repeat(200);
+    recordClientConnection(stub({ name: longName, version: "1.0.0" }, {}), { transport: "stdio" });
+
+    // clientAttrs is the census slice the counter + tool spans carry — capped.
+    const server2 = stub({ name: longName, version: "1.0.0" }, {});
+    recordClientConnection(server2, { transport: "stdio" });
+    const name = clientAttrs(server2)[ATTR_CLIENT_NAME] as string;
+    expect(name.length).toBe(64);
+    expect(longName.startsWith(name)).toBe(true);
+  });
 });

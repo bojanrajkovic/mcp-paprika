@@ -107,6 +107,9 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   const transport = new StdioServerTransport();
   await server.connect(transport);
   const deliver = transport.onmessage;
+  // StdioServerTransport types onmessage as single-arg `(message) => void` and calls
+  // it with one argument (stdio carries no per-request `extra`/authInfo), so the wrap
+  // forwards just `message` — there is nothing else to pass.
   transport.onmessage = (message) => {
     if (isInitializeRequest(message)) requestedProtocolVersion = message.params.protocolVersion;
     deliver?.(message);

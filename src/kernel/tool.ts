@@ -341,7 +341,12 @@ export function defineTool<
           return result;
         };
         const fail = (cause: unknown): never => {
+          // A throw carried no structured result; record the attribute + a matching
+          // completion line so every "tool invoked" pairs with a "tool completed"
+          // and a thrown call is not an orphan invocation in the span/log stream.
+          op.span.setAttribute(ATTR_TOOL_STRUCTURED_OUTPUT, false);
           op.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
+          log.debug({ tool: spec.name, structuredOutput: false, isError: true, threw: true }, "tool completed");
           throw cause;
         };
         // The guard chain runs inside the same try as the body, so even a

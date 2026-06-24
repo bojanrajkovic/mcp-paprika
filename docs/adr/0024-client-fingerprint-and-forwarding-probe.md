@@ -53,7 +53,7 @@ Rejected because a diagnostic that appears in `tools/list` in production is surf
 
 - The matrix's behavior column ages as clients change; it is maintained, not derived, and a renamed or updated client needs re-probing. The dual-channel fail-safe is what makes a stale matrix non-fatal.
 - The stdio transport sniffs the requested protocol version off the message stream because the server retains no negotiated value — a small transport-specific seam the HTTP path (which has the parsed body) does not need.
-- Tagging every tool span with the client adds attributes the trace backend stores; the metric path is deliberately left untouched to keep cardinality bounded.
+- Tagging every tool span with the client adds attributes the trace backend stores. The metric labels (the census counter and the session-duration histogram) carry only the bounded slice — client name and major version — but those are client-supplied, so they are length-capped against a pathological string; the count of distinct values is bounded operationally by the OAuth allowlist (only admitted identities connect), with a buggy client that randomizes its own name as the accepted residual.
 
 ## References
 

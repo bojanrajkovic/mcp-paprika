@@ -66,7 +66,7 @@ export interface ClientFingerprint {
 // `mcp_paprika.transport` constant so a session's connect span, census counter,
 // session-duration histogram, and tool spans all label transport identically.
 
-/** Client app name, e.g. `claude-ai`, `Claude Code`, `cursor-vscode`. Low-cardinality (stable per client). */
+/** Client app name, e.g. `claude-ai`, `Claude Code`. A metric label — length-capped (client-supplied); stable per legitimate client. */
 export const ATTR_CLIENT_NAME = "mcp_paprika.client.name";
 /** Full client version string — SPAN only (every patch is a distinct value; too high-cardinality for a metric label). */
 export const ATTR_CLIENT_VERSION = "mcp_paprika.client.version";
@@ -105,6 +105,21 @@ const clientConnections = lazy(() =>
  */
 const fingerprints = new WeakMap<FingerprintServer, ClientFingerprint>();
 
+// `clientInfo` is client-supplied, so the values that become METRIC LABELS (name +
+// major version) are length-capped: a metric label is bounded in size, and on the
+// OAuth HTTP transport a client controls these strings. The cap bounds label SIZE;
+// the count of distinct values is bounded operationally by the OAuth allowlist (only
+// admitted identities connect) — a buggy client that randomizes its name is the
+// residual, accepted risk. The full version string is never a label (span only), so
+// it is not capped here.
+const MAX_NAME_LABEL = 64;
+const MAX_VERSION_MAJOR_LABEL = 16;
+
+/** Cap a label value's length so a pathological client string can't bloat a metric series. */
+function clampLabel(value: string, max: number): string {
+  return value.length > max ? value.slice(0, max) : value;
+}
+
 /** Major-version bucket: the segment before the first `.`, or the whole string when there is none. */
 function majorVersion(version: string): string {
   const dot = version.indexOf(".");
@@ -120,9 +135,9 @@ function describeClient(
   const caps = server.getClientCapabilities();
   const version = info?.version ?? "unknown";
   return {
-    name: info?.name ?? "unknown",
+    name: clampLabel(info?.name ?? "unknown", MAX_NAME_LABEL),
     version,
-    versionMajor: majorVersion(version),
+    versionMajor: clampLabel(majorVersion(version), MAX_VERSION_MAJOR_LABEL),
     ...(info?.title !== undefined && { title: info.title }),
     ...(opts.protocolVersion !== undefined && { protocolVersion: opts.protocolVersion }),
     transport: opts.transport,
@@ -173,6 +188,12 @@ export function recordClientConnection(
   server: FingerprintServer,
   opts: { readonly transport: TransportKind; readonly protocolVersion?: string | undefined },
 ): ClientFingerprint {
+  // Idempotent per session server: a client that re-sends the `initialized`
+  // notification (off-spec, but cheap to tolerate) must not double-count the census
+  // or re-emit a connect span. The first record wins.
+  const already = fingerprints.get(server);
+  if (already !== undefined) return already;
+
   const fp = describeClient(server, opts);
   const census = censusAttrs(fp);
 
