@@ -13,15 +13,15 @@ describe("favorite_recipe tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("sets onFavorites true and renders markdown with On Favorites", async () => {
+  it("sets onFavorites true and the text JSON carries onFavorites: true", async () => {
     const recipe = makeRecipe({ onFavorites: false });
     const updated = makeRecipe({ uid: recipe.uid, onFavorites: true });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("favorite_recipe", { uid: recipe.uid });
+    const json = await kh.callToolJson("favorite_recipe", { uid: recipe.uid });
 
-    expect(text).toContain("**On Favorites:** Yes");
+    expect(json).toMatchObject({ uid: recipe.uid, onFavorites: true });
     expect(vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0]).toMatchObject({ onFavorites: true });
   });
 
@@ -106,15 +106,15 @@ describe("unfavorite_recipe tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("sets onFavorites false and renders markdown without On Favorites", async () => {
+  it("sets onFavorites false and the text JSON carries onFavorites: false", async () => {
     const recipe = makeRecipe({ onFavorites: true });
     const updated = makeRecipe({ uid: recipe.uid, onFavorites: false });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("unfavorite_recipe", { uid: recipe.uid });
+    const json = await kh.callToolJson("unfavorite_recipe", { uid: recipe.uid });
 
-    expect(text).not.toContain("**On Favorites:** Yes");
+    expect(json).toMatchObject({ uid: recipe.uid, onFavorites: false });
     expect(vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0]).toMatchObject({ onFavorites: false });
   });
 

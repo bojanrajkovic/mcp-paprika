@@ -354,7 +354,7 @@ describe("add_grocery_items tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("All items were duplicates");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(0);
     expect(text).toContain("update_grocery_item");
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
@@ -428,7 +428,7 @@ describe("add_grocery_items tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("Added 1 item(s)");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(1);
     expect(text).toContain("ITEM-DUP-1");
     expect(text).toContain("update_grocery_item");
 
@@ -458,7 +458,7 @@ describe("add_grocery_items tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("Added 1 item(s)");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(1);
     expect(kh.client().saveGroceryItems).toHaveBeenCalledOnce();
   });
 
@@ -480,7 +480,7 @@ describe("add_grocery_items tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("Added 1 item(s)");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(1);
     expect(text).toContain("duplicates");
 
     const saved = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]![0] as ReadonlyArray<{ ingredient: string }>;
@@ -508,7 +508,7 @@ describe("add_grocery_items tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("All items were duplicates");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(0);
     expect(result.isError).toBeUndefined();
     const structured = result.structuredContent as { listUid: string; items: unknown[] };
     expect(structured.listUid).toBe("LIST-1");

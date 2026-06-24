@@ -7,7 +7,7 @@ import type { MealUid } from "../ids.js";
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 const BREAKFAST_UID = "breakfast-uid" as MealTypeUid;
 const DINNER_UID = "dinner-uid" as MealTypeUid;
@@ -168,7 +168,8 @@ describe("read_meal_plan tool", () => {
       meals: [],
     });
     const result = await kh.callTool("read_meal_plan", {});
-    expect(getText(result)).toContain("No meals planned");
+    const json = getJson<{ weekStart: string; meals: unknown[]; mealTypes: unknown[] }>(result);
+    expect(json.meals).toEqual([]);
     // Empty is a valid success, not an error — it carries the (empty) payload.
     expect(result.isError).toBeFalsy();
     const sc = result.structuredContent as { weekStart: string; meals: unknown[]; mealTypes: unknown[] };

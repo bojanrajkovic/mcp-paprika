@@ -7,14 +7,9 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, type ErrorResult, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, type ErrorResult, errorResult, structuredResult, toolResult } from "../../../shared/tools.js";
 import { NO_AISLE_UID } from "../../aisle/ids.js";
-import {
-  groceryItemRowSchema,
-  groceryItemsToRows,
-  groceryItemToMarkdown,
-  groceryItemToRow,
-} from "../grocery-helpers.js";
+import { groceryItemRowSchema, groceryItemsToRows, groceryItemToRow } from "../grocery-helpers.js";
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -156,10 +151,16 @@ export async function buildGroceryItems(
  * list UID plus a row per newly-added item (the new child UIDs the model chains on,
  * distinguished from the list's pre-existing items). Shares {@link groceryItemRowSchema}
  * with `read_grocery_list`.
+ *
+ * `skipped` carries the duplicate-skip notices verbatim — a skipped item is absent from
+ * `items`, and an already-on-the-list duplicate's UID + merge hint appear nowhere else
+ * in the payload, so the notice is the model's only signal it was skipped. Shared with
+ * `add_recipe_to_grocery_list`, which reports its own already-on-the-list skips.
  */
 export const addGroceryItemsOutputSchema = z.object({
   listUid: GroceryListUidSchema,
   items: z.array(groceryItemRowSchema),
+  skipped: z.array(z.string()).describe("Human-readable notices for items skipped as duplicates; empty when none."),
 });
 
 /**
@@ -227,11 +228,7 @@ export const addGroceryItemsTool = defineTool(
         }
       }
       if (toAdd.length === 0) {
-        const skipReport = skipMessages.join("\n");
-        return toolResult(`All items were duplicates and skipped.\n\n${skipReport}`, {
-          listUid: args.listUid,
-          items: [],
-        });
+        return structuredResult({ listUid: args.listUid, items: [], skipped: skipMessages });
       }
 
       // Build all GroceryItem objects (aisle resolution + catalog memory), no recipe link.
@@ -249,21 +246,19 @@ export const addGroceryItemsTool = defineTool(
       if ("content" in savedItems) return savedItems;
 
       // The new child UIDs ride structuredContent (and the degraded commit branch), so the
-      // model can chain mark_grocery_item_purchased / update_grocery_item without a re-read.
-      const structured = { listUid: args.listUid, items: groceryItemsToRows(savedItems, ctx.deps.aisle) };
+      // model can chain mark_grocery_item_purchased / update_grocery_item without a re-read;
+      // `skipped` carries any duplicate notices alongside.
+      const structured = {
+        listUid: args.listUid,
+        items: groceryItemsToRows(savedItems, ctx.deps.aisle),
+        skipped: skipMessages,
+      };
       const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems), {
         structuredContent: structured,
       });
       if (commitErr) return commitErr;
 
-      const count = savedItems.length;
-      const rendered = savedItems.map((item) => groceryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
-      const header = `Added ${count.toString()} item(s) to the grocery list.`;
-      if (skipMessages.length > 0) {
-        const skipReport = skipMessages.join("\n");
-        return toolResult(`${header}\n\n${rendered}\n\n---\n\n**Skipped (duplicates):**\n${skipReport}`, structured);
-      }
-      return toolResult(`${header}\n\n${rendered}`, structured);
+      return structuredResult(structured);
     };
   },
 );
@@ -344,7 +339,7 @@ export const updateGroceryItemTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(groceryItemToMarkdown(saved, ctx.deps.aisle), structured);
+      return structuredResult(structured);
     };
   },
 );

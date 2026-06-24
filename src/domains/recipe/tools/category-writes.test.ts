@@ -6,7 +6,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("category write tools", () => {
   const kh = useKernelHarness<RecipeState>("recipe");
@@ -24,7 +24,8 @@ describe("category write tools", () => {
       const posted = vi.mocked(kh.client().saveCategory).mock.calls[0]?.[0];
       expect(posted?.name).toBe("Thai");
       expect(posted?.parentUid).toBeNull();
-      expect(getText(result)).toContain("Created category");
+      // The new category (incl its UID) rides the JSON text channel.
+      expect(getJson<{ name: string }>(result).name).toBe("Thai");
       // Category is committed to the real store.
       expect(kh.state().category.store.resolveByName("Thai")).toBeDefined();
     });
@@ -90,7 +91,8 @@ describe("category write tools", () => {
       const posted = vi.mocked(kh.client().saveCategory).mock.calls[0]?.[0];
       expect(posted?.name).toBe("New");
       expect(posted?.uid).toBe("c");
-      expect(getText(result)).toContain("Updated category");
+      // The whole catalog rides the JSON text channel — same payload as structuredContent.
+      expect(getJson(result)).toEqual(result.structuredContent);
       // The whole post-rename catalog (same shape list_categories produces, name-sorted,
       // with recipe counts + parent FKs) rides structuredContent.
       expect(result.isError).toBeUndefined();

@@ -13,13 +13,13 @@ import {
   errorResult,
   resolveLookup,
   resolveOrPick,
-  toolResult,
+  structuredResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema, MenuUidSchema } from "../ids.js";
-import { menuItemRowSchema, menuItemsToRows, menuToMarkdown } from "../menu-helpers.js";
+import { menuItemRowSchema, menuItemsToRows } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // One menuitem to add. Structurally EITHER recipe-linked (recipe_uid; display
@@ -203,8 +203,6 @@ export const addMenuItemsTool = defineTool(
       // never reference days outside a saved menu. This runs BEFORE meal-type
       // auto-create below, so a failed expand can't leave an orphan type behind.
       const maxDay = resolved.reduce((max, r) => Math.max(max, r.day), 0);
-      let menuForRender: Menu = menu;
-      let extendedTo: number | null = null;
       if (maxDay > menu.days) {
         const extended: Menu = { ...menu, days: maxDay };
         const saved = (await ctx.infra.client.saveMenus([extended])).match(
@@ -233,8 +231,6 @@ export const addMenuItemsTool = defineTool(
             ),
         );
         if (expandErr) return expandErr;
-        menuForRender = persisted;
-        extendedTo = maxDay;
       }
 
       // ----- Stage 3: auto-create any deferred {name} meal types (pantry-style) -----
@@ -297,10 +293,7 @@ export const addMenuItemsTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      const extendNote = extendedTo !== null ? `Extended menu "${menu.name}" to ${extendedTo.toString()} day(s). ` : "";
-      const header = `${extendNote}Added ${savedItems.length.toString()} item(s) to menu "${menu.name}".`;
-      const card = menuToMarkdown(menuForRender, ctx.state.items.store.getByMenuUid(menu.uid), mealTypes);
-      return toolResult(`${header}\n\n${card}`, structured);
+      return structuredResult(structured);
     };
   },
 );

@@ -6,12 +6,12 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
-import { makeMealOrderFlagAssigner, mealRowSchema, mealToRow, renderMealCard, resolveMealTypeName } from "./helpers.js";
+import { makeMealOrderFlagAssigner, mealRowSchema, mealToRow, resolveMealTypeName } from "./helpers.js";
 
 // `.strict()`. Rescheduling is its own act because moving a meal's date moves it
 // into the destination day's order_flag sequence (per-date), which a generic
@@ -78,10 +78,7 @@ export const rescheduleMealTool = defineTool(
       // Nothing to do: same date and no type co-change. A real success (nothing to
       // save), so success-with-structured. Avoid a wasted POST + notifySync.
       if (!dateChanged && args.type === undefined) {
-        return toolResult(
-          renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
-          mealToRow(existing, typeName(existing)),
-        );
+        return structuredResult(mealToRow(existing, typeName(existing)));
       }
 
       // Resolve the optional type co-change LAST — after the date validation above. An
@@ -131,7 +128,7 @@ export const rescheduleMealTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]), structured);
+      return structuredResult(structured);
     };
   },
 );

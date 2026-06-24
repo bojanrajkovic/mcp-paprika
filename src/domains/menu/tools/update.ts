@@ -11,11 +11,11 @@ import {
   errorResult,
   resolveLookup,
   resolveOrPick,
-  toolResult,
+  structuredResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuReadOutputSchema, menuToMarkdown, menuToReadStructured } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToReadStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -128,7 +128,7 @@ export const updateMenuTool = defineTool(
             structuredContent: structured,
           });
           if (commitErr) return commitErr;
-          return toolResult(menuToMarkdown(persisted, items, mealTypes), structured);
+          return structuredResult(structured);
         },
         async (e) => {
           log.error({ err: e, uid: existing.uid }, "saveMenus (update_menu) failed");

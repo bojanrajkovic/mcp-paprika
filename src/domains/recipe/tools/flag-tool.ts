@@ -5,9 +5,9 @@ import type { ToolDef } from "../../../kernel/tool.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeReadOutputSchema, recipeToMarkdown, recipeToReadStructured } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /** The strict `{ uid }` input every recipe flag verb takes — one schema, shared by all four verbs. */
@@ -69,7 +69,7 @@ export function makeRecipeFlagTool(spec: {
         });
         if (commitErr) return commitErr;
 
-        return toolResult(recipeToMarkdown(saved, categoryNames), structured);
+        return structuredResult(structured);
       };
     },
   );

@@ -2,11 +2,10 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealTypeState } from "../module.js";
-import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { sortCatalog } from "../../../shared/catalog.js";
-import { toolResult } from "../../../shared/tools.js";
+import { structuredResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../ids.js";
 import { mealTypeStartGuard } from "./guards.js";
 
@@ -42,32 +41,6 @@ export function buildMealTypeRows(state: MealTypeState): z.infer<typeof listMeal
 }
 
 /**
- * Format seconds-since-midnight as zero-padded `HH:MM` (e.g. 64800 → "18:00").
- * Meal types store their calendar-export time this way (`exportTime`). There is
- * no shared seconds→clock helper in the repo and this is the only caller, so it
- * stays local rather than landing in `utils/dates.ts`.
- */
-function formatSeconds(seconds: number): string {
-  const hh = Math.floor(seconds / 3600);
-  const mm = Math.floor((seconds % 3600) / 60);
-  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-}
-
-/**
- * Render one meal type as a markdown bullet, e.g.
- *   `- **Dinner** (built-in, 18:00) — \`<uid>\``
- * `originalType` is the built-in/custom marker (an integer for the four defaults,
- * `null` for user-created types). The schedule is "all-day" when `exportAllDay`,
- * otherwise the export clock time. The UID is included so callers can reference a
- * type by stable id via `plan_meals` / `update_meal`'s `type: { uid }` spec.
- */
-function mealTypeLine(mt: Readonly<MealType>): string {
-  const kind = mt.originalType !== null ? "built-in" : "custom";
-  const schedule = mt.exportAllDay ? "all-day" : formatSeconds(mt.exportTime);
-  return `- **${mt.name}** (${kind}, ${schedule}) — \`${mt.uid}\``;
-}
-
-/**
  * `list_meal_types` — list the meal-type catalog (sorted by order then name, one
  * bullet per entry, no input). Meal-type is a Reference-class entity: list tool +
  * managed lifecycle (auto-create via `ensureMealType`, `update_meal_type`,
@@ -89,15 +62,6 @@ export const listMealTypesTool = defineTool(
   },
   [mealTypeStartGuard],
   (ctx: DomainCtx<MealTypeState, never>) => {
-    return async () => {
-      const mealTypes = sortCatalog(ctx.state.store.getAll());
-
-      if (mealTypes.length === 0) {
-        return toolResult("No meal types found.", { items: [] });
-      }
-
-      const lines = mealTypes.map(mealTypeLine);
-      return toolResult(lines.join("\n"), { items: buildMealTypeRows(ctx.state) });
-    };
+    return async () => structuredResult({ items: buildMealTypeRows(ctx.state) });
   },
 );

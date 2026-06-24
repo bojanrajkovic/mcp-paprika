@@ -11,12 +11,12 @@ import {
   errorResult,
   resolveLookup,
   resolveOrPick,
+  structuredResult,
   toolResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import {
   groceryListReadOutputSchema,
-  groceryListToMarkdown,
   groceryListToReadStructured,
   sortGroceryItemsForChecklist,
 } from "../grocery-helpers.js";
@@ -52,22 +52,12 @@ export const listGroceryListsTool = defineTool(
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
     return async () => {
       const all = ctx.state.lists.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
-      const total = all.length;
-
-      if (total === 0) {
-        return toolResult("No grocery lists found.", { items: [] });
-      }
-
-      // Item count resolved once per list, feeding both the text and the structured row.
       const items = all.map((list) => ({
         uid: list.uid,
         name: list.name,
         itemCount: ctx.state.items.store.getByListUid(list.uid).length,
       }));
-      const header = `You have ${total.toString()} grocery list(s):`;
-      const lines = items.map((l) => `- **${l.name}** — ${l.itemCount.toString()} item(s) (uid: \`${l.uid}\`)`);
-
-      return toolResult(header + "\n\n" + lines.join("\n"), { items });
+      return structuredResult({ items });
     };
   },
 );
@@ -121,10 +111,7 @@ export const readGroceryListTool = defineTool(
         ctx.state.items.store.getByListUid(resolved.entity.uid),
         ctx.deps.aisle,
       );
-      return toolResult(
-        groceryListToMarkdown(resolved.entity, items, ctx.deps.aisle),
-        groceryListToReadStructured(resolved.entity, items, ctx.deps.aisle),
-      );
+      return structuredResult(groceryListToReadStructured(resolved.entity, items, ctx.deps.aisle));
     };
   },
 );
@@ -177,7 +164,7 @@ export const createGroceryListTool = defineTool(
             structuredContent: structured,
           });
           if (commitErr) return commitErr;
-          return toolResult(groceryListToMarkdown(saved, [], ctx.deps.aisle), structured);
+          return structuredResult(structured);
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveGroceryList failed");
@@ -218,10 +205,7 @@ export const renameGroceryListTool = defineTool(
       // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.
       if (existing.name.toLowerCase() === args.newName.toLowerCase()) {
         const items = ctx.state.items.store.getByListUid(existing.uid);
-        return toolResult(
-          groceryListToMarkdown(existing, items, ctx.deps.aisle),
-          groceryListToReadStructured(existing, items, ctx.deps.aisle),
-        );
+        return structuredResult(groceryListToReadStructured(existing, items, ctx.deps.aisle));
       }
 
       // Conflict check: reject if another list (different UID) has the exact same name.
@@ -245,7 +229,7 @@ export const renameGroceryListTool = defineTool(
             structuredContent: structured,
           });
           if (commitErr) return commitErr;
-          return toolResult(groceryListToMarkdown(saved, items, ctx.deps.aisle), structured);
+          return structuredResult(structured);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid, newName: args.newName }, "saveGroceryList failed");

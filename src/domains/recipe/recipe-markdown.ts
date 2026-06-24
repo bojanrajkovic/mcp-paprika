@@ -43,6 +43,7 @@ export const recipeRowSchema = z.object({
   servings: z.string().nullable(),
   isPinned: z.boolean(),
   onGroceryList: z.boolean(),
+  created: z.string().describe("Creation timestamp (Paprika wire format), for recency sorting."),
   photoResourceUri: z
     .string()
     .nullable()
@@ -64,6 +65,7 @@ export function recipeToRow(recipe: Recipe, categoryNames: Array<string>): Recip
     servings: recipe.servings,
     isPinned: recipe.isPinned,
     onGroceryList: recipe.onGroceryList,
+    created: recipe.created,
     photoResourceUri: recipePhotoResourceUri(recipe),
   };
 }
@@ -255,30 +257,6 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>, l
   }
 
   return lines.join("\n");
-}
-
-export function recipeMetadataLines(recipe: Recipe, lastCookedAt?: string | null): Array<string> {
-  const lines: Array<string> = [];
-  const timeParts: Array<string> = [];
-  if (recipe.prepTime) timeParts.push(`Prep: ${recipe.prepTime}`);
-  if (recipe.cookTime) timeParts.push(`Cook: ${recipe.cookTime}`);
-  if (recipe.totalTime) timeParts.push(`Total: ${recipe.totalTime}`);
-  if (timeParts.length > 0) {
-    lines.push(timeParts.join(" · "));
-  }
-  if (recipe.rating > 0) {
-    lines.push(`**Rating:** ${recipe.rating.toString()}/5`);
-  }
-  if (lastCookedAt) {
-    lines.push(`**Last Cooked:** ${lastCookedAt.slice(0, 10)}`);
-  }
-  if (recipe.isPinned) {
-    lines.push(`**Pinned:** Yes`);
-  }
-  if (recipe.onGroceryList) {
-    lines.push(`**On Grocery List:** Yes`);
-  }
-  return lines;
 }
 
 /**

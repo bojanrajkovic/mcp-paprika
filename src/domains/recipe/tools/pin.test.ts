@@ -13,15 +13,15 @@ describe("pin_recipe tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("sets isPinned true and renders markdown with Pinned", async () => {
+  it("sets isPinned true and the text JSON carries isPinned: true", async () => {
     const recipe = makeRecipe({ isPinned: false });
     const updated = makeRecipe({ uid: recipe.uid, isPinned: true });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("pin_recipe", { uid: recipe.uid });
+    const json = await kh.callToolJson("pin_recipe", { uid: recipe.uid });
 
-    expect(text).toContain("**Pinned:** Yes");
+    expect(json).toMatchObject({ uid: recipe.uid, isPinned: true });
     expect(vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0]).toMatchObject({ isPinned: true });
   });
 
@@ -92,15 +92,15 @@ describe("unpin_recipe tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("sets isPinned false and renders markdown without Pinned", async () => {
+  it("sets isPinned false and the text JSON carries isPinned: false", async () => {
     const recipe = makeRecipe({ isPinned: true });
     const updated = makeRecipe({ uid: recipe.uid, isPinned: false });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("unpin_recipe", { uid: recipe.uid });
+    const json = await kh.callToolJson("unpin_recipe", { uid: recipe.uid });
 
-    expect(text).not.toContain("**Pinned:** Yes");
+    expect(json).toMatchObject({ uid: recipe.uid, isPinned: false });
     expect(vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0]).toMatchObject({ isPinned: false });
   });
 

@@ -11,22 +11,22 @@ describe("create_recipe tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("required fields create a recipe returned as markdown", async () => {
+  it("required fields create a recipe returned as JSON carrying the new UID", async () => {
     const savedRecipe = makeRecipe({ name: "Soup" });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(savedRecipe));
     kh.seed({ recipes: [makeRecipe()] });
 
-    const text = await kh.callToolText("create_recipe", {
-      name: "Soup",
-      ingredients: "water, salt",
-      directions: "boil water, add salt",
-    });
+    const parsed = await kh.callToolJson<{ uid: string; name: string; ingredients: string; directions: string }>(
+      "create_recipe",
+      { name: "Soup", ingredients: "water, salt", directions: "boil water, add salt" },
+    );
 
-    expect(text).toContain("# Soup");
-    expect(text).toContain("## Ingredients");
-    expect(text).toContain("## Directions");
-    // The new recipe's UID rides structuredContent, not the human text (see the structuredContent test).
-    expect(text).not.toContain(savedRecipe.uid);
+    // The echo reflects the saved recipe; the body fields are present as keys.
+    expect(parsed.name).toBe("Soup");
+    expect(parsed).toHaveProperty("ingredients");
+    expect(parsed).toHaveProperty("directions");
+    // The new recipe's UID now rides the JSON text channel, so the model can chain on it.
+    expect(parsed.uid).toBe(savedRecipe.uid);
   });
 
   it("mints an uppercase canonical UUID (Paprika's native format)", async () => {
@@ -54,9 +54,10 @@ describe("create_recipe tool", () => {
       prepTime: "10 min",
     });
 
-    expect(text).toContain("Tasty pasta");
-    expect(text).toContain("**Servings:** 4");
-    expect(text).toContain("Prep: 10 min");
+    const parsed = JSON.parse(text) as { description: string | null; servings: string | null; prepTime: string | null };
+    expect(parsed.description).toBe("Tasty pasta");
+    expect(parsed.servings).toBe("4");
+    expect(parsed.prepTime).toBe("10 min");
   });
 
   it("defaults omitted optional fields to null", async () => {
@@ -128,19 +129,21 @@ describe("create_recipe tool", () => {
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
-  it("skips an unknown category name with a warning", async () => {
+  it("silently drops an unknown category name, keeping only the resolved ones", async () => {
     const category = makeCategory({ name: "Desserts" });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(makeRecipe({ categories: [category.uid] })));
     kh.seed({ recipes: [makeRecipe()], categories: [category] });
 
-    const text = await kh.callToolText("create_recipe", {
+    const parsed = await kh.callToolJson<{ categoryUids: Array<string> }>("create_recipe", {
       name: "Recipe",
       ingredients: "ingredients",
       directions: "directions",
       categories: ["Desserts", "UnknownCat"],
     });
 
-    expect(text).toContain('Warning: category "UnknownCat" not found');
+    // The unknown category is dropped (the per-call warning prose is gone); the recipe
+    // carries only the resolved category, which the model sees in the JSON payload.
+    expect(parsed.categoryUids).toEqual([category.uid]);
     const callArgs = vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0];
     expect(callArgs?.categories).toEqual([category.uid]);
     expect(callArgs?.categories).not.toContain("UnknownCat");

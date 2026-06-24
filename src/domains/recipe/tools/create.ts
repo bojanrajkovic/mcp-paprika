@@ -6,15 +6,10 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { formatTimestampWire } from "../../../utils/dates.js";
 import { RecipeUidSchema } from "../ids.js";
-import {
-  recipeReadOutputSchema,
-  recipeToMarkdown,
-  recipeToReadStructured,
-  resolveCategoryRefs,
-} from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured, resolveCategoryRefs } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
@@ -44,8 +39,8 @@ export const createRecipeTool = defineTool(
         .optional()
         .describe(
           "Categories to assign. Each entry is either a category UID (from `list_categories`) or a display " +
-            "name (case-insensitive). Unknown names are skipped with a warning — create them first with " +
-            "`create_category` if needed.",
+            "name (case-insensitive). Unknown names are skipped — the result's categories list the ones that " +
+            "were applied; create a missing one first with `create_category` if needed.",
         ),
       source: z.string().optional().describe("Source name"),
       sourceUrl: z.string().optional().describe("Source URL"),
@@ -59,13 +54,13 @@ export const createRecipeTool = defineTool(
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "create_recipe" });
     return async (args) => {
-      // Resolve category refs (UID or name) → UIDs (AC2.4, AC2.7)
-      const { uids: categories, unknown: unknownCategories } =
+      // Resolve category refs (UID or name) → UIDs (AC2.4, AC2.7). Unknown refs are
+      // dropped silently: the created recipe's resolved category set is in the payload,
+      // so the model sees which refs took without a separate warning line.
+      const { uids: categories } =
         args.categories && args.categories.length > 0
           ? resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories)
-          : { uids: [] as Array<CategoryUid>, unknown: [] as Array<string> };
-
-      const warnings = unknownCategories.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
+          : { uids: [] as Array<CategoryUid> };
 
       // Build the full Recipe object — all 28 fields required by the type.
       // hash: "" is a placeholder — `client.saveRecipe` stamps the real
@@ -129,11 +124,9 @@ export const createRecipeTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      const markdown = recipeToMarkdown(saved, categoryNames);
-      const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-      // The new UID rides structuredContent (and the rendered text), so the caller can
+      // The new UID rides the structured payload (and its JSON text), so the caller can
       // chain upload_recipe_photo / update_recipe without re-looking-up the new recipe.
-      return toolResult(prefix + markdown, structured);
+      return structuredResult(structured);
     };
   },
 );

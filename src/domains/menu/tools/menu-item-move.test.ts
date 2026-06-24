@@ -11,7 +11,7 @@ import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/me
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 import { moveMenuItemInputSchema } from "./menu-item-move.js";
 
 const TACOS_UID = "recipe-tacos" as RecipeUid;
@@ -57,9 +57,9 @@ describe("move_menu_item tool", () => {
       vi.mocked(kh.client().saveMenuItems).mock.invocationCallOrder[0]!,
     );
     expect((vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[])[0]!.day).toBe(5);
-    const text = getText(result);
-    expect(text).toContain("Extended the menu to 5 day(s).");
-    expect(text).toContain("moved to day 5");
+    // The auto-expanded menu with the moved item rides the JSON text channel; the
+    // extended span (days:5) and the item's new day are echoed in the payload below.
+    expect(getJson(result)).toEqual(result.structuredContent);
     // The whole parent menu (auto-expanded, item moved to day 5) rides structuredContent.
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toMatchObject({
@@ -152,7 +152,8 @@ describe("move_menu_item tool", () => {
 
     // Nothing changed, but this is a SUCCESS — it echoes the parent menu, not an error.
     expect(result.isError).toBeUndefined();
-    expect(getText(result)).toContain("already on day 2");
+    // The unchanged menu echo rides the JSON text channel too.
+    expect(getJson(result)).toEqual(result.structuredContent);
     expect(result.structuredContent).toMatchObject({
       uid: "m-1",
       items: [{ uid: "mi-1", name: "Tacos", day: 2 }],

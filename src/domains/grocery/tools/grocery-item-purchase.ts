@@ -5,8 +5,8 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
-import { groceryItemRowSchema, groceryItemToMarkdown, groceryItemToRow } from "../grocery-helpers.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
+import { groceryItemRowSchema, groceryItemToRow } from "../grocery-helpers.js";
 import { GroceryItemUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -59,7 +59,7 @@ export const markGroceryItemPurchasedTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(groceryItemToMarkdown(saved, ctx.deps.aisle), structured);
+      return structuredResult(structured);
     };
   },
 );

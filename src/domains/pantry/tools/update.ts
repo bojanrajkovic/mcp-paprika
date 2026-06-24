@@ -5,10 +5,10 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { normalizeWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToReadStructured } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToReadStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 // Strict (exported for direct Zod-validation tests). `inStock` was promoted to
@@ -134,7 +134,7 @@ export const updatePantryItemTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle), structured);
+      return structuredResult(structured);
     };
   },
 );

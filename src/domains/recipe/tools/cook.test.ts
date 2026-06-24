@@ -5,7 +5,7 @@ import type { CookRecipeInput } from "./cook.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 // A minimal flat (no-intermediate) parse for the given recipe UID. Typed as the tool's own
 // CookRecipeInput so the test tracks the schema; the cast covers the not-found / cold-start
@@ -50,11 +50,11 @@ describe("cook_recipe tool", () => {
     ]);
     expect(sc.steps).toHaveLength(2);
     expect(sc.steps[0]).toMatchObject({ text: "Mix flour and sugar.", ingredientRefs: [0, 1] });
-    // The markdown fallback leads with the recipe name.
-    expect(getText(result)).toContain("# Cook: Pound Cake");
+    // The text channel carries the same structured payload as JSON; assert the name is present.
+    expect(getJson<{ name: string }>(result).name).toBe("Pound Cake");
   });
 
-  it("preserves a produces/usesIntermediate chain and renders it in the fallback", async () => {
+  it("preserves a produces/usesIntermediate chain and carries it in the text JSON", async () => {
     const recipe = makeRecipe({ name: "Pork Satay" });
     kh.seed({ recipes: [recipe] });
     const args = {
@@ -86,10 +86,12 @@ describe("cook_recipe tool", () => {
     expect(result.structuredContent).toMatchObject({
       steps: [{ produces: "Spice Paste" }, { usesIntermediate: ["Spice Paste"] }],
     });
-    const text = getText(result);
-    expect(text).toContain("## Spice Paste");
-    expect(text).toContain("Makes: Spice Paste");
-    expect(text).toContain("Uses: Spice Paste");
+    const json = getJson<{ steps: { group: string | null; produces: string | null; usesIntermediate: string[] }[] }>(
+      result,
+    );
+    expect(json.steps.some((s) => s.group === "Spice Paste")).toBe(true);
+    expect(json.steps.some((s) => s.produces === "Spice Paste")).toBe(true);
+    expect(json.steps.some((s) => s.usesIntermediate.includes("Spice Paste"))).toBe(true);
   });
 
   it("rejects an ingredientRef out of range with a remediation hint", async () => {

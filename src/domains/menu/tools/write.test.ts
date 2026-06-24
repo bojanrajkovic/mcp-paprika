@@ -8,7 +8,7 @@ import type { MenuState } from "../module.js";
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 const DINNER_TYPE = makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 });
 
@@ -29,10 +29,11 @@ describe("create_menu tool", () => {
       okAsync([makeMenu({ name: "Holiday", days: 1, notes: "", deleted: false })]),
     );
 
-    const text = await kh.callToolText("create_menu", { name: "Holiday" });
+    const result = await kh.callTool("create_menu", { name: "Holiday" });
+    const json = getJson<{ name: string; days: number }>(result);
 
-    expect(text).toContain("# Holiday");
-    expect(text).toContain("**Days:** 1");
+    expect(json.name).toBe("Holiday");
+    expect(json.days).toBe(1);
     expect(kh.client().saveMenus).toHaveBeenCalledOnce();
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     const savedArg = savedArgs?.[0];
@@ -71,13 +72,17 @@ describe("create_menu tool", () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
     vi.mocked(kh.client().saveMenus).mockReturnValue(okAsync([makeMenu({ name: "Week", days: 7, notes: "low carb" })]));
 
-    const text = await kh.callToolText("create_menu", { name: "Week", days: 7, notes: "low carb" });
+    const json = await kh.callToolJson<{ name: string; days: number; notes: string }>("create_menu", {
+      name: "Week",
+      days: 7,
+      notes: "low carb",
+    });
 
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     const savedArg = savedArgs?.[0];
     expect(savedArg?.days).toBe(7);
     expect(savedArg?.notes).toBe("low carb");
-    expect(text).toContain("**Notes:** low carb");
+    expect(json.notes).toBe("low carb");
   });
 
   it("assigns the next free orderFlag", async () => {
@@ -156,9 +161,15 @@ describe("update_menu tool", () => {
     expect(savedArg?.name).toBe("New");
     expect(savedArg?.days).toBe(4);
     expect(savedArg?.notes).toBe("old notes"); // preserved
-    const text = getText(result);
-    expect(text).toContain("# New");
-    expect(text).toContain("**Days:** 4");
+    const json = getJson<{
+      uid: string;
+      name: string;
+      days: number;
+      notes: string;
+      items: Array<Record<string, unknown>>;
+    }>(result);
+    expect(json.name).toBe("New");
+    expect(json.days).toBe(4);
     // The whole parent menu (with its items) rides structuredContent.
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toMatchObject({

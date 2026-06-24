@@ -5,7 +5,7 @@ import type { AisleState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { sortCatalog } from "../../../shared/catalog.js";
-import { toolResult } from "../../../shared/tools.js";
+import { structuredResult } from "../../../shared/tools.js";
 import { AisleUidSchema } from "../ids.js";
 import { aisleStartGuard } from "./guards.js";
 
@@ -36,22 +36,14 @@ export const listAislesTool = defineTool(
     annotations: { readOnlyHint: true, idempotentHint: true },
     description:
       "List all known aisles, sorted by order then name. " +
-      "Includes the aisle UID needed for pantry and grocery item writes.",
+      "Includes the aisle UID needed for pantry and grocery item writes. " +
+      "There is no create-aisle tool: a new aisle is created automatically when you add a grocery or " +
+      "pantry item naming an aisle that does not exist yet.",
     inputSchema: {},
     outputSchema: listAislesOutputSchema,
   },
   [aisleStartGuard],
   (ctx: DomainCtx<AisleState, never>) => {
-    return async () => {
-      const aisles = sortCatalog(ctx.state.store.getAll());
-      if (aisles.length === 0) {
-        return toolResult(
-          "No aisles found. Aisles are created automatically when you add a grocery or pantry item with a new aisle name.",
-          { items: [] },
-        );
-      }
-      const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
-      return toolResult(lines.join("\n"), { items: buildAisleRows(ctx.state) });
-    };
+    return async () => structuredResult({ items: buildAisleRows(ctx.state) });
   },
 );

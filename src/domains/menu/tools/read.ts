@@ -2,9 +2,9 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { resolveLookup, resolveOrPick, structuredResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuReadOutputSchema, menuToMarkdown, menuToReadStructured } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToReadStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -49,10 +49,7 @@ export const readMenuTool = defineTool(
       if ("result" in resolved) return resolved.result;
       const items = ctx.state.items.store.getByMenuUid(resolved.entity.uid);
       const mealTypes = ctx.deps["meal-type"].getAll();
-      return toolResult(
-        menuToMarkdown(resolved.entity, items, mealTypes),
-        menuToReadStructured(resolved.entity, items, mealTypes),
-      );
+      return structuredResult(menuToReadStructured(resolved.entity, items, mealTypes));
     };
   },
 );

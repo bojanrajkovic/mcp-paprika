@@ -99,10 +99,15 @@ describe("discover_recipes tool", () => {
         recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Chocolate Cake" })],
       });
 
-      const text = await kh.callToolText("discover_recipes", { query: "chocolate" });
+      const json = await kh.callToolJson<{ items: Array<{ uid: string; name: string; score: number }> }>(
+        "discover_recipes",
+        { query: "chocolate" },
+      );
 
-      expect(text).toContain("Chocolate Cake");
-      expect(text).toContain("92% match");
+      expect(json.items).toHaveLength(1);
+      expect(json.items[0]!.name).toBe("Chocolate Cake");
+      // score is 0..1 float; 0.923 rounds to 92% in the old Markdown, assert the raw value here.
+      expect(json.items[0]!.score).toBeCloseTo(0.923, 2);
     });
 
     it("categories are resolved and displayed when present", async () => {
@@ -119,16 +124,18 @@ describe("discover_recipes tool", () => {
       expect(text).toContain("Dessert");
     });
 
-    it("categories line is absent when recipe has no categories", async () => {
+    it("categories are an empty array when recipe has no categories", async () => {
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.9, recipeName: "Bread" }]);
       injectVectorStore(kh, mockVs);
       kh.seed({
         recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Bread", categories: [] })],
       });
 
-      const text = await kh.callToolText("discover_recipes", { query: "bread" });
+      const json = await kh.callToolJson<{ items: Array<{ categories: Array<string> }> }>("discover_recipes", {
+        query: "bread",
+      });
 
-      expect(text).not.toContain("**Categories:**");
+      expect(json.items[0]!.categories).toEqual([]);
     });
 
     it("prepTime and cookTime are displayed when present", async () => {
@@ -138,23 +145,29 @@ describe("discover_recipes tool", () => {
         recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Pasta", prepTime: "10 min", cookTime: "30 min" })],
       });
 
-      const text = await kh.callToolText("discover_recipes", { query: "pasta" });
+      const json = await kh.callToolJson<{ items: Array<{ prepTime: string | null; cookTime: string | null }> }>(
+        "discover_recipes",
+        { query: "pasta" },
+      );
 
-      expect(text).toContain("Prep: 10 min");
-      expect(text).toContain("Cook: 30 min");
+      expect(json.items[0]!.prepTime).toBe("10 min");
+      expect(json.items[0]!.cookTime).toBe("30 min");
     });
 
-    it("omits prepTime and cookTime when null", async () => {
+    it("prepTime and cookTime are null when absent", async () => {
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.9, recipeName: "Soup" }]);
       injectVectorStore(kh, mockVs);
       kh.seed({
         recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Soup", prepTime: null, cookTime: null })],
       });
 
-      const text = await kh.callToolText("discover_recipes", { query: "soup" });
+      const json = await kh.callToolJson<{ items: Array<{ prepTime: string | null; cookTime: string | null }> }>(
+        "discover_recipes",
+        { query: "soup" },
+      );
 
-      expect(text).not.toContain("Prep:");
-      expect(text).not.toContain("Cook:");
+      expect(json.items[0]!.prepTime).toBeNull();
+      expect(json.items[0]!.cookTime).toBeNull();
     });
 
     it("result includes UID in backtick format", async () => {
@@ -164,9 +177,10 @@ describe("discover_recipes tool", () => {
         recipes: [makeRecipe({ uid: "abc-def-123" as RecipeUid, name: "Test Recipe" })],
       });
 
-      const text = await kh.callToolText("discover_recipes", { query: "test" });
+      const json = await kh.callToolJson<{ items: Array<{ uid: string }> }>("discover_recipes", { query: "test" });
 
-      expect(text).toContain("UID: `abc-def-123`");
+      // The UID now rides the JSON text channel directly.
+      expect(json.items[0]!.uid).toBe("abc-def-123");
     });
   });
 
@@ -176,9 +190,9 @@ describe("discover_recipes tool", () => {
       injectVectorStore(kh, mockVs);
       kh.seed({ recipes: [makeRecipe()] });
 
-      const text = await kh.callToolText("discover_recipes", { query: "nonexistent" });
+      const json = await kh.callToolJson<{ items: unknown[] }>("discover_recipes", { query: "nonexistent" });
 
-      expect(text).toBe("No recipes found matching that description.");
+      expect(json.items).toEqual([]);
     });
 
     it("all results map to deleted recipes — no recipes found message", async () => {
@@ -189,9 +203,9 @@ describe("discover_recipes tool", () => {
       injectVectorStore(kh, mockVs);
       kh.seed({ recipes: [makeRecipe({ uid: "existing" as RecipeUid })] });
 
-      const text = await kh.callToolText("discover_recipes", { query: "deleted" });
+      const json = await kh.callToolJson<{ items: unknown[] }>("discover_recipes", { query: "deleted" });
 
-      expect(text).toBe("No recipes found matching that description.");
+      expect(json.items).toEqual([]);
     });
   });
 
@@ -231,10 +245,14 @@ describe("discover_recipes tool", () => {
         ],
       });
 
-      const text = await kh.callToolText("discover_recipes", { query: "test" });
+      const json = await kh.callToolJson<{ items: Array<{ uid: string; name: string }> }>("discover_recipes", {
+        query: "test",
+      });
 
-      expect(text).toContain("1. **First**");
-      expect(text).toContain("2. **Third**");
+      // Deleted recipe is skipped; the two live ones appear in score order.
+      expect(json.items).toHaveLength(2);
+      expect(json.items[0]!.name).toBe("First");
+      expect(json.items[1]!.name).toBe("Third");
     });
 
     it("excludes trashed recipes even though store.get returns them (#177)", async () => {

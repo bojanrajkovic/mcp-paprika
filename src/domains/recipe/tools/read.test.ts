@@ -9,13 +9,15 @@ describe("read_recipe tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("UID lookup returns recipe as markdown with heading", async () => {
+  it("UID lookup returns the recipe payload as JSON text carrying the UID", async () => {
     const recipe = makeRecipe({ name: "Chocolate Cake" });
     kh.seed({ recipes: [recipe] });
     const text = await kh.callToolText("read_recipe", { lookup: { uid: recipe.uid } });
-    expect(text).toContain("# Chocolate Cake");
-    // The UID rides structuredContent, not the human text (see the structuredContent test).
-    expect(text).not.toContain(recipe.uid);
+    // The text is now the structured payload as compact JSON — the UID rides it, so the
+    // model can chain read_recipe → cook_recipe on a host that only forwards text.
+    const parsed = JSON.parse(text) as { uid: string; name: string };
+    expect(parsed.uid).toBe(recipe.uid);
+    expect(parsed.name).toBe("Chocolate Cake");
   });
 
   it("UID lookup includes category names", async () => {
@@ -23,26 +25,27 @@ describe("read_recipe tool", () => {
     const recipe = makeRecipe({ name: "Chocolate Cake", categories: [category.uid] });
     kh.seed({ recipes: [recipe], categories: [category] });
     const text = await kh.callToolText("read_recipe", { lookup: { uid: recipe.uid } });
-    expect(text).toContain("# Chocolate Cake");
-    expect(text).toContain("Dessert");
+    const parsed = JSON.parse(text) as { name: string; categories: Array<string> };
+    expect(parsed.name).toBe("Chocolate Cake");
+    expect(parsed.categories).toContain("Dessert");
   });
 
-  it("exact title match returns recipe markdown", async () => {
+  it("exact title match returns the recipe", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake" })] });
     const text = await kh.callToolText("read_recipe", { lookup: { title: "Chocolate Cake" } });
-    expect(text).toContain("# Chocolate Cake");
+    expect((JSON.parse(text) as { name: string }).name).toBe("Chocolate Cake");
   });
 
-  it("starts-with title match returns recipe markdown", async () => {
+  it("starts-with title match returns the recipe", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake" })] });
     const text = await kh.callToolText("read_recipe", { lookup: { title: "Choco" } });
-    expect(text).toContain("# Chocolate Cake");
+    expect((JSON.parse(text) as { name: string }).name).toBe("Chocolate Cake");
   });
 
-  it("contains title match returns recipe markdown", async () => {
+  it("contains title match returns the recipe", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake" })] });
     const text = await kh.callToolText("read_recipe", { lookup: { title: "late Ca" } });
-    expect(text).toContain("# Chocolate Cake");
+    expect((JSON.parse(text) as { name: string }).name).toBe("Chocolate Cake");
   });
 
   it("multiple title matches return an isError disambiguation list", async () => {

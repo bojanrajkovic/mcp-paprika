@@ -6,8 +6,8 @@ import type { MealTypeState, MealTypeWrites } from "../module.js";
 import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { renderCatalogOrder, repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../ids.js";
 import { mealTypeStartGuard } from "./guards.js";
 import { buildMealTypeRows, listMealTypesOutputSchema } from "./list-meal-types.js";
@@ -95,9 +95,7 @@ export const updateMealTypeTool = defineTool(
           );
         });
         if (toSave.length === 0) {
-          return toolResult(`No changes — "${existing.name}" already has that name/color/position.`, {
-            items: buildMealTypeRows(ctx.state),
-          });
+          return structuredResult({ items: buildMealTypeRows(ctx.state) });
         }
 
         return (await ctx.infra.client.saveMealTypes(toSave)).match(
@@ -107,24 +105,10 @@ export const updateMealTypeTool = defineTool(
             });
             if (commitErr) return commitErr;
 
-            const did: Array<string> = [];
-            if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
-            if (args.color !== undefined && args.color !== existing.color) did.push(`recolored to ${args.color}`);
-            // Report where the type actually LANDED — a past-the-end position
-            // clamps to last, so echoing args.position would contradict the
-            // rendered order below.
-            if (args.position !== undefined) {
-              const landed = ordered.findIndex((mt) => mt.uid === target.uid) + 1;
-              did.push(`moved to position ${String(landed)}`);
-            }
-            // The whole post-commit catalog rides structuredContent (the same full-list
-            // shape list_meal_types produces), so the model sees the reordered order.
-            return toolResult(
-              `Updated meal type "${existing.name}": ${did.join(", ")}.\n\nCurrent meal-type order:\n${renderCatalogOrder(
-                sortCatalog(ctx.state.store.getAll()),
-              )}`,
-              { items: buildMealTypeRows(ctx.state) },
-            );
+            // The whole post-commit catalog rides the structured payload (the same
+            // full-list shape list_meal_types produces), so the model sees the new
+            // names and order — the specific changes are derivable from it.
+            return structuredResult({ items: buildMealTypeRows(ctx.state) });
           },
           async (e) => {
             log.error({ err: e, uid: args.uid }, "saveMealTypes failed");

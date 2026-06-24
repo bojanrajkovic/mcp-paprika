@@ -1,4 +1,3 @@
-import { DateTime } from "luxon";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -8,7 +7,14 @@ import type { Meal } from "../../meal/types.js";
 import type { RecipeUid } from "../../recipe/ids.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import {
+  errorResult,
+  resolveLookup,
+  resolveOrPick,
+  structuredResult,
+  toolResult,
+  uidOrTextLookupSchema,
+} from "../../../shared/tools.js";
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
 import { MealUidSchema } from "../../meal/ids.js";
 import { mealListOutputSchema } from "../../meal/tools/helpers.js";
@@ -56,42 +62,6 @@ export const scheduleMenuInputSchema = z.object({
         "Day-N items land on start_date + (N−1) days.",
     ),
 });
-
-/**
- * Renders the compact, day-grouped success response. No per-meal UIDs — scales
- * to a 21-meal week; an agent that needs a meal UID afterward calls
- * `read_meal_plan` or `search_meal_history`. `items` arrives pre-sorted in menu-layout order (day →
- * meal-type order → menu item order — the same order the `order_flag`s were
- * assigned in), so grouping by day preserves that order and the rendered
- * sequence matches the persisted planner sequence.
- */
-function renderPlannerAdds(menuName: string, startDay: DateTime, items: ReadonlyArray<MaterializedMeal>): string {
-  const lines: Array<string> = [
-    `Added ${items.length.toString()} meal(s) to the planner from "${menuName}" ` +
-      `(Day 1 = ${startDay.toFormat("yyyy-MM-dd")}).`,
-  ];
-
-  // Group preserving input order; days emit ascending (== materialized order,
-  // but sort the keys defensively so a malformed clamped day can't reorder).
-  const byDay = new Map<number, Array<MaterializedMeal>>();
-  for (const item of items) {
-    const bucket = byDay.get(item.day);
-    if (bucket === undefined) byDay.set(item.day, [item]);
-    else bucket.push(item);
-  }
-
-  for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
-    const dayItems = byDay.get(day)!;
-    lines.push("");
-    lines.push(`## ${dayItems[0]!.date.slice(0, 10)} (Day ${day.toString()})`);
-    lines.push("");
-    for (const item of dayItems) {
-      lines.push(`- **${item.typeName}:** ${item.name}`);
-    }
-  }
-
-  return lines.join("\n");
-}
 
 export const scheduleMenuTool = defineTool(
   {
@@ -244,10 +214,7 @@ export const scheduleMenuTool = defineTool(
         // entirely (it scales to a 21-meal week), so without this the model could not
         // chain reschedule_meal / update_meal / delete_meal on what it just created. The
         // rows are built through the meal contract so the meal-type catalog stays meal's.
-        (savedMeals) =>
-          toolResult(renderPlannerAdds(menu.name, startDay, materialized), {
-            items: [...ctx.deps.meal.toRows(savedMeals)],
-          }),
+        (savedMeals) => structuredResult({ items: [...ctx.deps.meal.toRows(savedMeals)] }),
         (error) => {
           log.error({ uid: menu.uid, count: builtItems.length, phase: error.phase }, "createMeals failed");
           if (error.phase === "save") {

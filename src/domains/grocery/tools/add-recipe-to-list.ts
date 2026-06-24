@@ -10,11 +10,11 @@ import {
   errorResult,
   resolveLookup,
   resolveOrPick,
-  toolResult,
+  structuredResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
-import { groceryItemsToRows, groceryItemToMarkdown } from "../grocery-helpers.js";
+import { groceryItemsToRows } from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
 import { addGroceryItemsOutputSchema, buildGroceryItems, itemInputSchema } from "./grocery-item.js";
 import { groceryStartGuard, recipeSyncedGuard } from "./guards.js";
@@ -123,19 +123,12 @@ export const addRecipeToGroceryListTool = defineTool(
           toAdd.push(item);
         }
       }
-      const skippedNote =
-        skipMessages.length > 0
-          ? `\n\nAlready on the list (skipped):\n${skipMessages.map((m) => `- ${m}`).join("\n")}`
-          : "";
       if (toAdd.length === 0) {
         // Empty-but-valid success: nothing was created, so the structured payload
-        // is the target list with an empty item array (NOT an error — the input
-        // was fine and the act succeeded with zero new items).
-        return toolResult(
-          `Nothing to add — every ingredient from "${recipe.name}" is already on "${list.name}" unpurchased.` +
-            skippedNote,
-          { listUid, items: [] },
-        );
+        // is the target list with an empty item array (NOT an error — the input was
+        // fine and the act succeeded with zero new items). `skipped` carries the
+        // already-on-the-list notices.
+        return structuredResult({ listUid, items: [], skipped: skipMessages });
       }
 
       const builtItems = await buildGroceryItems(ctx, log, listUid, toAdd, recipe.name);
@@ -152,18 +145,14 @@ export const addRecipeToGroceryListTool = defineTool(
 
       // The new child UIDs ride structuredContent (and the degraded commit branch),
       // so the model can chain mark_grocery_item_purchased / update_grocery_item
-      // without a re-read.
-      const structured = { listUid, items: groceryItemsToRows(savedItems, ctx.deps.aisle) };
+      // without a re-read; `skipped` carries any already-on-the-list notices.
+      const structured = { listUid, items: groceryItemsToRows(savedItems, ctx.deps.aisle), skipped: skipMessages };
       const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems), {
         structuredContent: structured,
       });
       if (commitErr) return commitErr;
 
-      const rendered = savedItems.map((item) => groceryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
-      return toolResult(
-        `Added ${String(savedItems.length)} item(s) from "${recipe.name}" to "${list.name}".${skippedNote}\n\n${rendered}`,
-        structured,
-      );
+      return structuredResult(structured);
     };
   },
 );

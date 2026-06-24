@@ -10,9 +10,11 @@ import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/me
 import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
-import { mealToMarkdown } from "../meal-helpers.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 import { addMealsInputSchema, updateMealInputSchema } from "./meal-writes.js";
+
+type MealRowText = { uid: string; name: string; recipeUid: string | null; typeName: string | null };
+type MealRowsText = { items: ReadonlyArray<MealRowText> };
 
 // Stable UIDs used across all describe blocks so tests don't depend on
 // the module-level counters in the fixture factories.
@@ -52,13 +54,11 @@ describe("plan_meals tool — success paths", () => {
     const result = await kh.callTool("plan_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "2026-06-15", type: { name: "Dinner" } }],
     });
-    const text = getText(result);
-
-    // Markdown card contains the recipe name and a Recipe line linking back
-    expect(text).toContain("# Tacos");
-    expect(text).toContain("**Recipe:** Tacos");
-    // UID is minted and appears in the card
-    expect(text).toMatch(/\*\*UID:\*\* `[0-9A-F-]{36}`/);
+    // The structured payload (incl the minted UID) now travels in the text channel as JSON.
+    const parsed = getJson<MealRowsText>(result);
+    expect(parsed.items[0]!.name).toBe("Tacos");
+    expect(parsed.items[0]!.recipeUid).toBe(TACOS_UID);
+    expect(parsed.items[0]!.uid).toMatch(/[0-9A-F-]{36}/);
 
     // Meal landed in MealStore with correct fields
     const savedPayload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<{
@@ -99,10 +99,9 @@ describe("plan_meals tool — success paths", () => {
     const result = await kh.callTool("plan_meals", {
       items: [{ name: "Avocado Toast", date: "2026-06-15", type: { builtin: 0 } }],
     });
-    const text = getText(result);
-
-    expect(text).toContain("# Avocado Toast");
-    expect(text).toContain("**Recipe:** _(freeform)_");
+    const parsed = getJson<MealRowsText>(result);
+    expect(parsed.items[0]!.name).toBe("Avocado Toast");
+    expect(parsed.items[0]!.recipeUid).toBeNull();
 
     const savedPayload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<{
       uid: string;
@@ -118,7 +117,7 @@ describe("plan_meals tool — success paths", () => {
     expect(storedMeal?.recipeUid).toBeNull();
   });
 
-  it("5-item batch → single saveMeals call, 5 cards", async () => {
+  it("5-item batch → single saveMeals call, 5 meal rows", async () => {
     vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
@@ -131,19 +130,13 @@ describe("plan_meals tool — success paths", () => {
         { name: "Thursday Dinner", date: "2026-06-19", type: { builtin: 2 } },
       ],
     });
-    const text = getText(result);
-
     // Single batch POST
     expect(kh.client().saveMeals).toHaveBeenCalledOnce();
     const savedPayload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<unknown>;
     expect(savedPayload).toHaveLength(5);
 
-    // 5 markdown cards separated by ---
-    expect(text).toContain("Added 5 meal(s)");
-    const cardCount = (text.match(/^# /gm) ?? []).length;
-    expect(cardCount).toBe(5);
-    const separatorCount = (text.match(/^---$/gm) ?? []).length;
-    expect(separatorCount).toBe(4);
+    // All 5 minted meal rows ride the JSON text channel.
+    expect(getJson<MealRowsText>(result).items).toHaveLength(5);
   });
 
   it("schema rejects {recipe_uid, name} together at the item shape (structural union)", () => {
@@ -676,16 +669,18 @@ describe("update_meal — failure/edge paths", () => {
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
-  it("freeform meal + recipe_uid: null + no other fields → no POST, returns existing card", async () => {
+  it("freeform meal + recipe_uid: null + no other fields → no POST, returns existing row", async () => {
     const meal = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, typeUid: DINNER_UID, type: 2 });
     kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
 
     const result = await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null } });
-    const text = getText(result);
 
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
-    const expectedCard = mealToMarkdown(meal, "Dinner", null);
-    expect(text).toBe(expectedCard);
+    // The existing meal row (incl its UID) rides the JSON text channel.
+    const parsed = getJson<MealRowText>(result);
+    expect(parsed.uid).toBe(TEST_MEAL_UID);
+    expect(parsed.recipeUid).toBeNull();
+    expect(parsed.typeName).toBe("Dinner");
     // An idempotent no-op is a real success → success-with-structured.
     expect(result.isError).toBeUndefined();
     const structured = result.structuredContent as { uid: string; recipeUid: string | null };

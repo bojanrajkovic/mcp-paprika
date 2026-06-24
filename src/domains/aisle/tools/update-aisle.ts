@@ -6,8 +6,8 @@ import type { AisleState, AisleWrites } from "../module.js";
 import type { Aisle } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { renderCatalogOrder, repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { AisleUidSchema } from "../ids.js";
 import { aisleStartGuard } from "./guards.js";
 import { buildAisleRows, listAislesOutputSchema } from "./list-aisles.js";
@@ -83,9 +83,7 @@ export const updateAisleTool = defineTool(
           return prev === undefined || prev.name !== a.name || prev.orderFlag !== a.orderFlag;
         });
         if (toSave.length === 0) {
-          return toolResult(`No changes — "${existing.name}" already has that name/position.`, {
-            items: buildAisleRows(ctx.state),
-          });
+          return structuredResult({ items: buildAisleRows(ctx.state) });
         }
 
         return (await ctx.infra.client.saveAisles(toSave)).match(
@@ -95,23 +93,10 @@ export const updateAisleTool = defineTool(
             });
             if (commitErr) return commitErr;
 
-            const did: Array<string> = [];
-            if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
-            // Report where the aisle actually LANDED — a past-the-end position
-            // clamps to last, so echoing args.position would contradict the
-            // rendered order below.
-            if (args.position !== undefined) {
-              const landed = ordered.findIndex((a) => a.uid === target.uid) + 1;
-              did.push(`moved to position ${String(landed)}`);
-            }
-            // The whole post-commit catalog rides structuredContent (the same full-list
-            // shape list_aisles produces), so the model sees the reordered order.
-            return toolResult(
-              `Updated aisle "${existing.name}": ${did.join(", ")}.\n\nCurrent aisle order:\n${renderCatalogOrder(
-                sortCatalog(ctx.state.store.getAll()),
-              )}`,
-              { items: buildAisleRows(ctx.state) },
-            );
+            // The whole post-commit catalog rides the structured payload (the same
+            // full-list shape list_aisles produces), so the model sees the new names
+            // and order — the specific changes are derivable from it.
+            return structuredResult({ items: buildAisleRows(ctx.state) });
           },
           async (e) => {
             log.error({ err: e, uid: args.uid }, "saveAisles failed");

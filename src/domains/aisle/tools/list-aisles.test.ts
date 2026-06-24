@@ -16,12 +16,11 @@ describe("list_aisles tool", () => {
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
-  it("empty aisle list returns helpful message", async () => {
+  it("empty aisle list returns an empty items array", async () => {
     kh.seed({ aisles: [] });
 
-    const text = await kh.callToolText("list_aisles", {});
-    expect(text.toLowerCase()).toContain("no aisles found");
-    expect(text).toContain("created automatically");
+    const { items } = await kh.callToolJson<{ items: Array<unknown> }>("list_aisles", {});
+    expect(items).toEqual([]);
   });
 
   it("aisles sorted by orderFlag ascending", async () => {
@@ -47,13 +46,12 @@ describe("list_aisles tool", () => {
     expect(text.indexOf("Dairy")).toBeLessThan(text.indexOf("Produce"));
   });
 
-  it("output includes aisle name in bold and UID in backticks", async () => {
+  it("output includes the aisle name and UID in the JSON text", async () => {
     const aisle = makeAisle({ name: "Bakery", orderFlag: 1 });
     kh.seed({ aisles: [aisle] });
 
-    const text = await kh.callToolText("list_aisles", {});
-    expect(text).toContain(`**Bakery**`);
-    expect(text).toContain(`\`${aisle.uid}\``);
+    const { items } = await kh.callToolJson<{ items: Array<{ uid: string; name: string }> }>("list_aisles", {});
+    expect(items[0]).toEqual({ uid: aisle.uid, name: "Bakery" });
   });
 
   it("emits structured rows with uid and name (R1)", async () => {
@@ -66,15 +64,12 @@ describe("list_aisles tool", () => {
     expect(items).toEqual([{ uid: "a-produce", name: "Produce" }]);
   });
 
-  it("each aisle is on its own line with dash prefix", async () => {
+  it("returns one row per aisle", async () => {
     const a1 = makeAisle({ name: "Produce", orderFlag: 1 });
     const a2 = makeAisle({ name: "Dairy", orderFlag: 2 });
     kh.seed({ aisles: [a1, a2] });
 
-    const text = await kh.callToolText("list_aisles", {});
-    const lines = text.split("\n").filter((l) => l.trim().length > 0);
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toMatch(/^- \*\*/);
-    expect(lines[1]).toMatch(/^- \*\*/);
+    const { items } = await kh.callToolJson<{ items: Array<unknown> }>("list_aisles", {});
+    expect(items).toHaveLength(2);
   });
 });

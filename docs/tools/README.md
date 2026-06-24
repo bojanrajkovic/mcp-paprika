@@ -55,12 +55,12 @@ Add a recipe's ingredients to a grocery list as linked grocery items. Parse the 
 
 **Add, replace, or remove a recipe's categories** — write, destructive, idempotent
 
-Add, replace, or remove a recipe's categories by UID. Pass category names or UIDs and a mode: add (union with current — the default), replace (set exactly these), or remove (drop these). Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.
+Add, replace, or remove a recipe's categories by UID. Pass category names or UIDs and a mode: add (union with current — the default), replace (set exactly these), or remove (drop these). Unknown category names are skipped (if none resolve, the call is rejected). To edit other recipe fields, use update_recipe.
 
 **Parameters**
 
 - `uid` — Recipe UID to categorize
-- `categories` — Category references — each is a category UID (from list_categories) or a display name (case-insensitive). Unknown names are skipped with a warning.
+- `categories` — Category references — each is a category UID (from list_categories) or a display name (case-insensitive). Unknown names are skipped; the result lists the categories that were applied.
 - `mode` _(optional)_ — How to apply: "add" (default) unions these with the recipe's current categories; "replace" sets the recipe's categories to exactly these; "remove" drops these from the recipe.
 
 ## `clear_grocery_list`
@@ -153,7 +153,7 @@ Create a new recipe in the Paprika account. If you built this recipe from a web 
 - `prepTime` _(optional)_ — Prep time (e.g. '15 min')
 - `cookTime` _(optional)_ — Cook time (e.g. '30 min')
 - `totalTime` _(optional)_ — Total time (e.g. '45 min')
-- `categories` _(optional)_ — Categories to assign. Each entry is either a category UID (from `list_categories`) or a display name (case-insensitive). Unknown names are skipped with a warning — create them first with `create_category` if needed.
+- `categories` _(optional)_ — Categories to assign. Each entry is either a category UID (from `list_categories`) or a display name (case-insensitive). Unknown names are skipped — the result's categories list the ones that were applied; create a missing one first with `create_category` if needed.
 - `source` _(optional)_ — Source name
 - `sourceUrl` _(optional)_ — Source URL
 - `difficulty` _(optional)_ — Difficulty level
@@ -301,7 +301,7 @@ Generate a styled food photo for a recipe with an AI image model and (by default
 
 **List grocery aisles** — read-only, idempotent
 
-List all known aisles, sorted by order then name. Includes the aisle UID needed for pantry and grocery item writes.
+List all known aisles, sorted by order then name. Includes the aisle UID needed for pantry and grocery item writes. There is no create-aisle tool: a new aisle is created automatically when you add a grocery or pantry item naming an aisle that does not exist yet.
 
 _No parameters._
 
@@ -505,7 +505,7 @@ Read a recipe by UID or title. Title lookup is fuzzy (exact → starts-with → 
 
 **Read a recipe's cooking history** — read-only, idempotent
 
-Summarize ONE recipe's cooking history: when it was last cooked, how many times total, and its most recent cooking dates (with meal type). Answers "when did I last make this", "have we cooked this before", "how often do we make it". Look the recipe up by UID (from list_recipes, search_recipes, or read_recipe). Only PAST cooks count — future planner entries are excluded (use read_meal_plan for what's scheduled). For the full meal-by-meal list, or to filter cooking history by category, meal type, or date window, use search_meal_history.
+Summarize ONE recipe's cooking history: when it was last cooked, how many times total, and its most recent cooking dates (with meal type). Answers "when did I last make this", "have we cooked this before", "how often do we make it". Look the recipe up by UID (from list_recipes, search_recipes, or read_recipe). Only PAST cooks count — future planner entries are excluded (use read_meal_plan for what's scheduled). A recipe never cooked returns a zero summary (timesCooked 0, lastCooked null) — use log_cooked_meal to record a past cooking or plan_meals to schedule one. For the full meal-by-meal list, or to filter cooking history by category, meal type, or date window, use search_meal_history.
 
 **Parameters**
 

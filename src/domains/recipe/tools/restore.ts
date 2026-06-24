@@ -6,9 +6,9 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeReadOutputSchema, recipeToMarkdown, recipeToReadStructured } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 export const restoreRecipeInputSchema = z
@@ -68,10 +68,7 @@ export const restoreRecipeTool = defineTool(
         // structured payload is the live recipe (NOT an error).
         await ctx.writes.reconcileLocalRecipe(recipe);
         const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
-        return toolResult(
-          `Recipe "${recipe.name}" is already in your active library.`,
-          recipeToReadStructured(recipe, categoryNames),
-        );
+        return structuredResult(recipeToReadStructured(recipe, categoryNames));
       }
 
       // A pure inTrash flip; saveRecipe's hash recompute is a no-op (the hash is
@@ -94,7 +91,7 @@ export const restoreRecipeTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(recipeToMarkdown(saved, categoryNames), structured);
+      return structuredResult(structured);
     };
   },
 );

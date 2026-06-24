@@ -7,7 +7,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { MenuItemUidSchema } from "../ids.js";
 import { menuReadOutputSchema, menuToReadStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -84,19 +84,14 @@ export const moveMenuItemTool = defineTool(
               `(UID "${menuUid}") is not known locally; wait for the next sync, then use \`read_menu\`.`,
           );
         }
-        return toolResult(
-          `Menu item "${existing.name}" is already on day ${existing.day.toString()}.`,
-          structuredFor(parent, existing),
-        );
+        return structuredResult(structuredFor(parent, existing));
       }
 
       const newDay = args.day;
 
-      // (A) Auto-expand the parent menu when the move pushes the item past the
-      // menu's current span — otherwise menuToMarkdown (Day 1..menu.days) silently
-      // hides it. Mirrors add_menu_items' auto-expand. Skipped for a menu not known
-      // locally.
-      let extendedTo: number | null = null;
+      // (A) Auto-expand the parent menu when the move pushes the item past the menu's
+      // current span — otherwise read_menu (Day 1..menu.days) would not surface it.
+      // Mirrors add_menu_items' auto-expand. Skipped for a menu not known locally.
       let parent = ctx.state.menus.store.get(menuUid);
       if (parent !== undefined && newDay > parent.days) {
         const expanded: Menu = { ...parent, days: newDay };
@@ -119,7 +114,6 @@ export const moveMenuItemTool = defineTool(
         });
         if (commitErr) return commitErr;
         parent = persistedMenu;
-        extendedTo = newDay;
       }
 
       // (B) Re-sequence the moved item to the END of the menu's order_flag run
@@ -155,8 +149,7 @@ export const moveMenuItemTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      const extendNote = extendedTo !== null ? `Extended the menu to ${extendedTo.toString()} day(s). ` : "";
-      return toolResult(`${extendNote}Menu item "${saved.name}" moved to day ${saved.day.toString()}.`, structured);
+      return structuredResult(structured);
     };
   },
 );

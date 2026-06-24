@@ -78,7 +78,7 @@ describe("add_menu_items tool", () => {
     expect(saved[1]!.name).toBe("Soup");
     expect(saved[1]!.typeUid).toBe("breakfast-uid");
     expect(saved.every((i) => !i.deleted)).toBe(true);
-    expect(text).toContain('Added 2 item(s) to menu "Holiday"');
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(2);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
     expect(kh.state().items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
   });
@@ -237,7 +237,8 @@ describe("add_menu_items tool", () => {
     expect(vi.mocked(kh.client().saveMenus).mock.invocationCallOrder[0]!).toBeLessThan(
       vi.mocked(kh.client().saveMenuItems).mock.invocationCallOrder[0]!,
     );
-    expect(text).toContain('Extended menu "Holiday" to 3 day(s).');
+    // The auto-extend advisory is gone; the added item landed on day 3 in the JSON payload.
+    expect((JSON.parse(text) as { items: Array<{ day: number }> }).items[0]!.day).toBe(3);
     expect(kh.state().menus.store.get("m-1" as MenuUid)!.days).toBe(3);
   });
 

@@ -5,9 +5,9 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuReadOutputSchema, menuToMarkdown, menuToReadStructured } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToReadStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -70,7 +70,7 @@ export const createMenuTool = defineTool(
             structuredContent: structured,
           });
           if (commitErr) return commitErr;
-          return toolResult(menuToMarkdown(created, [], mealTypes), structured);
+          return structuredResult(structured);
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveMenus (create_menu) failed");

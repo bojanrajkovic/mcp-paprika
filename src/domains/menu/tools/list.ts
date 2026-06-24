@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { structuredResult } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -42,23 +42,13 @@ export const listMenusTool = defineTool(
         .getAll()
         .sort((a, b) => a.orderFlag - b.orderFlag || a.name.localeCompare(b.name));
 
-      if (all.length === 0) {
-        return toolResult("No menus found.", { items: [] });
-      }
-
-      // Item count resolved once per menu, feeding both the text and the structured row.
       const items = all.map((menu) => ({
         uid: menu.uid,
         name: menu.name,
         itemCount: ctx.state.items.store.getByMenuUid(menu.uid).length,
         days: menu.days,
       }));
-      const lines = items.map((m) => {
-        const dayLabel = m.days === 1 ? "day" : "days";
-        return `- **${m.name}** (${m.itemCount.toString()} items, ${m.days.toString()} ${dayLabel}) — \`${m.uid}\``;
-      });
-
-      return toolResult(lines.join("\n"), { items });
+      return structuredResult({ items });
     };
   },
 );

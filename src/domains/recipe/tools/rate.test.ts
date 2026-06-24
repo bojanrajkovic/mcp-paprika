@@ -13,15 +13,15 @@ describe("rate_recipe tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("sets rating and renders markdown with updated star rating", async () => {
+  it("sets rating and the text JSON carries the updated rating", async () => {
     const recipe = makeRecipe({ rating: 0 });
     const updated = makeRecipe({ uid: recipe.uid, rating: 4 });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
-    const text = await kh.callToolText("rate_recipe", { uid: recipe.uid, rating: 4 });
+    const json = await kh.callToolJson("rate_recipe", { uid: recipe.uid, rating: 4 });
 
-    expect(text).toContain("**Rating:** 4/5");
+    expect(json).toMatchObject({ uid: recipe.uid, rating: 4 });
     expect(kh.client().saveRecipe).toHaveBeenCalledWith(expect.objectContaining({ rating: 4 }));
   });
 
