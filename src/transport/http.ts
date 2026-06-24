@@ -115,7 +115,11 @@ export function accessLog(log: Logger) {
       // and guarantees access-log telemetry for every request.
       const durationMs = Math.round(performance.now() - t0);
       const status = c.res.status;
-      const fields = { method: c.req.method, path: c.req.path, status, durationMs };
+      // The mcp-session-id header groups a client's /mcp request sequence into one
+      // session (and ties back to its `mcp client connected` fingerprint); absent on
+      // initialize and non-/mcp routes.
+      const session = c.req.header?.(MCP_SESSION_HEADER);
+      const fields = { method: c.req.method, path: c.req.path, status, durationMs, ...(session && { session }) };
 
       if (status >= 500) {
         log.error(fields, "http request 5xx");
