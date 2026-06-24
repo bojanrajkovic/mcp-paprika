@@ -96,10 +96,12 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   // arrives before the initialized NOTIFICATION that fires oninitialized, so the
   // captured value is ready by then.
   let requestedProtocolVersion: string | undefined;
+  let requestedCapabilities: unknown;
   server.server.oninitialized = () => {
     const fp = recordClientConnection(server.server, {
       transport: "stdio",
       protocolVersion: requestedProtocolVersion,
+      rawCapabilities: requestedCapabilities,
     });
     tlog.info({ client: fp }, "mcp client connected");
   };
@@ -111,7 +113,11 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   // it with one argument (stdio carries no per-request `extra`/authInfo), so the wrap
   // forwards just `message` — there is nothing else to pass.
   transport.onmessage = (message) => {
-    if (isInitializeRequest(message)) requestedProtocolVersion = message.params.protocolVersion;
+    if (isInitializeRequest(message)) {
+      requestedProtocolVersion = message.params.protocolVersion;
+      // The RAW capabilities (before the SDK strips `extensions`, the apps/widget axis).
+      requestedCapabilities = message.params.capabilities;
+    }
     deliver?.(message);
   };
   tlog.info("server ready");

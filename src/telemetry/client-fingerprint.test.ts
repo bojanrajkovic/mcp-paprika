@@ -6,8 +6,11 @@ import {
   ATTR_CLIENT_CAP_ELICITATION,
   ATTR_CLIENT_CAP_ELICITATION_FORM,
   ATTR_CLIENT_CAP_EXPERIMENTAL,
+  ATTR_CLIENT_CAP_EXTENSIONS,
   ATTR_CLIENT_CAP_ROOTS,
   ATTR_CLIENT_CAP_SAMPLING,
+  ATTR_CLIENT_CAP_UI,
+  ATTR_CLIENT_CAP_UI_MIME_TYPES,
   ATTR_CLIENT_NAME,
   ATTR_CLIENT_PROTOCOL_VERSION,
   ATTR_CLIENT_TITLE,
@@ -58,6 +61,27 @@ describe("recordClientConnection", () => {
     expect(a[ATTR_CLIENT_CAP_ELICITATION]).toBe(true);
     expect(a[ATTR_CLIENT_CAP_ELICITATION_FORM]).toBe(true);
     expect(a[ATTR_CLIENT_CAP_EXPERIMENTAL]).toBe("io.modelcontextprotocol/apps");
+    expect(a[ATTR_CLIENT_CAP_UI]).toBe(false); // no `extensions` advertised here
+  });
+
+  it("captures the apps/UI extension (io.modelcontextprotocol/ui) the SDK schema strips", () => {
+    // The UI capability lives under a top-level `extensions` key — pass it as the RAW
+    // capabilities, since the SDK's getClientCapabilities() would drop it entirely.
+    const rawCapabilities = {
+      roots: {},
+      extensions: {
+        "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app", "text/html+mcp"] },
+      },
+    };
+    const server = stub({ name: "claude-ai", version: "0.1.0" }, {});
+    recordClientConnection(server, { transport: "stdio", rawCapabilities });
+
+    const a = telemetry.spansNamed(CONNECT_SPAN)[0]!.attributes;
+    expect(a[ATTR_CLIENT_CAP_UI]).toBe(true);
+    expect(a[ATTR_CLIENT_CAP_UI_MIME_TYPES]).toBe("text/html;profile=mcp-app,text/html+mcp");
+    expect(a[ATTR_CLIENT_CAP_EXTENSIONS]).toBe("io.modelcontextprotocol/ui");
+    // The logged fingerprint keeps the raw capability tree verbatim (extensions intact).
+    expect(clientFingerprint(server)?.capabilities).toEqual(rawCapabilities);
   });
 
   it("omits optional attributes when the client did not advertise them", () => {
@@ -106,12 +130,13 @@ describe("recordClientConnection", () => {
       [ATTR_CLIENT_VERSION_MAJOR]: "2",
       [ATTR_MCP_PAPRIKA_TRANSPORT]: "stdio",
     });
-    // clientFingerprint: the full object the disconnect log reads.
+    // clientFingerprint: the full object the disconnect log reads — capabilities is
+    // the RAW tree, logged verbatim (here the parsed fallback, since no rawCapabilities).
     expect(clientFingerprint(server)).toMatchObject({
       name: "Cursor",
       version: "2.0.1",
       protocolVersion: "2025-03-26",
-      capabilities: { sampling: true, roots: false },
+      capabilities: { sampling: {} },
     });
   });
 

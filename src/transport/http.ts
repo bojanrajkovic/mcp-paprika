@@ -430,6 +430,10 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
       const fp = recordClientConnection(server.server, {
         transport: "http",
         protocolVersion: body.params.protocolVersion,
+        // The RAW capabilities (from the parsed initialize body) — they carry the
+        // `extensions` map (the apps/widget `io.modelcontextprotocol/ui` axis) that
+        // the SDK's getClientCapabilities() strips.
+        rawCapabilities: body.params.capabilities,
       });
       log.info({ client: fp }, "mcp client connected");
     };

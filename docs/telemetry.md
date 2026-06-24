@@ -50,19 +50,24 @@ At the MCP `initialize` handshake, each session's client fingerprint is captured
 
 **`mcp_paprika.client.connect` span** (point-in-time, opened and closed at the handshake — not a session-lifetime span, which would never export until close). Attributes:
 
-| Attribute                                 | Example                        | Notes                                            |
-| ----------------------------------------- | ------------------------------ | ------------------------------------------------ |
-| `mcp_paprika.client.name`                 | `claude-ai`, `Claude Code`     | client app name                                  |
-| `mcp_paprika.client.version`              | `1.4.2`                        | full version (span only)                         |
-| `mcp_paprika.client.version_major`        | `1`                            | bucketed version (the metric dimension)          |
-| `mcp_paprika.client.title`                | `Claude`                       | when advertised                                  |
-| `mcp_paprika.client.protocol_version`     | `2025-06-18`                   | the protocol version the client requested        |
-| `mcp_paprika.transport`                   | `stdio` \| `http`              | shared transport dimension                       |
-| `mcp_paprika.client.cap.roots`            | `true`                         | advertised `roots` capability                    |
-| `mcp_paprika.client.cap.sampling`         | `false`                        | advertised `sampling` capability                 |
-| `mcp_paprika.client.cap.elicitation`      | `true`                         | advertised `elicitation` capability              |
-| `mcp_paprika.client.cap.elicitation_form` | `true`                         | form-mode (the confirm/pick gates read this)     |
-| `mcp_paprika.client.cap.experimental`     | `io.modelcontextprotocol/apps` | sorted, comma-joined keys (the apps/widget axis) |
+| Attribute                                 | Example                      | Notes                                                             |
+| ----------------------------------------- | ---------------------------- | ----------------------------------------------------------------- |
+| `mcp_paprika.client.name`                 | `claude-ai`, `Claude Code`   | client app name                                                   |
+| `mcp_paprika.client.version`              | `1.4.2`                      | full version (span only)                                          |
+| `mcp_paprika.client.version_major`        | `1`                          | bucketed version (the metric dimension)                           |
+| `mcp_paprika.client.title`                | `Claude`                     | when advertised                                                   |
+| `mcp_paprika.client.protocol_version`     | `2025-06-18`                 | the protocol version the client requested                         |
+| `mcp_paprika.transport`                   | `stdio` \| `http`            | shared transport dimension                                        |
+| `mcp_paprika.client.cap.roots`            | `true`                       | advertised `roots` capability                                     |
+| `mcp_paprika.client.cap.sampling`         | `false`                      | advertised `sampling` capability                                  |
+| `mcp_paprika.client.cap.elicitation`      | `true`                       | advertised `elicitation` capability                               |
+| `mcp_paprika.client.cap.elicitation_form` | `true`                       | form-mode (the confirm/pick gates read this)                      |
+| `mcp_paprika.client.cap.ui`               | `true`                       | the apps/widget axis — the `io.modelcontextprotocol/ui` extension |
+| `mcp_paprika.client.cap.ui_mime_types`    | `text/html;profile=mcp-app`  | the UI extension's rendered MIME types, comma-joined (span only)  |
+| `mcp_paprika.client.cap.extensions`       | `io.modelcontextprotocol/ui` | sorted, comma-joined `extensions` keys (span only)                |
+| `mcp_paprika.client.cap.experimental`     | `…`                          | sorted, comma-joined `experimental` keys (span only)              |
+
+The **log** (`mcp client connected`) additionally carries the **entire raw `capabilities` tree verbatim** under `client.capabilities` — the future-proof record, and the only place the apps/widget capability is visible whole. It must come from the raw initialize params, because the SDK's `ClientCapabilities` schema **strips** every key it does not model (`roots`/`sampling`/`elicitation`/`experimental`) — including the top-level `extensions` map where `io.modelcontextprotocol/ui` (with its `mimeTypes`) lives. So a host that supports widgets (Claude Desktop, claude-ai) shows `cap.ui=true` here even though `getClientCapabilities()` would report nothing.
 
 **`mcp_paprika.client.connections` counter** — one per connection, labeled only by the cardinality-bounded census slice: `mcp_paprika.client.name`, `mcp_paprika.client.version_major`, `mcp_paprika.transport`. The same slice labels the `mcp.server.session.duration` histogram and tags every `tools/call` span.
 

@@ -37,12 +37,21 @@ export interface FingerprintServer {
   getClientCapabilities(): ClientCapabilities | undefined;
 }
 
+/** The MCP UI / apps-widget capability key, advertised by hosts under `capabilities.extensions`. */
+export const MCP_UI_EXTENSION = "io.modelcontextprotocol/ui";
+
 /**
  * A host's connection fingerprint, in loggable shape: the structured object the
- * transport logs at connect AND the source of every telemetry attribute. The
- * capability tree is flattened to booleans (`elicitationForm` is the field the
- * confirm/pick gates check), with `experimental` keys carried as a list (the
- * apps/widget axis lands there).
+ * transport logs at connect AND the source of every telemetry attribute.
+ *
+ * `capabilities` is the **raw, verbatim** capability tree the client sent at
+ * `initialize` — logged whole, on purpose: it is future-proof (any capability,
+ * known or not, shows up) and it carries the top-level `extensions` map where the
+ * apps/widget capability (`io.modelcontextprotocol/ui`, with its rendered MIME
+ * types) lives — a key the SDK's `ClientCapabilities` schema STRIPS, so it must
+ * come from the raw initialize params rather than `getClientCapabilities()`. The
+ * span (which can't hold a nested object) derives bounded scalars from it; the log
+ * keeps the whole thing.
  */
 export interface ClientFingerprint {
   readonly name: string;
@@ -51,13 +60,7 @@ export interface ClientFingerprint {
   readonly title?: string;
   readonly protocolVersion?: string;
   readonly transport: TransportKind;
-  readonly capabilities: {
-    readonly roots: boolean;
-    readonly sampling: boolean;
-    readonly elicitation: boolean;
-    readonly elicitationForm: boolean;
-    readonly experimental: ReadonlyArray<string>;
-  };
+  readonly capabilities: Readonly<Record<string, unknown>>;
 }
 
 // Custom telemetry names (the `mcp_paprika.` prefix per ADR-0018; the
@@ -84,8 +87,14 @@ export const ATTR_CLIENT_CAP_SAMPLING = "mcp_paprika.client.cap.sampling";
 export const ATTR_CLIENT_CAP_ELICITATION = "mcp_paprika.client.cap.elicitation";
 /** Whether the client advertised FORM-mode elicitation (the field the confirm/pick gates check). */
 export const ATTR_CLIENT_CAP_ELICITATION_FORM = "mcp_paprika.client.cap.elicitation_form";
-/** Sorted, comma-joined `experimental` capability keys (the apps/widget axis lands here). SPAN only; omitted when none. */
+/** Sorted, comma-joined `experimental` capability keys. SPAN only; omitted when none. */
 export const ATTR_CLIENT_CAP_EXPERIMENTAL = "mcp_paprika.client.cap.experimental";
+/** Whether the client advertised the `io.modelcontextprotocol/ui` apps/widget extension. */
+export const ATTR_CLIENT_CAP_UI = "mcp_paprika.client.cap.ui";
+/** The UI extension's rendered MIME types, comma-joined. SPAN only; omitted when no UI capability. */
+export const ATTR_CLIENT_CAP_UI_MIME_TYPES = "mcp_paprika.client.cap.ui_mime_types";
+/** Sorted, comma-joined `extensions` keys (the open-ended capability axis the SDK schema strips). SPAN only; omitted when none. */
+export const ATTR_CLIENT_CAP_EXTENSIONS = "mcp_paprika.client.cap.extensions";
 
 /** Per-connection census; labeled by client name + bucketed version + transport (cardinality-bounded). */
 const clientConnections = lazy(() =>
@@ -126,13 +135,31 @@ function majorVersion(version: string): string {
   return dot === -1 ? version : version.slice(0, dot);
 }
 
-/** Build the loggable fingerprint from the server's post-handshake client reads. */
+/** A record or `{}` — for safely reading the raw, untyped capability tree. */
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+/**
+ * Build the loggable fingerprint from the server's post-handshake client reads.
+ *
+ * Capabilities are read from the RAW initialize `params.capabilities` when the
+ * caller has it (both transports do), NOT `getClientCapabilities()`: the SDK's
+ * `ClientCapabilities` schema strips every key it does not model — including the
+ * top-level `extensions` map where the apps/widget capability
+ * (`io.modelcontextprotocol/ui`) lives — so the parsed view silently loses it.
+ * The raw object is the authoritative source; it falls back to the parsed view
+ * only when no raw object was threaded in (e.g. a unit test).
+ */
 function describeClient(
   server: FingerprintServer,
-  opts: { readonly transport: TransportKind; readonly protocolVersion?: string | undefined },
+  opts: {
+    readonly transport: TransportKind;
+    readonly protocolVersion?: string | undefined;
+    readonly rawCapabilities?: unknown;
+  },
 ): ClientFingerprint {
   const info = server.getClientVersion();
-  const caps = server.getClientCapabilities();
   const version = info?.version ?? "unknown";
   return {
     name: clampLabel(info?.name ?? "unknown", MAX_NAME_LABEL),
@@ -141,13 +168,31 @@ function describeClient(
     ...(info?.title !== undefined && { title: info.title }),
     ...(opts.protocolVersion !== undefined && { protocolVersion: opts.protocolVersion }),
     transport: opts.transport,
-    capabilities: {
-      roots: caps?.roots !== undefined,
-      sampling: caps?.sampling !== undefined,
-      elicitation: caps?.elicitation !== undefined,
-      elicitationForm: caps?.elicitation?.form !== undefined,
-      experimental: caps?.experimental ? Object.keys(caps.experimental).sort() : [],
-    },
+    // The raw capability tree, verbatim (logged whole). Prefer the RAW initialize
+    // params — they carry the `extensions` map the SDK's getClientCapabilities()
+    // strips; fall back to the parsed view only when no raw object was threaded in.
+    capabilities: asRecord(opts.rawCapabilities ?? server.getClientCapabilities()),
+  };
+}
+
+/** The UID-or-text-free scalar slice the connect SPAN carries, derived from the raw capability tree. */
+function capabilitySpanAttrs(caps: Readonly<Record<string, unknown>>): Attributes {
+  const extensions = asRecord(caps["extensions"]);
+  const uiExt = extensions[MCP_UI_EXTENSION];
+  const uiMimeTypes = ((asRecord(uiExt)["mimeTypes"] ?? []) as ReadonlyArray<unknown>)
+    .filter((m): m is string => typeof m === "string")
+    .join(",");
+  const experimental = Object.keys(asRecord(caps["experimental"])).sort().join(",");
+  const extensionKeys = Object.keys(extensions).sort().join(",");
+  return {
+    [ATTR_CLIENT_CAP_ROOTS]: caps["roots"] !== undefined,
+    [ATTR_CLIENT_CAP_SAMPLING]: caps["sampling"] !== undefined,
+    [ATTR_CLIENT_CAP_ELICITATION]: caps["elicitation"] !== undefined,
+    [ATTR_CLIENT_CAP_ELICITATION_FORM]: asRecord(caps["elicitation"])["form"] !== undefined,
+    [ATTR_CLIENT_CAP_UI]: uiExt !== undefined,
+    ...(experimental.length > 0 && { [ATTR_CLIENT_CAP_EXPERIMENTAL]: experimental }),
+    ...(extensionKeys.length > 0 && { [ATTR_CLIENT_CAP_EXTENSIONS]: extensionKeys }),
+    ...(uiMimeTypes.length > 0 && { [ATTR_CLIENT_CAP_UI_MIME_TYPES]: uiMimeTypes }),
   };
 }
 
@@ -186,7 +231,12 @@ function censusAttrs(fp: ClientFingerprint): Attributes {
  */
 export function recordClientConnection(
   server: FingerprintServer,
-  opts: { readonly transport: TransportKind; readonly protocolVersion?: string | undefined },
+  opts: {
+    readonly transport: TransportKind;
+    readonly protocolVersion?: string | undefined;
+    /** The RAW initialize `params.capabilities` — carries `extensions`, which the SDK schema strips. */
+    readonly rawCapabilities?: unknown;
+  },
 ): ClientFingerprint {
   // Idempotent per session server: a client that re-sends the `initialized`
   // notification (off-spec, but cheap to tolerate) must not double-count the census
@@ -197,17 +247,12 @@ export function recordClientConnection(
   const fp = describeClient(server, opts);
   const census = censusAttrs(fp);
 
-  const experimental = fp.capabilities.experimental.join(",");
   const spanAttrs: Attributes = {
     ...census,
     [ATTR_CLIENT_VERSION]: fp.version,
-    [ATTR_CLIENT_CAP_ROOTS]: fp.capabilities.roots,
-    [ATTR_CLIENT_CAP_SAMPLING]: fp.capabilities.sampling,
-    [ATTR_CLIENT_CAP_ELICITATION]: fp.capabilities.elicitation,
-    [ATTR_CLIENT_CAP_ELICITATION_FORM]: fp.capabilities.elicitationForm,
+    ...capabilitySpanAttrs(fp.capabilities),
     ...(fp.title !== undefined && { [ATTR_CLIENT_TITLE]: fp.title }),
     ...(fp.protocolVersion !== undefined && { [ATTR_CLIENT_PROTOCOL_VERSION]: fp.protocolVersion }),
-    ...(experimental.length > 0 && { [ATTR_CLIENT_CAP_EXPERIMENTAL]: experimental }),
   };
 
   getTracer().startSpan("mcp_paprika.client.connect", { kind: SpanKind.INTERNAL, attributes: spanAttrs }).end();
