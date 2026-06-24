@@ -327,9 +327,10 @@ export function defineTool<
           const structuredOutput = result.structuredContent !== undefined;
           op.span.setAttribute(ATTR_TOOL_STRUCTURED_OUTPUT, structuredOutput);
           op.end({ errorType, isError: errorType === "tool_error" });
-          // Uniform per-call completion line (debug) closing every "tool invoked"
-          // with the outcome; the client fingerprint is on the span (pivot via trace_id).
-          log.debug(
+          // Uniform per-call completion line (info, matching the "tool invoked"
+          // open) closing every call with its outcome; the client fingerprint is on
+          // the span (pivot via trace_id). The full args stay on the separate debug line.
+          log.info(
             {
               tool: spec.name,
               structuredOutput,
@@ -346,7 +347,7 @@ export function defineTool<
           // and a thrown call is not an orphan invocation in the span/log stream.
           op.span.setAttribute(ATTR_TOOL_STRUCTURED_OUTPUT, false);
           op.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
-          log.debug({ tool: spec.name, structuredOutput: false, isError: true, threw: true }, "tool completed");
+          log.info({ tool: spec.name, structuredOutput: false, isError: true, threw: true }, "tool completed");
           throw cause;
         };
         // The guard chain runs inside the same try as the body, so even a
