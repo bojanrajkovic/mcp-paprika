@@ -9,9 +9,11 @@
   import WidgetShell from "../shared/WidgetShell.svelte";
   import { groupConsecutive } from "../shared/group.js";
   import {
+    blobDataUri,
     callTool,
     connectHost,
     errorText,
+    readResource,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
 
@@ -34,9 +36,16 @@
     name: string;
     servings: string | null;
     totalTime: string | null;
+    photoResourceUri: string | null;
     ingredients: Ingredient[];
     steps: Step[];
   }
+
+  // The cover photo at a hero width, read from the ui://recipe/{uid}/photo proxy into a
+  // data: URI; null until loaded, when the recipe has no photo, or when the read fails
+  // (the widget just shows no photo). The same image backs the header thumbnail and the
+  // done-screen hero — one read, downscaled by CSS.
+  const HERO_PX = 600;
 
   // The four built-in Paprika meal types, by their exact built-in names (the 4th is
   // "Snacks", plural) so {name} resolves to the built-in instead of auto-creating a
@@ -59,6 +68,7 @@
   let reanchorOpen = $state(false);
   let reanchorText = $state("");
   let logState = $state<"idle" | "logging" | "logged">("idle");
+  let photoSrc = $state<string | null>(null);
   // The error result's remediation text (cold-start / not-found / a validateCookParse
   // hint), shown verbatim on the error screen — display only, never parsed.
   let errorMsg = $state<string | null>(null);
@@ -125,11 +135,13 @@
       }
       return;
     }
+    const photoUri = d["photoResourceUri"];
     data = {
       recipeUid: uid,
       name: typeof d["name"] === "string" ? d["name"] : "Recipe",
       servings: typeof d["servings"] === "string" ? d["servings"] : null,
       totalTime: typeof d["totalTime"] === "string" ? d["totalTime"] : null,
+      photoResourceUri: typeof photoUri === "string" ? photoUri : null,
       ingredients: (d["ingredients"] as unknown[]).map(toIngredient),
       steps: (d["steps"] as unknown[]).map(toStep),
     };
@@ -140,6 +152,20 @@
     logState = "idle";
     errorMsg = null;
     phase = "ready";
+    void loadHeroPhoto(data.photoResourceUri);
+  }
+
+  // Read the cover photo into a data: URI for the header thumbnail + done-screen hero.
+  // Guarded against a late landing: if the recipe changed underneath us (a re-anchor to
+  // a different recipe), the stored photoResourceUri no longer matches and we drop it.
+  async function loadHeroPhoto(uri: string | null) {
+    photoSrc = null;
+    if (uri === null) return;
+    const src = blobDataUri(
+      await readResource(app, `${uri}?w=${HERO_PX.toString()}`),
+      "image/jpeg",
+    );
+    if (data?.photoResourceUri === uri) photoSrc = src;
   }
 
   function toIngredient(raw: unknown): Ingredient {
@@ -270,18 +296,23 @@
     />
   {:else}
     <header>
-      <div class="title">
-        <h1>{data.name}</h1>
-        {#if data.servings || data.totalTime}
-          <p class="meta">
-            {[
-              data.servings ? `${data.servings} servings` : null,
-              data.totalTime,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
+      <div class="head-left">
+        {#if photoSrc}
+          <img class="thumb" src={photoSrc} alt="" />
         {/if}
+        <div class="title">
+          <h1>{data.name}</h1>
+          {#if data.servings || data.totalTime}
+            <p class="meta">
+              {[
+                data.servings ? `${data.servings} servings` : null,
+                data.totalTime,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          {/if}
+        </div>
       </div>
       <div class="tabs">
         <button
@@ -352,7 +383,11 @@
             >Review the recipe again</button
           >
         {:else}
-          <div class="done-icon">🍽️</div>
+          {#if photoSrc}
+            <img class="hero" src={photoSrc} alt={data.name} />
+          {:else}
+            <div class="done-icon">🍽️</div>
+          {/if}
           <p class="done-title">Nicely done — you made {data.name}.</p>
           <div class="split">
             <button
@@ -469,6 +504,20 @@
     padding-top: calc(16px + env(safe-area-inset-top));
     background: linear-gradient(var(--bg) 80%, transparent);
     flex: none;
+  }
+  .head-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .thumb {
+    flex: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 9px;
+    object-fit: cover;
+    border: 1px solid color-mix(in oklch, var(--ink) 12%, transparent);
   }
   .title h1 {
     margin: 0;
@@ -812,6 +861,14 @@
   }
   .done-icon {
     font-size: 34px;
+  }
+  .hero {
+    width: 100%;
+    max-width: 260px;
+    max-height: 190px;
+    object-fit: cover;
+    border-radius: 16px;
+    border: 1px solid color-mix(in oklch, var(--ink) 12%, transparent);
   }
   .done-title {
     margin: 0;
