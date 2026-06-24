@@ -16,10 +16,10 @@ describe("list_meal_types tool", () => {
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
-  it("empty synced catalog returns a helpful message", async () => {
+  it("empty synced catalog returns an empty items array", async () => {
     kh.seed({ mealTypes: [] });
-    const text = await kh.callToolText("list_meal_types", {});
-    expect(text).toContain("No meal types found.");
+    const { items } = await kh.callToolJson<{ items: Array<unknown> }>("list_meal_types", {});
+    expect(items).toEqual([]);
   });
 
   it("emits structured rows with uid, name, and originalType (R1)", async () => {
@@ -64,40 +64,27 @@ describe("list_meal_types tool", () => {
     expect(text.indexOf("Dessert")).toBeLessThan(text.indexOf("Supper"));
   });
 
-  it("marks built-in vs custom and renders schedule and UID", async () => {
-    const dinner = makeMealType({
-      name: "Dinner",
-      orderFlag: 2,
-      originalType: 2,
-      exportAllDay: false,
-      exportTime: 64800, // 18:00
-    });
-    const brunch = makeMealType({
-      name: "Brunch",
-      orderFlag: 4,
-      originalType: null,
-      exportAllDay: true,
-      exportTime: 0,
-    });
+  it("distinguishes built-in vs custom via originalType and carries each UID", async () => {
+    // The export schedule (clock time / all-day) was display-only Markdown and is not in
+    // the structured row, so it is no longer surfaced; built-in vs custom rides originalType.
+    const dinner = makeMealType({ name: "Dinner", orderFlag: 2, originalType: 2 });
+    const brunch = makeMealType({ name: "Brunch", orderFlag: 4, originalType: null });
     kh.seed({ mealTypes: [dinner, brunch] });
-    const text = await kh.callToolText("list_meal_types", {});
-    expect(text).toContain("**Dinner** (built-in, 18:00)");
-    expect(text).toContain(`\`${dinner.uid}\``);
-    expect(text).toContain("**Brunch** (custom, all-day)");
-    expect(text).toContain(`\`${brunch.uid}\``);
+    const { items } = await kh.callToolJson<{
+      items: Array<{ uid: string; name: string; originalType: number | null }>;
+    }>("list_meal_types", {});
+    expect(items).toContainEqual({ uid: dinner.uid, name: "Dinner", originalType: 2 });
+    expect(items).toContainEqual({ uid: brunch.uid, name: "Brunch", originalType: null });
   });
 
-  it("each meal type is on its own line with dash prefix", async () => {
+  it("returns one row per meal type", async () => {
     kh.seed({
       mealTypes: [
         makeMealType({ name: "Breakfast", orderFlag: 0, originalType: 0 }),
         makeMealType({ name: "Lunch", orderFlag: 1, originalType: 1 }),
       ],
     });
-    const text = await kh.callToolText("list_meal_types", {});
-    const lines = text.split("\n").filter((l) => l.trim().length > 0);
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toMatch(/^- \*\*/);
-    expect(lines[1]).toMatch(/^- \*\*/);
+    const { items } = await kh.callToolJson<{ items: Array<unknown> }>("list_meal_types", {});
+    expect(items).toHaveLength(2);
   });
 });

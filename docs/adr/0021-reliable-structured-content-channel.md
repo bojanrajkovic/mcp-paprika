@@ -1,6 +1,6 @@
 # ADR-0021: Trust structuredContent as the model's reliable identifier channel
 
-**Status:** Accepted (2026-06-21)
+**Status:** Accepted (2026-06-21) — clean-text half superseded by [ADR-0023](0023-json-or-widget-tool-results.md) (the premise that every host forwards `structuredContent` to the model does not hold; the text now carries the same payload as JSON). The coverage rule below still governs which tools are schema-bearing.
 
 ## Context
 

@@ -1,8 +1,6 @@
-import { DateTime } from "luxon";
 import { z } from "zod";
 
 import type { MealTypeApi } from "../../meal-type/api.js";
-import type { RecipeApi } from "../../recipe/api.js";
 import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
@@ -10,12 +8,11 @@ import { sortCatalog } from "../../../shared/catalog.js";
 import { MealTypeUidSchema } from "../../meal-type/ids.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MealUidSchema } from "../ids.js";
-import { mealToMarkdown } from "../meal-helpers.js";
 
 /**
- * Meal-domain tool helpers — the per-date `order_flag` assigner and the meal-card
- * renderers. Readiness gating lives in `guards.ts`; meal-type spec resolution goes
- * through `deps["meal-type"].resolveSpec(spec)` (the meal-type module owns that
+ * Meal-domain tool helpers — the per-date `order_flag` assigner and the structured
+ * meal-row builders. Readiness gating lives in `guards.ts`; meal-type spec resolution
+ * goes through `deps["meal-type"].resolveSpec(spec)` (the meal-type module owns that
  * resolver and publishes it on its api).
  */
 
@@ -37,27 +34,10 @@ export function makeMealOrderFlagAssigner(state: MealState): (date: string) => n
 }
 
 /**
- * Resolve a meal's display names from the deps, then render its markdown card.
- * Wraps the pure `mealToMarkdown` with the lookups every meal-write response path
- * repeats: typeName from the meal-type catalog, and recipeName from the recipe
- * store. Meals with `typeUid: null` (legacy, predating the catalog) fall back to
- * the integer-labelled `Type N`; a non-null typeUid that misses the catalog is a
- * DANGLING reference (its type was deleted) and renders no type line
- * at all. `recipeUid: null` renders freeform.
- */
-export function renderMealCard(meal: Readonly<Meal>, recipe: RecipeApi, mealType: MealTypeApi): string {
-  const typeNameByUid = new Map<string, string>();
-  for (const mt of mealType.getAll()) typeNameByUid.set(mt.uid, mt.name);
-  const typeName = meal.typeUid !== null ? (typeNameByUid.get(meal.typeUid) ?? null) : `Type ${meal.type.toString()}`;
-  const recipeName = meal.recipeUid !== null ? (recipe.get(meal.recipeUid)?.name ?? null) : null;
-  return mealToMarkdown(meal, typeName, recipeName);
-}
-
-/**
  * Build the two meal-type lookup maps from the catalog in one pass: `byUid` (the
  * primary key) and `byOriginalType` (the legacy integer fallback for meals predating
- * the catalog, populated only for built-in types). Shared by the date-grouped text
- * renderer and the structured-row resolver so both read the catalog the same way.
+ * the catalog, populated only for built-in types). Drives the structured-row type-name
+ * resolver.
  */
 function mealTypeLookups(mealType: MealTypeApi): {
   byUid: Map<string, string>;
@@ -74,78 +54,15 @@ function mealTypeLookups(mealType: MealTypeApi): {
   return { byUid, byOriginalType };
 }
 
-function formatMealLine(
-  meal: Readonly<Meal>,
-  typeNames: Map<string, string>,
-  typeByOriginalType: Map<number, string>,
-): { typeName: string; entry: string } {
-  // typeUid is the primary lookup, but older meals (predating Paprika's
-  // mealtypes catalog) carry typeUid: null and rely on the `type` integer
-  // (which corresponds to MealType.originalType in the catalog). A non-null
-  // typeUid that misses the catalog is a DANGLING reference (its type was
-  // deleted) and groups under "—" rather than a misleading Type N.
-  const typeName =
-    meal.typeUid !== null
-      ? (typeNames.get(meal.typeUid) ?? "—")
-      : (typeByOriginalType.get(meal.type) ?? `Type ${meal.type.toString()}`);
-  const isFreeform = meal.recipeUid === null || meal.recipeUid === "";
-  const entry = isFreeform ? `${meal.name} *(freeform)*` : meal.name;
-  return { typeName, entry };
-}
-
 /**
- * Render meals as a date-grouped calendar section: one `### EEE dd` heading per
- * calendar day — in the order the meals are supplied, so the CALLER controls
- * chronology — then one `- **Type** · entry, entry` bullet per meal type on that
- * day, with freeform meals annotated. Returns just the grouped body.
- */
-export function renderMealsGroupedByDate(meals: ReadonlyArray<Readonly<Meal>>, mealType: MealTypeApi): string {
-  const { byUid: typeNames, byOriginalType: typeByOriginalType } = mealTypeLookups(mealType);
-
-  const grouped = new Map<string, Array<{ typeName: string; entry: string }>>();
-  for (const meal of meals) {
-    const dateKey = meal.date.slice(0, 10);
-    let entries = grouped.get(dateKey);
-    if (entries === undefined) {
-      entries = [];
-      grouped.set(dateKey, entries);
-    }
-    entries.push(formatMealLine(meal, typeNames, typeByOriginalType));
-  }
-
-  const lines: Array<string> = [];
-  for (const [dateKey, entries] of grouped) {
-    const dt = DateTime.fromISO(dateKey, { zone: "utc" });
-    const dayLabel = dt.isValid ? dt.toFormat("EEE dd") : dateKey;
-    lines.push("");
-    lines.push(`### ${dayLabel}`);
-
-    const byType = new Map<string, Array<string>>();
-    for (const { typeName, entry } of entries) {
-      let typeEntries = byType.get(typeName);
-      if (typeEntries === undefined) {
-        typeEntries = [];
-        byType.set(typeName, typeEntries);
-      }
-      typeEntries.push(entry);
-    }
-    for (const [typeName, typeEntries] of byType) {
-      lines.push(`- **${typeName}** · ${typeEntries.join(", ")}`);
-    }
-  }
-  return lines.join("\n");
-}
-
-/**
- * The structured-output row for one meal — the machine-readable
- * counterpart to `renderMealsGroupedByDate`'s human text, shared by `read_meal_plan`
- * and `search_meal_history`. The `uid` is the gap-closer: the rendered text omits it,
- * so without this row the model cannot drive `reschedule_meal` / `delete_meal` /
- * `update_meal` after a read. The fields are exactly what those follow-ups consume —
- * `recipeUid` / `typeUid` / `typeName` / `scale` let the model build an `update_meal`
- * partial without re-querying; `date` is the calendar day `reschedule_meal` takes.
- * The vestigial `type` integer, the internal `orderFlag`, and the non-actionable
- * `isIngredient` / `deleted` are deliberately omitted.
+ * The structured-output row for one meal, shared by `read_meal_plan` and
+ * `search_meal_history`. The `uid` is the gap-closer: without this row the model
+ * cannot drive `reschedule_meal` / `delete_meal` / `update_meal` after a read. The
+ * fields are exactly what those follow-ups consume — `recipeUid` / `typeUid` /
+ * `typeName` / `scale` let the model build an `update_meal` partial without
+ * re-querying; `date` is the calendar day `reschedule_meal` takes. The vestigial
+ * `type` integer, the internal `orderFlag`, and the non-actionable `isIngredient` /
+ * `deleted` are deliberately omitted.
  */
 export const mealRowSchema = z.object({
   uid: MealUidSchema,

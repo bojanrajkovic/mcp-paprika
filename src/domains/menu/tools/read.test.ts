@@ -6,7 +6,7 @@ import type { MenuItemUid, MenuUid } from "../ids.js";
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 const BREAKFAST = makeMealType({
   uid: "breakfast-uid" as MealTypeUid,
@@ -29,16 +29,19 @@ describe("list_menus tool", () => {
 
   it("returns an empty message when no menus exist", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = await kh.callToolText("list_menus", {});
-    expect(text).toBe("No menus found.");
+    const json = await kh.callToolJson<{ items: unknown[] }>("list_menus", {});
+    expect(json.items).toEqual([]);
   });
 
   it("lists each menu with item count, day span, and UID", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 3 });
     const items = [makeMenuItem({ menuUid: "m-1", day: 1 }), makeMenuItem({ menuUid: "m-1", day: 2 })];
     kh.seed({ menus: [menu], menuItems: items, mealTypes: [BREAKFAST, DINNER] });
-    const text = await kh.callToolText("list_menus", {});
-    expect(text).toContain("- **Holiday** (2 items, 3 days) — `m-1`");
+    const json = await kh.callToolJson<{
+      items: Array<{ uid: string; name: string; itemCount: number; days: number }>;
+    }>("list_menus", {});
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0]).toEqual({ uid: "m-1", name: "Holiday", itemCount: 2, days: 3 });
   });
 
   it("emits structured menu rows with uid, item count, and day span (R1)", async () => {
@@ -54,8 +57,11 @@ describe("list_menus tool", () => {
   it("uses singular 'day' for a one-day menu", async () => {
     const menu = makeMenu({ uid: "m-2" as MenuUid, name: "Single", days: 1 });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = await kh.callToolText("list_menus", {});
-    expect(text).toContain("(0 items, 1 day)");
+    const json = await kh.callToolJson<{
+      items: Array<{ uid: string; name: string; itemCount: number; days: number }>;
+    }>("list_menus", {});
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0]).toMatchObject({ name: "Single", itemCount: 0, days: 1 });
   });
 
   it("sorts by orderFlag then name (Paprika order, not alphabetical)", async () => {
@@ -99,13 +105,15 @@ describe("read_menu tool", () => {
     kh.seed({ menus: [menu], menuItems: [item], mealTypes: [BREAKFAST, DINNER] });
     const result = await kh.callTool("read_menu", { lookup: { uid: "m-10" } });
 
-    const text = getText(result);
-    expect(text).toContain("# Dinner Week");
-    expect(text).toContain("**Days:** 2");
-    // The text line is clean — no per-item UID clause (the includeItemUids flag, #353).
-    expect(text).toContain("- **Dinner:** Roast Chicken");
-    expect(text).not.toContain("· item");
-    expect(text).toContain("_(no meals planned)_"); // Day 2 empty
+    // The text is now compact JSON; assert on the parsed payload fields.
+    const json = getJson<{ uid: string; name: string; days: number; items: Array<Record<string, unknown>> }>(result);
+    expect(json.name).toBe("Dinner Week");
+    expect(json.days).toBe(2);
+    // The item is present with its UID (now in the text/JSON channel).
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0]).toMatchObject({ uid: "mi-10", name: "Roast Chicken", typeName: "Dinner" });
+    // The text (compact JSON) does not contain any "· item" markup fragment.
+    expect(getText(result)).not.toContain("· item");
 
     // The UIDs the model chains on (update_menu_item / read_recipe) ride structuredContent.
     const structured = result.structuredContent as { uid: string; days: number; items: Array<Record<string, unknown>> };
@@ -132,8 +140,8 @@ describe("read_menu tool", () => {
   it("resolves a menu by name (case-insensitive)", async () => {
     const menu = makeMenu({ uid: "m-11" as MenuUid, name: "Thanksgiving Dinner" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = await kh.callToolText("read_menu", { lookup: { name: "thanksgiving" } });
-    expect(text).toContain("# Thanksgiving Dinner");
+    const json = await kh.callToolJson<{ name: string }>("read_menu", { lookup: { name: "thanksgiving" } });
+    expect(json.name).toBe("Thanksgiving Dinner");
   });
 
   it("reports no match for an unknown UID", async () => {

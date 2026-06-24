@@ -22,12 +22,12 @@ describe("mark_pantry_item_out_of_stock tool", () => {
     kh.seed({ pantry: [item] });
 
     const result = await kh.callTool("mark_pantry_item_out_of_stock", { uid: "uid-1" });
-    const text = getText(result);
+    const parsed = JSON.parse(getText(result)) as { uid: string; ingredient: string; inStock: boolean };
 
-    expect(text).toContain("Milk");
-    expect(text).toContain("**In stock:** No");
+    expect(parsed.ingredient).toBe("Milk");
+    expect(parsed.inStock).toBe(false);
     expect(kh.client().savePantryItems).toHaveBeenCalledWith([expect.objectContaining({ inStock: false })]);
-    // The updated item rides structuredContent so the model can chain on its UID.
+    // The updated item rides both structuredContent and the JSON text channel.
     expect(result.isError).toBeUndefined();
     const structured = result.structuredContent as { uid: string; inStock: boolean };
     expect(structured.uid).toBe("uid-1");
@@ -92,12 +92,12 @@ describe("restock_pantry_item tool", () => {
     kh.seed({ pantry: [item] });
 
     const result = await kh.callTool("restock_pantry_item", { uid: "uid-2" });
-    const text = getText(result);
+    const parsed = JSON.parse(getText(result)) as { uid: string; ingredient: string; inStock: boolean };
 
-    expect(text).toContain("Butter");
-    expect(text).toContain("**In stock:** Yes");
+    expect(parsed.ingredient).toBe("Butter");
+    expect(parsed.inStock).toBe(true);
     expect(kh.client().savePantryItems).toHaveBeenCalledWith([expect.objectContaining({ inStock: true })]);
-    // The updated item rides structuredContent so the model can chain on its UID.
+    // The updated item rides both structuredContent and the JSON text channel.
     expect(result.isError).toBeUndefined();
     const structured = result.structuredContent as { uid: string; inStock: boolean };
     expect(structured.uid).toBe("uid-2");

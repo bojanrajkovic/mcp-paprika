@@ -5,9 +5,9 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeReadOutputSchema, recipeToMarkdown, recipeToReadStructured } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // Strict schema (exported for direct Zod-validation tests). `.strict()` is
@@ -100,7 +100,7 @@ export const updateRecipeTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(recipeToMarkdown(saved, categoryNames), structured);
+      return structuredResult(structured);
     };
   },
 );

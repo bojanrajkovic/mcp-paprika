@@ -24,8 +24,21 @@ export type PantryItemRow = z.infer<typeof pantryItemRowSchema>;
  * Structured-output payload for `add_pantry_items` — a row per newly-added item
  * (the new UIDs the model chains `update_pantry_item` / `mark_pantry_item_out_of_stock`
  * / `restock_pantry_item` on). Shares {@link pantryItemRowSchema} with `list_pantry_items`.
+ *
+ * `skipped` carries the duplicate-skip notices verbatim — an item that duplicated an
+ * existing ingredient (or an earlier batch entry) is not in `items`, and an existing
+ * duplicate's UID + merge hint appear nowhere else in the payload, so the notice is the
+ * model's only signal that the item was skipped rather than silently dropped. It is
+ * optional because this schema is also `move_grocery_items_to_pantry`'s output, and a
+ * move has no dedup step (it omits the field rather than sending an always-empty array).
  */
-export const addPantryItemsOutputSchema = z.object({ items: z.array(pantryItemRowSchema) });
+export const addPantryItemsOutputSchema = z.object({
+  items: z.array(pantryItemRowSchema),
+  skipped: z
+    .array(z.string())
+    .optional()
+    .describe("Human-readable notices for items skipped as duplicates (add_pantry_items only); omitted when none."),
+});
 
 /**
  * The structured-output payload for `read_pantry_item` — the machine-readable
@@ -55,37 +68,12 @@ export function pantryItemToRow(item: PantryItem, aisles: AisleDisplaySource): P
   };
 }
 
-/** Map a `PantryItem` into its structured read payload, resolving the aisle name through
- * the live catalog (the same resolution {@link pantryItemToMarkdown} uses). */
+/**
+ * Map a `PantryItem` into its structured read payload, resolving the aisle name through
+ * the live catalog. `notes` is on `PantryItem` (the GET wire includes it) but no Paprika
+ * client exposes a UI for it and no captured item has a non-null value, so it is omitted
+ * from display and POST payloads while retained in the schema.
+ */
 export function pantryItemToReadStructured(item: PantryItem, aisles: AisleDisplaySource): PantryItemReadStructured {
   return { ...pantryItemToRow(item, aisles), purchaseDate: item.purchaseDate };
-}
-
-// notes is on PantryItem (the GET wire includes it) but no Paprika client
-// exposes a UI for pantry notes and no captured item has a non-null value.
-// Omitted from display and from POST payloads; retained in the schema so
-// the parser doesn't reject the field if the server starts populating it.
-// The aisle display name resolves through the live catalog (`aisles` — the
-// caller passes `ctx.deps.aisle`, which carries `displayName`).
-export function pantryItemToMarkdown(item: PantryItem, aisles: AisleDisplaySource): string {
-  const lines: Array<string> = [];
-
-  lines.push(`# ${item.ingredient}`);
-  lines.push("");
-
-  if (item.quantity !== "") {
-    lines.push(`**Quantity:** ${item.quantity}`);
-  }
-  const aisleName = aisles.displayName(item);
-  if (aisleName !== "") {
-    lines.push(`**Aisle:** ${aisleName}`);
-  }
-  lines.push(`**In stock:** ${item.inStock ? "Yes" : "No"}`);
-  if (item.expirationDate !== null) {
-    lines.push(`**Expires:** ${item.expirationDate}`);
-  }
-  if (item.purchaseDate !== null) {
-    lines.push(`**Purchased:** ${item.purchaseDate}`);
-  }
-  return lines.join("\n");
 }

@@ -5,15 +5,9 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, toolResult } from "../../../shared/tools.js";
+import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { mealStartGuard } from "./guards.js";
-import {
-  mealToRow,
-  mealTypeRegistry,
-  mealWeekOutputSchema,
-  renderMealsGroupedByDate,
-  resolveMealTypeName,
-} from "./helpers.js";
+import { mealToRow, mealTypeRegistry, mealWeekOutputSchema, resolveMealTypeName } from "./helpers.js";
 
 export const readMealPlanInputSchema = z
   .object({
@@ -102,10 +96,7 @@ export const readMealPlanTool = defineTool(
       const { meals } = ctx.state.store.getInDateRange({ since, until, offset: 0, limit: 500 });
 
       if (meals.length === 0) {
-        return toolResult(
-          `No meals planned between ${since.toFormat("yyyy-MM-dd")} and ${until.toFormat("yyyy-MM-dd")}.`,
-          { weekStart, meals: [], mealTypes },
-        );
+        return structuredResult({ weekStart, meals: [], mealTypes });
       }
 
       // getInDateRange sorts DESC (newest-first); the plan reads forward, so
@@ -116,17 +107,9 @@ export const readMealPlanTool = defineTool(
         return a.type - b.type;
       });
 
-      const count = ascending.length;
-      const header =
-        `**Meal plan: ${since.toFormat("yyyy-MM-dd")} – ${until.toFormat("yyyy-MM-dd")}** ` +
-        `(${count.toString()} meal${count === 1 ? "" : "s"})`;
       const resolveTypeName = resolveMealTypeName(ctx.deps["meal-type"]);
       const mealRows = ascending.map((meal) => mealToRow(meal, resolveTypeName(meal)));
-      return toolResult(`${header}\n${renderMealsGroupedByDate(ascending, ctx.deps["meal-type"])}`, {
-        weekStart,
-        meals: mealRows,
-        mealTypes,
-      });
+      return structuredResult({ weekStart, meals: mealRows, mealTypes });
     };
   },
 );

@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { structuredResult } from "../../../shared/tools.js";
 import { pantryItemRowSchema, pantryItemToRow } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -34,24 +34,8 @@ export const listPantryItemsTool = defineTool(
   (ctx: DomainCtx<PantryState, "aisle">) => {
     return async () => {
       const all = ctx.state.store.getAll().sort((a, b) => a.ingredient.localeCompare(b.ingredient));
-      const total = all.length;
-
-      if (total === 0) {
-        return toolResult("Your pantry is empty.", { items: [] });
-      }
-
       const items = all.map((item) => pantryItemToRow(item, ctx.deps.aisle));
-      const header = `You have ${total.toString()} pantry item${total === 1 ? "" : "s"}:\n`;
-      const lines = all.map((item) => {
-        const qty = item.quantity !== "" ? ` (${item.quantity})` : "";
-        const aisle = ctx.deps.aisle.displayName(item);
-        const aisleStr = aisle !== "" ? ` — ${aisle}` : "";
-        const status = item.inStock ? "" : " · **out of stock**";
-        const expires = item.expirationDate !== null ? ` · expires ${item.expirationDate}` : "";
-        return `- **${item.ingredient}**${qty}${aisleStr}${status}${expires} (uid: \`${item.uid}\`)`;
-      });
-
-      return toolResult(header + "\n" + lines.join("\n"), { items });
+      return structuredResult({ items });
     };
   },
 );

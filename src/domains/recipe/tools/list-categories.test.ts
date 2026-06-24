@@ -6,6 +6,10 @@ import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixt
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 
+type ListCategoriesPayload = {
+  items: Array<{ uid: string; name: string; recipeCount: number; parentUid: string | null }>;
+};
+
 describe("list_categories tool", () => {
   const kh = useKernelHarness("recipe");
   beforeEach(kh.setup);
@@ -25,14 +29,16 @@ describe("list_categories tool", () => {
       categories: [catA, catB],
     });
 
-    const text = await kh.callToolText("list_categories", {});
+    const payload = await kh.callToolJson<ListCategoriesPayload>("list_categories", {});
 
     // Desserts has 2 non-trashed recipes (trashed one excluded)
-    expect(text).toContain("Desserts");
-    expect(text).toContain("2 recipes");
+    const desserts = payload.items.find((i) => i.name === "Desserts");
+    expect(desserts).toBeDefined();
+    expect(desserts!.recipeCount).toBe(2);
     // Mains has 1 recipe
-    expect(text).toContain("Mains");
-    expect(text).toContain("1 recipe");
+    const mains = payload.items.find((i) => i.name === "Mains");
+    expect(mains).toBeDefined();
+    expect(mains!.recipeCount).toBe(1);
   });
 
   it("categories sorted alphabetically by name", async () => {
@@ -63,12 +69,14 @@ describe("list_categories tool", () => {
       categories: [catEmpty, catFull],
     });
 
-    const text = await kh.callToolText("list_categories", {});
+    const payload = await kh.callToolJson<ListCategoriesPayload>("list_categories", {});
 
-    expect(text).toContain("Empty Category");
-    expect(text).toContain("0 recipes");
-    expect(text).toContain("Full Category");
-    expect(text).toContain("1 recipe");
+    const empty = payload.items.find((i) => i.name === "Empty Category");
+    expect(empty).toBeDefined();
+    expect(empty!.recipeCount).toBe(0);
+    const full = payload.items.find((i) => i.name === "Full Category");
+    expect(full).toBeDefined();
+    expect(full!.recipeCount).toBe(1);
   });
 
   it("empty recipe store returns cold-start error", async () => {
@@ -84,8 +92,8 @@ describe("list_categories tool", () => {
       categories: [cat],
     });
 
-    const text = await kh.callToolText("list_categories", {});
-    expect(text).toContain("uid: `cat-uid-1`");
+    const payload = await kh.callToolJson<ListCategoriesPayload>("list_categories", {});
+    expect(payload.items.some((i) => i.uid === "cat-uid-1")).toBe(true);
   });
 
   it("emits structured category rows carrying uid, recipeCount, and parentUid (R1)", async () => {
@@ -119,10 +127,15 @@ describe("list_categories tool", () => {
       categories: [parent, child],
     });
 
-    const text = await kh.callToolText("list_categories", {});
+    const payload = await kh.callToolJson<ListCategoriesPayload>("list_categories", {});
 
-    expect(text).toContain("- **Baking**");
-    expect(text).toContain("  - **Cakes**");
+    // The tree is reconstructable from parentUid: parent has null, child references parent.
+    const baking = payload.items.find((i) => i.name === "Baking");
+    expect(baking).toBeDefined();
+    expect(baking!.parentUid).toBeNull();
+    const cakes = payload.items.find((i) => i.name === "Cakes");
+    expect(cakes).toBeDefined();
+    expect(cakes!.parentUid).toBe("parent-1");
   });
 
   it("renders an orphaned category (dangling parentUid) at top level with a warning disclosure", async () => {
@@ -133,16 +146,17 @@ describe("list_categories tool", () => {
       categories: [orphan, root],
     });
 
-    const text = await kh.callToolText("list_categories", {});
+    const payload = await kh.callToolJson<ListCategoriesPayload>("list_categories", {});
 
-    // Orphan is NOT silently hidden, renders at top level (no indent), flagged.
-    expect(text).toContain("- **Curries**");
-    expect(text).toContain("⚠️");
-    expect(text).toContain("missing-parent");
-    // Sanity: a normal root still renders without the orphan marker.
-    expect(text).toContain("- **Beef**");
-    const beefLine = text.split("\n").find((l) => l.includes("**Beef**"));
-    expect(beefLine).not.toContain("⚠️");
+    // Orphan is NOT silently hidden; its dangling parentUid is normalized to null
+    // (top-level re-rooting), matching the text tree behavior.
+    const curries = payload.items.find((i) => i.name === "Curries");
+    expect(curries).toBeDefined();
+    expect(curries!.parentUid).toBeNull();
+    // Sanity: a normal root still appears with its own null parentUid.
+    const beef = payload.items.find((i) => i.name === "Beef");
+    expect(beef).toBeDefined();
+    expect(beef!.parentUid).toBeNull();
   });
 
   it("store with recipes but no categories returns empty message", async () => {
@@ -152,10 +166,10 @@ describe("list_categories tool", () => {
     });
 
     const result = await kh.callTool("list_categories", {});
-    const text = getText(result);
-
     expect(result.isError).toBeFalsy();
-    expect(text.toLowerCase()).toContain("no categories");
+    // Empty catalog returns {items:[]} as compact JSON — not a text "no categories" message.
+    const payload = JSON.parse(getText(result)) as ListCategoriesPayload;
+    expect(payload.items).toHaveLength(0);
   });
 
   it("recipe store synced but category catalog not yet synced returns a wait hint", async () => {

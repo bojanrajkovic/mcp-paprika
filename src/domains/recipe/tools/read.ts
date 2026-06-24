@@ -2,16 +2,14 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { resolveLookup, resolveOrPick, structuredResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeReadOutputSchema, recipeToMarkdown, recipeToReadStructured } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
- * `read_recipe` — read one recipe (with category names). The `lastCookedAt` argument
- * to `recipeToMarkdown` is DROPPED — recipe is `dependsOn []` (no meal dependency);
- * "last cooked" stays meal-side, surfaced by the meal domain's `read_recipe_history`
- * tool.
+ * `read_recipe` — read one recipe (with category names). "Last cooked" stays meal-side
+ * (recipe is `dependsOn []`), surfaced by the meal domain's `read_recipe_history` tool.
  */
 export const readRecipeTool = defineTool(
   {
@@ -48,7 +46,7 @@ export const readRecipeTool = defineTool(
       });
       if ("result" in resolved) return resolved.result;
       const names = ctx.state.category.store.resolveNames(resolved.entity.categories);
-      return toolResult(recipeToMarkdown(resolved.entity, names), recipeToReadStructured(resolved.entity, names));
+      return structuredResult(recipeToReadStructured(resolved.entity, names));
     };
   },
 );

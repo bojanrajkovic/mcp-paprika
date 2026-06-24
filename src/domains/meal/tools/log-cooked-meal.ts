@@ -7,19 +7,13 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
-import {
-  makeMealOrderFlagAssigner,
-  mealListOutputSchema,
-  mealToRow,
-  renderMealCard,
-  resolveMealTypeName,
-} from "./helpers.js";
+import { makeMealOrderFlagAssigner, mealListOutputSchema, mealToRow, resolveMealTypeName } from "./helpers.js";
 
 export const logCookedMealInputSchema = z
   .object({
@@ -127,7 +121,7 @@ export const logCookedMealTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(`Logged.\n\n${renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"])}`, structured);
+      return structuredResult(structured);
     };
   },
 );

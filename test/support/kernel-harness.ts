@@ -184,7 +184,7 @@ export interface UseKernelHarnessOptions {
  * afterEach(kh.teardown);
  * it("reads a recipe", async () => {
  *   kh.seed({ recipes: [makeRecipe({ name: "Soup" })] });
- *   expect(await kh.callToolText("read_recipe", { lookup: { title: "Soup" } })).toContain("# Soup");
+ *   expect((await kh.callToolJson("read_recipe", { lookup: { title: "Soup" } })).name).toBe("Soup");
  * });
  * ```
  *
@@ -197,6 +197,8 @@ export interface KernelHarness<State = unknown, Writes = unknown> {
   readonly callTool: (name: string, args: Record<string, unknown>) => Promise<CallToolResult>;
   /** `callTool` then the text of the first content block — the common read-assertion shorthand. */
   readonly callToolText: (name: string, args: Record<string, unknown>) => Promise<string>;
+  /** `callTool` then the text block parsed as JSON — for schema-bearing tools, whose text is the structured payload as JSON. */
+  readonly callToolJson: <T = Record<string, unknown>>(name: string, args: Record<string, unknown>) => Promise<T>;
   readonly callResourceList: (name: string) => Promise<unknown>;
   readonly callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
   /** Drive the elicitation gate (ADR-0020): set an accept/decline responder, or unset to fail-open. */
@@ -280,6 +282,7 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
     },
     callTool: (name, args) => live().callTool(name, args),
     callToolText: async (name, args) => getText(await live().callTool(name, args)),
+    callToolJson: async (name, args) => JSON.parse(getText(await live().callTool(name, args))),
     callResourceList: (name) => live().callResourceList(name),
     callResource: (name, uid, uri) => live().callResource(name, uid, uri),
     setElicitResponder: (responder) => live().setElicitResponder(responder),

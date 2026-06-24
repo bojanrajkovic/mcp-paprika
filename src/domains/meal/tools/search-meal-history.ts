@@ -7,12 +7,12 @@ import type { RecipeUid } from "../../recipe/ids.js";
 import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, toolResult } from "../../../shared/tools.js";
+import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
 import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
-import { mealListOutputSchema, mealToRow, renderMealsGroupedByDate, resolveMealTypeName } from "./helpers.js";
+import { mealListOutputSchema, mealToRow, resolveMealTypeName } from "./helpers.js";
 
 export const searchMealHistoryInputSchema = z
   .object({
@@ -79,14 +79,12 @@ export const searchMealHistoryTool = defineTool(
       // Optional meal-type filter (built-ins also surface legacy null-typeUid meals).
       let typeUid: MealTypeUid | undefined;
       let legacyTypeInteger: number | undefined;
-      let typeName: string | undefined;
       if (args.type !== undefined) {
         const result = ctx.deps["meal-type"].resolveSpec(args.type);
         if (!result.ok) {
           return errorResult(formatMealTypeResolveError(result));
         }
         typeUid = result.resolved.uid;
-        typeName = result.resolved.name;
         if (result.resolved.originalType !== null) {
           legacyTypeInteger = result.resolved.originalType;
         }
@@ -97,14 +95,12 @@ export const searchMealHistoryTool = defineTool(
       // reached through `ctx.deps.recipe`. No category→recipe
       // index exists; recipe's contract does a linear scan internally.
       let classRecipeUids: Set<RecipeUid> | undefined;
-      let classLabel: string | undefined;
       if (args.class !== undefined) {
         const { uids } = ctx.deps.recipe.resolveCategoryRefs([args.class]);
         if (uids.length === 0) {
           return errorResult(`No category found matching "${args.class}".`);
         }
         const catUid = uids[0]!;
-        classLabel = ctx.deps.recipe.resolveCategoryNames([catUid])[0] ?? args.class;
         // recipe owns categories, so the category→recipe-UIDs membership query lives
         // on the recipe contract (recipesInCategory) rather than reaching its store —
         // mirroring the live `getAll().filter(r => r.categories.includes(catUid))`.
@@ -161,16 +157,9 @@ export const searchMealHistoryTool = defineTool(
         limit,
       });
 
-      // Scope phrase for the header / empty message.
-      const scopeParts: Array<string> = [];
-      if (args.recipe_uid !== undefined) scopeParts.push(`recipe "${args.recipe_uid}"`);
-      if (classLabel !== undefined) scopeParts.push(`category "${classLabel}"`);
-      if (typeName !== undefined) scopeParts.push(`type "${typeName}"`);
-      const scope = scopeParts.length > 0 ? ` for ${scopeParts.join(", ")}` : "";
-
       if (total === 0) {
         // Empty match is a valid empty success — carries the structured payload.
-        return toolResult(`No past meals found${scope}.`, { items: [], total: 0, offset });
+        return structuredResult({ items: [], total: 0, offset });
       }
       if (meals.length === 0) {
         // Over-paged: matches exist but this offset is past the end. Bad input, not an
@@ -181,27 +170,9 @@ export const searchMealHistoryTool = defineTool(
         );
       }
 
-      const sinceLabel = since !== undefined ? since.toFormat("yyyy-MM-dd") : null;
-      const untilLabel = until.toFormat("yyyy-MM-dd");
-      const rangeLabel = sinceLabel !== null ? `${sinceLabel} – ${untilLabel}` : `through ${untilLabel}`;
-
-      // getInDateRange sorts newest-first, so at offset 0 the first meal is the
-      // most recent match — i.e. "last made".
-      const lastMade = offset === 0 ? meals[0]!.date.slice(0, 10) : null;
-
-      const paged = !(offset === 0 && total <= limit);
-      const countLabel = paged
-        ? `Showing ${(offset + 1).toString()}–${(offset + meals.length).toString()} of ${total.toString()} past meals`
-        : `${total.toString()} past meal${total === 1 ? "" : "s"}`;
-      const header = `**${countLabel}${scope} (${rangeLabel})**${lastMade !== null ? ` · last made ${lastMade}` : ""}`;
-
       const resolveTypeName = resolveMealTypeName(ctx.deps["meal-type"]);
       const items = meals.map((meal) => mealToRow(meal, resolveTypeName(meal)));
-      return toolResult(`${header}\n${renderMealsGroupedByDate(meals, ctx.deps["meal-type"])}`, {
-        items,
-        total,
-        offset,
-      });
+      return structuredResult({ items, total, offset });
     };
   },
 );

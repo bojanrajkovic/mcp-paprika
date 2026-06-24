@@ -6,7 +6,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
 import { restoreRecipeInputSchema } from "./restore.js";
 
@@ -59,7 +59,7 @@ describe("restore_recipe tool", () => {
 
     const result = await kh.callTool("restore_recipe", { uid: live.uid });
 
-    expect(getText(result)).toContain("already in your active library");
+    expect(getJson(result)).toMatchObject({ uid: live.uid, name: "Active Recipe" });
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
     // hash + inTrash match the local store → reconcile is a no-op → no notification
     expect(kh.resourceListChanged()).not.toHaveBeenCalled();
@@ -77,9 +77,9 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(authoritative));
     kh.seed({ recipes: [staleTrashed] }); // seed the stale copy
 
-    const text = await kh.callToolText("restore_recipe", { uid });
+    const result = await kh.callTool("restore_recipe", { uid });
 
-    expect(text).toContain("already in your active library");
+    expect(getJson(result)).toMatchObject({ uid, name: "Restored Elsewhere" });
     expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
     // Local store healed to authoritative truth.
     expect(kh.state().recipe.store.get(uid)?.inTrash).toBe(false);

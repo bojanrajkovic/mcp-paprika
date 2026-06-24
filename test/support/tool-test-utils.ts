@@ -166,6 +166,15 @@ export function getText(result: CallToolResult): string {
 }
 
 /**
+ * Parse a schema-bearing tool's text block as JSON. The text channel of a
+ * schema-bearing tool carries the structured payload as compact JSON (the universal
+ * floor that reaches the model on every host), so a test asserts on the parsed object.
+ */
+export function getJson<T = Record<string, unknown>>(result: CallToolResult): T {
+  return JSON.parse(getText(result)) as T;
+}
+
+/**
  * Logging-config shape that suppresses all output. Use for transport-test
  * setups (or anywhere a config literal is needed but logger noise isn't).
  * `notifyLevel: "fatal"` blocks fan-out at any sub-fatal level — no level

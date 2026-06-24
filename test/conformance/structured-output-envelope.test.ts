@@ -3,29 +3,31 @@ import { z } from "zod";
 
 import { collectToolSpecs } from "../../scripts/tool-specs.js";
 import { RecipeUidSchema } from "../../src/domains/recipe/ids.js";
-import { toolResult } from "../../src/shared/tools.js";
+import { structuredResult, toolResult } from "../../src/shared/tools.js";
 
 /**
  * ADR-0019 structured-output conformance — the channel is *expressible* (the
- * two-argument `toolResult` envelope parses against a declared `outputSchema`) and
- * the rollout is *underway* (A3 #318 made the meal reads its first adopters).
+ * envelope parses against a declared `outputSchema`) and the rollout is *complete*
+ * (the frontier below pins the exact schema-bearing set).
  *
- * The positive check parses the envelope against the schema DIRECTLY:
- * `makeTestServer` discards the `registerTool` config and never runs the SDK's
- * `validateToolOutput`, so a harness round-trip would assert nothing. That a
- * declared schema reaches the real `tools/list` advertisement (the `toJsonSchema`
- * path), and the SDK's success/`isError` validation contract, are anchored
- * separately in `src/kernel/tool.e2e.test.ts`.
+ * A schema-bearing tool emits via {@link structuredResult}, which carries
+ * the structured payload on BOTH channels — `structuredContent` AND the text block as
+ * compact JSON — so the model receives the machine fields (UIDs) through the text on
+ * hosts that don't forward `structuredContent` to it. The positive checks parse the
+ * envelope against the schema DIRECTLY: `makeTestServer` discards the `registerTool`
+ * config and never runs the SDK's `validateToolOutput`, so a harness round-trip would
+ * assert nothing. That a declared schema reaches the real `tools/list` advertisement
+ * (the `toJsonSchema` path), and the SDK's success/`isError` validation contract, are
+ * anchored separately in `src/kernel/tool.e2e.test.ts`.
  *
  * The adoption invariant is the tree-wide gate: it pins the EXACT set of
- * schema-bearing tools. It started empty (A1 was inert); A3 #318 added the three
- * meal reads. Each later A3/A2/B1 batch ADDS its tool names here — an explicit
- * allowlist, so a tool that gains a schema unexpectedly (or one that should have
- * but didn't) trips the gate rather than sliding by.
+ * schema-bearing tools — an explicit allowlist, so a tool that gains a schema
+ * unexpectedly (or one that should have but didn't) trips the gate rather than
+ * sliding by.
  */
 
 describe("ADR-0019: structured-output envelope and rollout", () => {
-  it("a structured toolResult parses against the tool's own outputSchema", () => {
+  it("structuredResult carries the payload on BOTH channels — structuredContent and JSON text", () => {
     // A representative list-read payload: rows wrapped under a record key (the
     // SDK's structuredContent is a record, never a bare top-level array), each
     // carrying a branded UID (a compile-time brand, plain string at runtime —
@@ -40,12 +42,23 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       ],
     };
 
-    const result = toolResult("Pasta\nSoup", payload);
+    const result = structuredResult(payload);
 
-    // The text block is always present and unchanged by the structured channel.
-    expect(result.content).toEqual([{ type: "text", text: "Pasta\nSoup" }]);
+    // The text block is the same payload as compact JSON — the universal floor that
+    // reaches the model (incl the UIDs) on every host, widget or not.
+    expect(result.content).toEqual([{ type: "text", text: JSON.stringify(payload) }]);
+    expect(JSON.parse(result.content[0].text)).toEqual(payload);
     // The structured payload satisfies the declared schema the SDK would validate.
     expect(outputSchema.safeParse(result.structuredContent).success).toBe(true);
+    expect(result.structuredContent).toEqual(payload);
+  });
+
+  it("the toolResult primitive still carries an explicit text block beside the structured channel", () => {
+    // structuredResult is built on this two-argument form; resources and the few
+    // callers that pass explicit text still rely on it.
+    const result = toolResult("Pasta\nSoup", { items: [{ uid: "r1", name: "Pasta" }] });
+    expect(result.content).toEqual([{ type: "text", text: "Pasta\nSoup" }]);
+    expect(result.structuredContent).toEqual({ items: [{ uid: "r1", name: "Pasta" }] });
   });
 
   it("exactly the rolled-out R1 tools declare an outputSchema (the conformance frontier)", async () => {

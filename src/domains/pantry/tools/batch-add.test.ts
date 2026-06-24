@@ -23,7 +23,7 @@ describe("add_pantry_items tool", () => {
     const result = await kh.callTool("add_pantry_items", { items: [{ ingredient: "Butter" }] });
     const text = getText(result);
 
-    expect(text).toContain("# Butter");
+    expect((JSON.parse(text) as { items: Array<{ ingredient: string }> }).items[0]!.ingredient).toBe("Butter");
     expect(kh.client().savePantryItems).toHaveBeenCalledOnce();
 
     const [savedItem] = vi.mocked(kh.client().savePantryItems).mock.calls[0]?.[0] ?? [];
@@ -61,7 +61,7 @@ describe("add_pantry_items tool", () => {
       vi.mocked(kh.client().savePantryItems).mock.calls[0]?.[0] ?? [];
     expect(savedItems).toHaveLength(3);
     expect(savedItems.map((i) => i.ingredient)).toEqual(["Apples", "Milk", "Eggs"]);
-    expect(text).toContain("Added 3 item(s)");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(3);
     // The new item UIDs ride structuredContent so the model can chain on them.
     const structured = result.structuredContent as { items: ReadonlyArray<{ uid: string }> };
     expect(structured.items.map((i) => i.uid)).toEqual(savedItems.map((i) => i.uid));
@@ -101,7 +101,7 @@ describe("add_pantry_items tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("Added 1 item(s)");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(1);
     expect(text).toContain("EXISTING-UID");
     expect(text).toContain("update_pantry_item");
     const savedItems: ReadonlyArray<{ ingredient: string }> =
@@ -119,7 +119,7 @@ describe("add_pantry_items tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("Added 1 item(s)");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(1);
     expect(text).toContain("MILK"); // skip report mentions the duplicate
     const savedItems: ReadonlyArray<unknown> = vi.mocked(kh.client().savePantryItems).mock.calls[0]?.[0] ?? [];
     expect(savedItems).toHaveLength(1);
@@ -134,7 +134,8 @@ describe("add_pantry_items tool", () => {
     const result = await kh.callTool("add_pantry_items", { items: [{ ingredient: "butter" }] });
     const text = getText(result);
 
-    expect(text).toContain("All items were duplicates");
+    // All-duplicates: nothing added (items:[]), the dup notice rides `skipped`.
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(0);
     expect(text).toContain("UID-1");
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
   });
@@ -251,7 +252,7 @@ describe("add_pantry_items tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("Added 2 item(s)");
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(2);
     expect(text).toContain("UID-BT");
     expect(text).toContain("Skipped");
     const savedItems: ReadonlyArray<{ ingredient: string }> =

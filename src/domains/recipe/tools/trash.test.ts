@@ -5,7 +5,7 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("trash_recipe tool", () => {
   const kh = useKernelHarness<RecipeState>("recipe");
@@ -20,10 +20,10 @@ describe("trash_recipe tool", () => {
 
     const result = await kh.callTool("trash_recipe", { uid: recipe.uid });
 
-    expect(getText(result)).toContain("Pasta Carbonara");
-    expect(getText(result).toLowerCase()).toContain("trash");
+    const json = getJson(result);
+    expect(json).toMatchObject({ uid: recipe.uid, name: "Pasta Carbonara" });
     expect(kh.state().recipe.store.get(recipe.uid)?.inTrash).toBe(true);
-    // The prose ack stays, but the now-trashed recipe rides structuredContent.
+    // The text JSON carries the recipe; the store confirms inTrash was committed.
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toMatchObject({ uid: recipe.uid, name: "Pasta Carbonara" });
   });
@@ -70,7 +70,7 @@ describe("trash_recipe tool", () => {
 
     const result = await kh.callTool("trash_recipe", { uid: trashedRecipe.uid });
 
-    expect(getText(result).toLowerCase()).toContain("already in the trash");
+    expect(getJson(result)).toMatchObject({ uid: trashedRecipe.uid, name: "Trashed Recipe" });
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toMatchObject({ uid: trashedRecipe.uid, name: "Trashed Recipe" });
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();

@@ -6,7 +6,7 @@ import type { Aisle } from "../types.js";
 
 import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("update_aisle tool", () => {
   const kh = useKernelHarness<AisleState>("aisle");
@@ -47,7 +47,8 @@ describe("update_aisle tool", () => {
 
     const result = await kh.callTool("update_aisle", { uid: produce.uid, name: "Fresh Produce" });
 
-    expect(getText(result)).toContain('renamed to "Fresh Produce"');
+    // The renamed catalog rides the JSON text channel — same payload as structuredContent.
+    expect(getJson(result)).toEqual(result.structuredContent);
     expect(kh.state().store.get(produce.uid)?.name).toBe("Fresh Produce");
     // Only the renamed aisle is saved — order flags untouched.
     const saveAisles = vi.mocked(kh.client().saveAisles);
@@ -83,7 +84,8 @@ describe("update_aisle tool", () => {
 
     const text = await kh.callToolText("update_aisle", { uid: frozen.uid, position: 1 });
 
-    expect(text).toContain("moved to position 1");
+    // The echoed catalog (JSON text) now leads with the moved aisle.
+    expect((JSON.parse(text) as { items: Array<{ uid: string }> }).items[0]!.uid).toBe(frozen.uid);
     // New order: Frozen(0), Produce(1), Dairy(2).
     expect(kh.state().store.get(frozen.uid)?.orderFlag).toBe(0);
     expect(kh.state().store.get(produce.uid)?.orderFlag).toBe(1);
@@ -98,9 +100,8 @@ describe("update_aisle tool", () => {
 
     const text = await kh.callToolText("update_aisle", { uid: produce.uid, position: 99 });
 
-    // The response reports the LANDED position (clamped to last), not the
-    // requested 99 — it must agree with the rendered order.
-    expect(text).toContain("moved to position 3");
+    // Clamped to last: the echoed catalog (JSON text) ends with the moved aisle.
+    expect((JSON.parse(text) as { items: Array<{ uid: string }> }).items[2]!.uid).toBe(produce.uid);
     expect(kh.state().store.get(dairy.uid)?.orderFlag).toBe(0);
     expect(kh.state().store.get(frozen.uid)?.orderFlag).toBe(1);
     expect(kh.state().store.get(produce.uid)?.orderFlag).toBe(2);
@@ -119,7 +120,8 @@ describe("update_aisle tool", () => {
         { uid: frozen.uid, name: "Frozen" },
       ],
     });
-    expect(getText(result)).toContain("No changes");
+    // The unchanged catalog rides the JSON text channel too.
+    expect(getJson(result)).toEqual(result.structuredContent);
     expect(kh.client().saveAisles).not.toHaveBeenCalled();
   });
 
@@ -142,7 +144,10 @@ describe("update_aisle tool", () => {
     releaseSave();
     const [text1, text2] = await Promise.all([first, second]);
 
-    expect(text1).toContain('renamed to "Snacks"');
+    expect((JSON.parse(text1) as { items: Array<{ uid: string; name: string }> }).items).toContainEqual({
+      uid: produce.uid,
+      name: "Snacks",
+    });
     expect(text2).toContain('An aisle named "Snacks" already exists');
     expect(kh.state().store.get(dairy.uid)?.name).toBe("Dairy");
   });

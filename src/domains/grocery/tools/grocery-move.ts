@@ -7,7 +7,7 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { confirmGate } from "../../../shared/elicit.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult, toolResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../../pantry/ids.js";
 import { addPantryItemsOutputSchema } from "../../pantry/pantry-helpers.js";
@@ -68,7 +68,7 @@ export const moveToPantryTool = defineTool(
         log,
       });
       if (confirm === "declined") {
-        return toolResult(`Cancelled — nothing was moved to the pantry.`, { items: [] });
+        return structuredResult({ items: [] });
       }
 
       // Step 2: Build PantryItem objects from GroceryItem fields
@@ -123,13 +123,8 @@ export const moveToPantryTool = defineTool(
           });
           if (commitErr) return commitErr;
 
-          // Step 5: Success response
-          const movedNames = items.map((gi) => gi.ingredient).join(", ");
-          const pantryUids = savedPantry.map((p) => p.uid).join(", ");
-          return toolResult(
-            `Moved ${items.length.toString()} item(s) to pantry: ${movedNames}.\nNew pantry UIDs: ${pantryUids}`,
-            structured,
-          );
+          // Step 5: Success response — the moved (now-pantry) item rows ride structured.
+          return structuredResult(structured);
         },
         async (error) => {
           log.error({ uids: args.uids, phase: error.phase }, `createItems failed (${error.phase})`);

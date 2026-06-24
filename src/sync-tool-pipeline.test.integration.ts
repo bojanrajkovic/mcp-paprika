@@ -151,9 +151,10 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Initial cycle (run inside buildKernel): only recipe-1.
       const { kernel, callTool } = await buildKernelHarness();
-      expect(getText(await callTool("search_recipes", { query: "salad", limit: 20 })).toLowerCase()).toContain(
-        "no recipes",
-      );
+      expect(
+        (JSON.parse(getText(await callTool("search_recipes", { query: "salad", limit: 20 }))) as { items: unknown[] })
+          .items,
+      ).toHaveLength(0);
 
       // Second cycle: recipe-2 ("Salad") appears.
       await kernel.syncOnce();
@@ -188,9 +189,10 @@ describe("Sync → Tool Pipeline Integration", () => {
       await kernel.syncOnce(); // cycle 2: recipe-2 dropped
 
       expect(getText(await callTool("search_recipes", { query: "pasta", limit: 20 }))).toContain("Pasta");
-      expect(getText(await callTool("search_recipes", { query: "salad", limit: 20 })).toLowerCase()).toContain(
-        "no recipes",
-      );
+      expect(
+        (JSON.parse(getText(await callTool("search_recipes", { query: "salad", limit: 20 }))) as { items: unknown[] })
+          .items,
+      ).toHaveLength(0);
     });
   });
 
@@ -261,9 +263,10 @@ describe("Sync → Tool Pipeline Integration", () => {
       );
 
       const { kernel, callTool } = await buildKernelHarness(); // cycle 1: "Original Name"
-      expect(getText(await callTool("search_recipes", { query: "updated", limit: 20 })).toLowerCase()).toContain(
-        "no recipes",
-      );
+      expect(
+        (JSON.parse(getText(await callTool("search_recipes", { query: "updated", limit: 20 }))) as { items: unknown[] })
+          .items,
+      ).toHaveLength(0);
 
       // Mutate the server: a new name behind a new hash so the diff detects the change.
       recipeName = "Updated Name";

@@ -3,14 +3,13 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
-import type { RecipeRow } from "../recipe-markdown.js";
 import type { TimeConstraints } from "../store.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, toolResult } from "../../../shared/tools.js";
+import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { parseDuration } from "../../../utils/duration.js";
-import { browseContextSchema, recipeMetadataLines, recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
+import { browseContextSchema, recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 export const searchRecipesInputSchema = z
@@ -159,39 +158,17 @@ export const searchRecipesTool = defineTool(
           const limited = queryResults.slice(0, args.limit);
 
           if (limited.length === 0) {
-            const criteria: Array<string> = [];
-            if (hasQuery) criteria.push(`query "${args.query!}"`);
-            if (hasIngredients) criteria.push(`ingredients [${args.ingredients!.join(", ")}]`);
-            if (args.maxPrep !== undefined) criteria.push(`maxPrep "${args.maxPrep}"`);
-            if (args.maxCook !== undefined) criteria.push(`maxCook "${args.maxCook}"`);
-            if (args.maxTotal !== undefined) criteria.push(`maxTotal "${args.maxTotal}"`);
             // No match is a valid empty success, not an error.
-            return toolResult(`No recipes found matching ${criteria.join(", ")}.`, {
-              context: browseContext,
-              items: [],
-              total: 0,
-            });
+            return structuredResult({ context: browseContext, items: [], total: 0 });
           }
 
-          // Resolve category names once per row, feeding both the text and the
-          // structured channel so they can't disagree.
+          // Resolve each row's category names once for the structured payload.
           const total = queryResults.length;
-          const items: Array<RecipeRow> = [];
-          const lines: Array<string> = [];
-          for (const r of limited) {
-            const categoryNames = ctx.state.category.store.resolveNames(r.recipe.categories);
-            items.push(recipeToRow(r.recipe, categoryNames));
-            const base = formatRecipeItem(r.recipe, categoryNames);
-            const unverified = hasTime ? unverifiedTimeFields(r.recipe, constraints) : [];
-            lines.push(
-              unverified.length === 0
-                ? base
-                : `${base}\n> ⚠️ _Time unverified — couldn't parse this recipe's ${unverified.join(" / ")} against your ` +
-                    `limit, so it's shown rather than hidden. Check the displayed time before relying on it._`,
-            );
-          }
+          const items = limited.map((r) =>
+            recipeToRow(r.recipe, ctx.state.category.store.resolveNames(r.recipe.categories)),
+          );
 
-          return toolResult(lines.join("\n\n---\n\n"), { context: browseContext, items, total });
+          return structuredResult({ context: browseContext, items, total });
         },
         (errorMsg) => errorResult(errorMsg),
       );
@@ -210,40 +187,4 @@ function parseMaybeMinutes(input: string | undefined): Result<number | undefined
   return parseDuration(input)
     .map((d) => d.as("minutes"))
     .mapErr((e) => `Invalid time format "${e.input}": ${e.reason}`);
-}
-
-function formatRecipeItem(recipe: Recipe, categoryNames: Array<string>): string {
-  const lines: Array<string> = [];
-  lines.push(`## ${recipe.name}`);
-  lines.push(`UID: \`${recipe.uid}\``);
-  if (categoryNames.length > 0) {
-    lines.push(`**Categories:** ${categoryNames.join(", ")}`);
-  }
-  lines.push(...recipeMetadataLines(recipe));
-  return lines.join("\n");
-}
-
-// Which active time constraints could NOT be confirmed for this recipe. A recipe
-// is "verified" against a constraint only when its corresponding field parses —
-// inclusion already guarantees it's within the bound, since the store excludes
-// parse-and-exceed recipes. A null or unparseable field (free-text like
-// "5+ hours" or "overnight") is kept (the store stays lenient — AC5.5 / issue
-// #162) but can't be confirmed, so search_recipes flags it as advisory rather
-// than silently presenting it as a clean match.
-function unverifiedTimeFields(recipe: Recipe, constraints: TimeConstraints): Array<string> {
-  const unverified: Array<string> = [];
-  const check = (max: number | undefined, value: string | null, label: string): void => {
-    if (max === undefined) return;
-    const parses =
-      value !== null &&
-      parseDuration(value).match(
-        () => true,
-        () => false,
-      );
-    if (!parses) unverified.push(label);
-  };
-  check(constraints.maxPrepTime, recipe.prepTime, "prep time");
-  check(constraints.maxCookTime, recipe.cookTime, "cook time");
-  check(constraints.maxTotalTime, recipe.totalTime, "total time");
-  return unverified;
 }

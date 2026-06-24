@@ -23,8 +23,8 @@ describe("list_grocery_lists tool", () => {
 
   it("returns empty message when no lists exist", async () => {
     kh.seed({ groceryLists: [], groceryItems: [] });
-    const text = await kh.callToolText("list_grocery_lists", {});
-    expect(text).toBe("No grocery lists found.");
+    const json = await kh.callToolJson<{ items: unknown[] }>("list_grocery_lists", {});
+    expect(json.items).toEqual([]);
   });
 
   it("returns list names, UIDs, and item counts", async () => {
@@ -35,15 +35,22 @@ describe("list_grocery_lists tool", () => {
     const item3 = makeGroceryItem({ listUid: listB.uid });
     kh.seed({ groceryLists: [listA, listB], groceryItems: [item1, item2, item3] });
 
-    const text = await kh.callToolText("list_grocery_lists", {});
+    const json = await kh.callToolJson<{ items: Array<{ uid: string; name: string; itemCount: number }> }>(
+      "list_grocery_lists",
+      {},
+    );
 
-    expect(text).toContain("You have 2 grocery list(s)");
-    expect(text).toContain("Weekly Shopping");
-    expect(text).toContain("Costco Run");
-    expect(text).toContain(listA.uid);
-    expect(text).toContain(listB.uid);
-    expect(text).toContain("2 item(s)");
-    expect(text).toContain("1 item(s)");
+    expect(json.items).toHaveLength(2);
+    const names = json.items.map((i) => i.name);
+    expect(names).toContain("Weekly Shopping");
+    expect(names).toContain("Costco Run");
+    const uids = json.items.map((i) => i.uid);
+    expect(uids).toContain(listA.uid);
+    expect(uids).toContain(listB.uid);
+    const weeklyItem = json.items.find((i) => i.name === "Weekly Shopping")!;
+    const costcoItem = json.items.find((i) => i.name === "Costco Run")!;
+    expect(weeklyItem.itemCount).toBe(2);
+    expect(costcoItem.itemCount).toBe(1);
   });
 
   it("emits structured grocery-list rows with uid and item count (R1)", async () => {
@@ -98,13 +105,17 @@ describe("read_grocery_list tool", () => {
     const item2 = makeGroceryItem({ listUid: list.uid, ingredient: "Milk" });
     kh.seed({ groceryLists: [list], groceryItems: [item1, item2] });
 
-    const text = await kh.callToolText("read_grocery_list", { lookup: { uid: list.uid } });
+    const json = await kh.callToolJson<{ uid: string; name: string; items: Array<{ ingredient: string }> }>(
+      "read_grocery_list",
+      { lookup: { uid: list.uid } },
+    );
 
-    expect(text).toContain("Weekly Shopping");
-    // The list UID rides structuredContent, not the human text (see the structuredContent test).
-    expect(text).not.toContain(list.uid);
-    expect(text).toContain("Apples");
-    expect(text).toContain("Milk");
+    expect(json.name).toBe("Weekly Shopping");
+    // The list UID now appears in the text (JSON channel); assert it IS present.
+    expect(json.uid).toBe(list.uid);
+    const ingredients = json.items.map((i) => i.ingredient);
+    expect(ingredients).toContain("Apples");
+    expect(ingredients).toContain("Milk");
   });
 
   it("carries each item's UID on the structured channel; the text table stays clean (B1/#321)", async () => {
@@ -398,11 +409,14 @@ describe("rename_grocery_list tool", () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    const text = await kh.callToolText("rename_grocery_list", { uid: list.uid, newName: "Weekly Shopping" });
+    const json = await kh.callToolJson<{ uid: string; name: string }>("rename_grocery_list", {
+      uid: list.uid,
+      newName: "Weekly Shopping",
+    });
 
-    expect(text).toContain("Weekly Shopping");
-    // The UID rides structuredContent now, not the human text (see the structuredContent test).
-    expect(text).not.toContain(list.uid);
+    expect(json.name).toBe("Weekly Shopping");
+    // The UID now appears in the text (JSON channel); assert it IS present.
+    expect(json.uid).toBe(list.uid);
     expect(kh.client().saveGroceryList).not.toHaveBeenCalled();
   });
 

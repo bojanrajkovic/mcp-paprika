@@ -140,26 +140,3 @@ export function groceryListToMarkdown(
 
   return lines.join("\n");
 }
-
-/**
- * Renders a single grocery item as markdown. The item UID and its parent-list UID
- * travel on the structured channel and the caller's own request inputs, so the
- * human text carries only the editable fields.
- */
-export function groceryItemToMarkdown(item: GroceryItem, aisles: AisleDisplaySource): string {
-  const lines: Array<string> = [];
-  lines.push(`# ${item.ingredient}`);
-  lines.push("");
-  if (item.quantity !== "") {
-    lines.push(`**Quantity:** ${item.quantity}`);
-  }
-  const aisleName = aisles.displayName(item);
-  if (aisleName !== "") {
-    lines.push(`**Aisle:** ${aisleName}`);
-  }
-  lines.push(`**Purchased:** ${item.purchased ? "Yes" : "No"}`);
-  if (item.instruction !== "") {
-    lines.push(`**Notes:** ${item.instruction}`);
-  }
-  return lines.join("\n");
-}

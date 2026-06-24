@@ -8,7 +8,7 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState, MenuWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema } from "../ids.js";
@@ -127,7 +127,7 @@ export const updateMenuItemTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(`Menu item "${saved.name}" updated.`, structured);
+      return structuredResult(structured);
     };
   },
 );

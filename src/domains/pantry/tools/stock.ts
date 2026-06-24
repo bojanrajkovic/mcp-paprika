@@ -5,9 +5,9 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToReadStructured } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToReadStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 export const markPantryItemOutOfStockInputSchema = z
@@ -63,7 +63,7 @@ export const markPantryItemOutOfStockTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle), structured);
+      return structuredResult(structured);
     };
   },
 );
@@ -109,7 +109,7 @@ export const restockPantryItemTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle), structured);
+      return structuredResult(structured);
     };
   },
 );

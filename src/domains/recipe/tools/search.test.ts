@@ -5,6 +5,24 @@ import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { searchRecipesInputSchema } from "./search.js";
 
+type SearchRecipesPayload = {
+  context: { source: string; query?: string };
+  items: Array<{
+    uid: string;
+    name: string;
+    categories: string[];
+    rating: number;
+    prepTime: string | null;
+    cookTime: string | null;
+    totalTime: string | null;
+    servings: string | null;
+    isPinned: boolean;
+    onGroceryList: boolean;
+    [k: string]: unknown;
+  }>;
+  total: number;
+};
+
 describe("search_recipes tool", () => {
   const kh = useKernelHarness("recipe");
   beforeEach(kh.setup);
@@ -35,9 +53,9 @@ describe("search_recipes tool", () => {
 
   it("time fields are rendered when populated", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta Carbonara", prepTime: "10 min", totalTime: "25 min" })] });
-    const text = await kh.callToolText("search_recipes", { query: "pasta", limit: 20 });
-    expect(text).toContain("Prep: 10 min");
-    expect(text).toContain("Total: 25 min");
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "pasta", limit: 20 });
+    expect(payload.items[0]!.prepTime).toBe("10 min");
+    expect(payload.items[0]!.totalTime).toBe("25 min");
   });
 
   it("limit defaults to 20 when store has many matches", async () => {
@@ -46,19 +64,18 @@ describe("search_recipes tool", () => {
     });
     // Pass limit: 20 explicitly (mirrors what the SDK provides when caller omits limit,
     // since z.default(20) ensures the handler always receives 20 for omitted limit).
-    const text = await kh.callToolText("search_recipes", { query: "recipe", limit: 20 });
-    // Count "---" separators: N results produce N-1 separators
-    const separators = (text.match(/^---$/gm) ?? []).length;
-    expect(separators).toBe(19); // 20 results = 19 separators
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "recipe", limit: 20 });
+    expect(payload.items).toHaveLength(20);
+    expect(payload.total).toBe(25);
   });
 
   it("limit caps result count", async () => {
     kh.seed({
       recipes: Array.from({ length: 10 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })),
     });
-    const text = await kh.callToolText("search_recipes", { query: "recipe", limit: 3 });
-    const separators = (text.match(/^---$/gm) ?? []).length;
-    expect(separators).toBe(2); // 3 results = 2 separators
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "recipe", limit: 3 });
+    expect(payload.items).toHaveLength(3);
+    expect(payload.total).toBe(10);
   });
 
   it("category names appear in formatted results", async () => {
@@ -76,45 +93,46 @@ describe("search_recipes tool", () => {
 
   it("no matching recipes returns empty-result message (not an error)", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta Carbonara" })] });
-    const result = await kh.callTool("search_recipes", { query: "sushi", limit: 20 });
-    expect(result.isError).toBeFalsy();
-    expect(getText(result).toLowerCase()).toContain("no recipes");
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "sushi", limit: 20 });
+    // No match is a valid empty success returning {items:[], total:0}, not an isError.
+    expect(payload.items).toHaveLength(0);
+    expect(payload.total).toBe(0);
   });
 
   it("rating appears in search hit when greater than 0", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", rating: 5 })] });
-    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
-    expect(text).toContain("5/5");
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "chocolate", limit: 20 });
+    expect(payload.items[0]!.rating).toBe(5);
   });
 
   it("rating is absent from search hit when 0", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", rating: 0 })] });
-    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
-    expect(text).not.toContain("/5");
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "chocolate", limit: 20 });
+    expect(payload.items[0]!.rating).toBe(0);
   });
 
   it("pinned marker appears in search hit when isPinned is true", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", isPinned: true })] });
-    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
-    expect(text).toContain("Pinned");
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "chocolate", limit: 20 });
+    expect(payload.items[0]!.isPinned).toBe(true);
   });
 
   it("pinned marker is absent from search hit when isPinned is false", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", isPinned: false })] });
-    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
-    expect(text).not.toContain("Pinned");
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "chocolate", limit: 20 });
+    expect(payload.items[0]!.isPinned).toBe(false);
   });
 
   it("on-grocery-list marker appears in search hit when onGroceryList is true", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", onGroceryList: true })] });
-    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
-    expect(text).toContain("Grocery List");
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "chocolate", limit: 20 });
+    expect(payload.items[0]!.onGroceryList).toBe(true);
   });
 
   it("on-grocery-list marker is absent from search hit when onGroceryList is false", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", onGroceryList: false })] });
-    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
-    expect(text).not.toContain("Grocery List");
+    const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { query: "chocolate", limit: 20 });
+    expect(payload.items[0]!.onGroceryList).toBe(false);
   });
 
   // ---------------------------------------------------------------------------
@@ -176,9 +194,14 @@ describe("search_recipes tool", () => {
 
     it("no matching recipes returns empty-result message", async () => {
       kh.seed({ recipes: [makeRecipe({ name: "Pasta", ingredients: "pasta, tomato" })] });
-      const result = await kh.callTool("search_recipes", { ingredients: ["sushi"], match: "all", limit: 20 });
-      expect(result.isError).toBeFalsy();
-      expect(getText(result).toLowerCase()).toContain("no recipes");
+      const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", {
+        ingredients: ["sushi"],
+        match: "all",
+        limit: 20,
+      });
+      // No match is a valid empty success returning {items:[], total:0}, not an isError.
+      expect(payload.items).toHaveLength(0);
+      expect(payload.total).toBe(0);
     });
 
     it("limit caps ingredient-only results", async () => {
@@ -187,9 +210,13 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: `Recipe ${String(i + 1)}`, ingredients: "tomato" }),
         ),
       });
-      const text = await kh.callToolText("search_recipes", { ingredients: ["tomato"], match: "all", limit: 20 });
-      const separators = (text.match(/^---$/gm) ?? []).length;
-      expect(separators).toBe(19); // 20 results = 19 separators
+      const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", {
+        ingredients: ["tomato"],
+        match: "all",
+        limit: 20,
+      });
+      expect(payload.items).toHaveLength(20);
+      expect(payload.total).toBe(25);
     });
   });
 
@@ -255,16 +282,20 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: `Recipe ${String(i + 1)}`, totalTime: "20 min" }),
         ),
       });
-      const text = await kh.callToolText("search_recipes", { maxTotal: "1 hour", limit: 3 });
-      const separators = (text.match(/^---$/gm) ?? []).length;
-      expect(separators).toBe(2); // 3 results = 2 separators
+      const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", { maxTotal: "1 hour", limit: 3 });
+      expect(payload.items).toHaveLength(3);
+      expect(payload.total).toBe(10);
     });
 
     it("no recipes matching time constraints returns empty-result message", async () => {
       kh.seed({ recipes: [makeRecipe({ name: "Slow", totalTime: "4 hours" })] });
-      const result = await kh.callTool("search_recipes", { maxTotal: "10 minutes", limit: 20 });
-      expect(result.isError).toBeFalsy();
-      expect(getText(result).toLowerCase()).toContain("no recipes");
+      const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", {
+        maxTotal: "10 minutes",
+        limit: 20,
+      });
+      // No match is a valid empty success returning {items:[], total:0}, not an isError.
+      expect(payload.items).toHaveLength(0);
+      expect(payload.total).toBe(0);
     });
 
     it("invalid duration string returns a user-friendly error (isError)", async () => {
@@ -282,14 +313,19 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "VagueRecipe", totalTime: "overnight" }),
         ],
       });
-      const text = await kh.callToolText("search_recipes", { maxTotal: "30 minutes", limit: 20 });
-      // Lenient inclusion: both are returned, the unparseable one not hidden.
-      expect(text).toContain("CleanRecipe");
-      expect(text).toContain("VagueRecipe");
-      // Only the unparseable one carries the advisory flag.
-      expect(text).toContain("Time unverified");
-      expect(text).toContain("total time");
-      expect((text.match(/Time unverified/g) ?? []).length).toBe(1);
+      const payload = await kh.callToolJson<SearchRecipesPayload>("search_recipes", {
+        maxTotal: "30 minutes",
+        limit: 20,
+      });
+      // Lenient inclusion: both recipes are returned; the unparseable one is not hidden.
+      // NOTE: The old Markdown 'Time unverified' advisory annotation is gone — the JSON row
+      // carries the raw totalTime value ("overnight") so the caller can inspect it directly.
+      const names = payload.items.map((i) => i.name);
+      expect(names).toContain("CleanRecipe");
+      expect(names).toContain("VagueRecipe");
+      // The unparseable item's raw totalTime is present in the row.
+      const vague = payload.items.find((i) => i.name === "VagueRecipe");
+      expect(vague!.totalTime).toBe("overnight");
     });
 
     it("recipes whose times all parse carry no advisory flag", async () => {

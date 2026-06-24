@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, toolResult } from "../../../shared/tools.js";
+import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
 import { mealRowSchema, resolveMealTypeName } from "./helpers.js";
@@ -73,11 +73,13 @@ export const readRecipeHistoryTool = defineTool(
       const lastCooked = ctx.state.store.lastCookedAt(args.recipe_uid);
       if (lastCooked === null) {
         // Never cooked is a valid empty success — the zero-summary, not an error.
-        return toolResult(
-          `**${recipe.name}** has no cooking history yet. ` +
-            "Use plan_meals to schedule it or log_cooked_meal to record a past cooking.",
-          { recipeUid: args.recipe_uid, recipeName: recipe.name, lastCooked: null, timesCooked: 0, recent: [] },
-        );
+        return structuredResult({
+          recipeUid: args.recipe_uid,
+          recipeName: recipe.name,
+          lastCooked: null,
+          timesCooked: 0,
+          recent: [],
+        });
       }
 
       const history = ctx.state.store.cookedHistory(args.recipe_uid);
@@ -85,27 +87,12 @@ export const readRecipeHistoryTool = defineTool(
       const count = history.length;
       const recentMeals = history.slice(0, RECENT_LIMIT);
 
-      const lines: Array<string> = [];
-      lines.push(`**${recipe.name}** — cooking history`);
-      lines.push("");
-      lines.push(`Last cooked: ${lastCooked.slice(0, 10)} · cooked ${count.toString()} time${count === 1 ? "" : "s"}`);
-      lines.push("");
-      lines.push("Recent:");
-      for (const meal of recentMeals) {
-        const typeName = resolveTypeName(meal);
-        lines.push(`- ${meal.date.slice(0, 10)} · ${typeName ?? `Type ${meal.type.toString()}`}`);
-      }
-      if (count > RECENT_LIMIT) {
-        lines.push("");
-        lines.push(`_Showing ${RECENT_LIMIT.toString()} most recent of ${count.toString()}._`);
-      }
-
       const recent = recentMeals.map((meal) => ({
         uid: meal.uid,
         date: meal.date.slice(0, 10),
         typeName: resolveTypeName(meal),
       }));
-      return toolResult(lines.join("\n"), {
+      return structuredResult({
         recipeUid: args.recipe_uid,
         recipeName: recipe.name,
         lastCooked: lastCooked.slice(0, 10),

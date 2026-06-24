@@ -5,7 +5,7 @@ import type { MealType } from "../types.js";
 
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("update_meal_type tool", () => {
   const kh = useKernelHarness<MealTypeState>("meal-type");
@@ -46,9 +46,8 @@ describe("update_meal_type tool", () => {
 
     const result = await kh.callTool("update_meal_type", { uid: dinner.uid, name: "Supper", color: "#4A90D9" });
 
-    const text = getText(result);
-    expect(text).toContain('renamed to "Supper"');
-    expect(text).toContain("recolored to #4A90D9");
+    // The renamed/recolored catalog rides the JSON text channel — same payload as structuredContent.
+    expect(getJson(result)).toEqual(result.structuredContent);
     const updated = kh.state().store.get(dinner.uid);
     expect(updated).toMatchObject({ name: "Supper", color: "#4A90D9", originalType: 2, orderFlag: 1 });
     const saveMealTypes = vi.mocked(kh.client().saveMealTypes);
@@ -83,7 +82,8 @@ describe("update_meal_type tool", () => {
 
     const text = await kh.callToolText("update_meal_type", { uid: brunch.uid, position: 1 });
 
-    expect(text).toContain("moved to position 1");
+    // The echoed catalog (JSON text) now leads with the moved type.
+    expect((JSON.parse(text) as { items: Array<{ uid: string }> }).items[0]!.uid).toBe(brunch.uid);
     expect(kh.state().store.get(brunch.uid)?.orderFlag).toBe(0);
     expect(kh.state().store.get(breakfast.uid)?.orderFlag).toBe(1);
     expect(kh.state().store.get(dinner.uid)?.orderFlag).toBe(2);
@@ -102,7 +102,8 @@ describe("update_meal_type tool", () => {
         { uid: brunch.uid, name: "Brunch", originalType: null },
       ],
     });
-    expect(getText(result)).toContain("No changes");
+    // The unchanged catalog rides the JSON text channel too.
+    expect(getJson(result)).toEqual(result.structuredContent);
     expect(kh.client().saveMealTypes).not.toHaveBeenCalled();
   });
 });

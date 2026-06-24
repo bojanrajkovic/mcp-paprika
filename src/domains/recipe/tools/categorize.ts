@@ -6,14 +6,9 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import {
-  recipeReadOutputSchema,
-  recipeToMarkdown,
-  recipeToReadStructured,
-  resolveCategoryRefs,
-} from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured, resolveCategoryRefs } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // Strict (exported for direct Zod-validation tests). The `categories` field left
@@ -28,7 +23,7 @@ export const categorizeRecipeInputSchema = z
       .min(1)
       .describe(
         "Category references — each is a category UID (from list_categories) or a display name " +
-          "(case-insensitive). Unknown names are skipped with a warning.",
+          "(case-insensitive). Unknown names are skipped; the result lists the categories that were applied.",
       ),
     mode: z
       .enum(["add", "replace", "remove"])
@@ -52,7 +47,8 @@ export const categorizeRecipeTool = defineTool(
     description:
       "Add, replace, or remove a recipe's categories by UID. Pass category names or UIDs and a mode: " +
       "add (union with current — the default), replace (set exactly these), or remove (drop these). " +
-      "Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.",
+      "Unknown category names are skipped (if none resolve, the call is rejected). To edit other recipe " +
+      "fields, use update_recipe.",
     inputSchema: categorizeRecipeInputSchema,
     outputSchema: recipeReadOutputSchema,
   },
@@ -107,9 +103,10 @@ export const categorizeRecipeTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      const markdown = recipeToMarkdown(saved, categoryNames);
-      const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-      return toolResult(prefix + markdown, structured);
+      // The partial-unknown warnings (some refs resolved, some did not) are dropped from
+      // the result text: the model sees the resolved category set in the payload. The
+      // all-unknown case still returns an isError with the warning prose (above).
+      return structuredResult(structured);
     };
   },
 );

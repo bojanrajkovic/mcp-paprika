@@ -20,14 +20,18 @@ describe("list_pantry_items tool", () => {
       ],
     });
 
-    const text = await kh.callToolText("list_pantry_items", {});
+    const payload = await kh.callToolJson<{ items: Array<{ uid: string; ingredient: string }> }>(
+      "list_pantry_items",
+      {},
+    );
 
-    expect(text).toContain("You have 3 pantry items");
+    expect(payload.items).toHaveLength(3);
 
     // Alphabetical ordering: Apples before Milk before Sugar.
-    const applesIdx = text.indexOf("Apples");
-    const milkIdx = text.indexOf("Milk");
-    const sugarIdx = text.indexOf("Sugar");
+    const names = payload.items.map((i) => i.ingredient);
+    const applesIdx = names.indexOf("Apples");
+    const milkIdx = names.indexOf("Milk");
+    const sugarIdx = names.indexOf("Sugar");
 
     expect(applesIdx).toBeGreaterThan(-1);
     expect(milkIdx).toBeGreaterThan(-1);
@@ -36,18 +40,19 @@ describe("list_pantry_items tool", () => {
     expect(milkIdx).toBeLessThan(sugarIdx);
 
     // UIDs are present so the caller can chain follow-up operations.
-    const items = kh.state().store.getAll();
-    for (const item of items) {
-      expect(text).toContain(item.uid);
+    const storeItems = kh.state().store.getAll();
+    for (const item of storeItems) {
+      expect(payload.items.some((i) => i.uid === item.uid)).toBe(true);
     }
   });
 
   it("returns friendly message for empty pantry", async () => {
     kh.seed({ pantry: [] });
 
-    const text = await kh.callToolText("list_pantry_items", {});
+    const payload = await kh.callToolJson<{ items: Array<unknown> }>("list_pantry_items", {});
 
-    expect(text).toBe("Your pantry is empty.");
+    // Empty pantry returns {items:[]} as compact JSON, not a prose "pantry is empty" message.
+    expect(payload.items).toHaveLength(0);
   });
 
   it("emits structured rows; absent quantity/aisle normalize to null (R1)", async () => {

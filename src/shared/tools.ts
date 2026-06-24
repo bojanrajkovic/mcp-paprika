@@ -62,6 +62,37 @@ export function toolResult(text: string, structuredContent?: Record<string, unkn
 }
 
 /**
+ * The dual-channel result for a schema-bearing tool: the structured payload travels
+ * on BOTH channels — `structuredContent` (verbatim, the widget feed and the channel
+ * surfacing hosts give the model) and the text block as compact JSON. The text block
+ * is the universal floor: it is the ONLY channel guaranteed to reach the model on
+ * every host, because whether a host forwards `structuredContent` to the model is a
+ * per-host choice the server cannot detect at the handshake (Claude Code and ChatGPT
+ * do; Claude Desktop hands the model only the text). Carrying the same payload as JSON
+ * in the text means a follow-up's identifiers reach the model everywhere, and a
+ * non-widget host still has a complete machine-readable result the model renders its
+ * own human view from.
+ *
+ * This replaces the former "clean Markdown text beside structuredContent" split: a
+ * hand-authored Markdown view per tool was a second source of truth that drifted from
+ * the structured payload (and dropped the UIDs the model needs). There is now one
+ * source — the structured payload — and the text is derived from it.
+ *
+ * The per-tool emit stays localized here so dropping the structured channel on a
+ * non-widget tool later is a one-line change (this call → `toolResult(JSON.stringify(s))`,
+ * plus removing its `outputSchema` — the SDK requires `structuredContent` once a schema
+ * is declared). The text is compact (`JSON.stringify`, no indentation): the model reads
+ * either form, and hosts that surface read results collapse them, so legibility buys
+ * little against the per-result token cost. As with `toolResult`'s two-argument form, a
+ * tool using this must declare a matching `outputSchema` on its `ToolSpec`.
+ */
+export function structuredResult<S extends Record<string, unknown>>(
+  structuredContent: S,
+): { content: [{ type: "text"; text: string }]; structuredContent: S } {
+  return toolResult(JSON.stringify(structuredContent), structuredContent);
+}
+
+/**
  * The error envelope: a text-only result flagged `isError`, carrying NO
  * `structuredContent`. The split from {@link toolResult} mirrors the SDK's own
  * contract — once a tool declares an `outputSchema`, the SDK's `validateToolOutput`

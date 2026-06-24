@@ -7,16 +7,10 @@ import type { CategoryUid } from "../ids.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { CategoryUidSchema } from "../ids.js";
 import { categoryStartGuard } from "./guards.js";
 import { buildCategoryRows, listCategoriesOutputSchema } from "./list-categories.js";
-
-function categorySummary(state: RecipeState, category: Category): string {
-  const parent = category.parentUid ? state.category.store.get(category.parentUid) : undefined;
-  const parentLine = parent ? ` (under **${parent.name}**)` : " (top-level)";
-  return `**${category.name}**${parentLine} — uid: \`${category.uid}\``;
-}
 
 /**
  * Structured-output payload for `create_category` (ADR-0019, R1, B1/#321). No
@@ -100,7 +94,7 @@ export const createCategoryTool = defineTool(
             structuredContent: structured,
           });
           if (commitErr) return commitErr;
-          return toolResult(`Created category ${categorySummary(ctx.state, saved)}`, structured);
+          return structuredResult(structured);
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveCategory failed");
@@ -173,9 +167,7 @@ export const updateCategoryTool = defineTool(
             structuredContent: { items: buildCategoryRows(ctx.state) },
           });
           if (commitErr) return commitErr;
-          return toolResult(`Updated category ${categorySummary(ctx.state, saved)}`, {
-            items: buildCategoryRows(ctx.state),
-          });
+          return structuredResult({ items: buildCategoryRows(ctx.state) });
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "saveCategory failed");

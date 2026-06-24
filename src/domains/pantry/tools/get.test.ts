@@ -9,15 +9,17 @@ describe("read_pantry_item tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("UID lookup returns full item details as markdown", async () => {
+  it("UID lookup returns full item details as JSON", async () => {
     const item = makePantryItem({ ingredient: "Olive Oil" });
     kh.seed({ pantry: [item] });
 
-    const text = await kh.callToolText("read_pantry_item", { lookup: { uid: item.uid } });
+    const parsed = await kh.callToolJson<{ uid: string; ingredient: string }>("read_pantry_item", {
+      lookup: { uid: item.uid },
+    });
 
-    expect(text).toContain(`# ${item.ingredient}`);
-    // The UID rides structuredContent, not the human text (see the structuredContent test).
-    expect(text).not.toContain(item.uid);
+    expect(parsed.ingredient).toBe("Olive Oil");
+    // UID is now in the text channel (as part of the compact JSON payload).
+    expect(parsed.uid).toBe(item.uid);
   });
 
   it("single fuzzy match by ingredient name returns item details", async () => {
@@ -25,9 +27,11 @@ describe("read_pantry_item tool", () => {
       pantry: [makePantryItem({ ingredient: "Brown Sugar" }), makePantryItem({ ingredient: "Flour" })],
     });
 
-    const text = await kh.callToolText("read_pantry_item", { lookup: { ingredient: "Brown" } });
+    const parsed = await kh.callToolJson<{ ingredient: string }>("read_pantry_item", {
+      lookup: { ingredient: "Brown" },
+    });
 
-    expect(text).toContain("# Brown Sugar");
+    expect(parsed.ingredient).toBe("Brown Sugar");
   });
 
   it("multiple fuzzy matches return a disambiguation list with all names and UIDs", async () => {

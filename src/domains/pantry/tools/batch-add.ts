@@ -6,11 +6,11 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { normalizeWire, todayWire } from "../../../utils/dates.js";
 import { NO_AISLE_UID } from "../../aisle/ids.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { addPantryItemsOutputSchema, pantryItemToMarkdown, pantryItemToRow } from "../pantry-helpers.js";
+import { addPantryItemsOutputSchema, pantryItemToRow } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 const itemInputSchema = z.object({
@@ -115,9 +115,8 @@ export const addPantryItemsTool = defineTool(
       if (toAdd.length === 0) {
         // Empty-but-valid success: nothing was created, so the structured payload
         // is an empty item array (NOT an error — the input was fine, every item
-        // was simply a duplicate).
-        const skipReport = skipMessages.join("\n");
-        return toolResult(`All items were duplicates and skipped.\n\n${skipReport}`, { items: [] });
+        // was simply a duplicate). `skipped` carries the per-item notices.
+        return structuredResult({ items: [], skipped: skipMessages });
       }
 
       // Phase 3: Build PantryItem objects with aisle resolution
@@ -177,24 +176,18 @@ export const addPantryItemsTool = defineTool(
       if ("content" in savedItems) return savedItems;
 
       // The new UIDs ride structuredContent (and the degraded commit branch), so the
-      // model can chain update_pantry_item / mark_pantry_item_out_of_stock without a re-read.
-      const structured = { items: savedItems.map((item) => pantryItemToRow(item, ctx.deps.aisle)) };
+      // model can chain update_pantry_item / mark_pantry_item_out_of_stock without a
+      // re-read; `skipped` carries any duplicate notices alongside.
+      const structured = {
+        items: savedItems.map((item) => pantryItemToRow(item, ctx.deps.aisle)),
+        skipped: skipMessages,
+      };
       const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItemsBatch(savedItems), {
         structuredContent: structured,
       });
       if (commitErr) return commitErr;
 
-      // Phase 5: Build response
-      const count = savedItems.length;
-      const rendered = savedItems.map((item) => pantryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
-      const header = `Added ${count.toString()} item(s) to the pantry.`;
-
-      if (skipMessages.length > 0) {
-        const skipReport = skipMessages.join("\n");
-        return toolResult(`${header}\n\n${rendered}\n\n---\n\n**Skipped (duplicates):**\n${skipReport}`, structured);
-      }
-
-      return toolResult(`${header}\n\n${rendered}`, structured);
+      return structuredResult(structured);
     };
   },
 );

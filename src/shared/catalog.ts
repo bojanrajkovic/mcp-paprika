@@ -48,11 +48,6 @@ export function repositionCatalog<T extends OrderedCatalogEntry>(
   );
 }
 
-/** Render the catalog as the numbered order listing the update tools respond with. */
-export function renderCatalogOrder(entries: ReadonlyArray<OrderedCatalogEntry>): string {
-  return entries.map((e, i) => `${String(i + 1)}. **${e.name}** — \`${e.uid}\``).join("\n");
-}
-
 /**
  * Build a catalog's tombstone-delete contract write (`AisleApi.deleteAisle`,
  * `MealTypeApi.deleteMealType`): sync-gate, lookup, wire tombstone (`save` POSTs

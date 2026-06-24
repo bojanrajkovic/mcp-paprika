@@ -2,10 +2,9 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
-import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, toolResult } from "../../../shared/tools.js";
+import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipePhotoResourceUri } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -127,35 +126,6 @@ export function validateCookParse(args: CookRecipeInput): string | null {
 }
 
 /**
- * A readable cook-view for hosts without the widget surface (the text fallback beside
- * the structured channel): steps grouped by component, each step's raw ingredients and
- * the intermediates it uses/makes listed beneath. Numbered continuously across groups.
- */
-export function cookToMarkdown(args: CookRecipeInput, recipe: Recipe): string {
-  const lines: string[] = [`# Cook: ${recipe.name}`];
-  const meta = [recipe.servings ? `${recipe.servings} servings` : null, recipe.totalTime].filter((v): v is string =>
-    Boolean(v),
-  );
-  if (meta.length > 0) lines.push(meta.join(" · "));
-
-  let lastGroup: string | null | undefined;
-  let stepNo = 0;
-  for (const step of args.steps) {
-    if (step.group !== lastGroup) {
-      lines.push("", `## ${step.group ?? "Steps"}`);
-      lastGroup = step.group;
-    }
-    stepNo += 1;
-    lines.push("", `${stepNo.toString()}. ${step.text}`);
-    const adds = step.ingredientRefs.map((r) => args.ingredients[r]?.text).filter((t): t is string => Boolean(t));
-    if (adds.length > 0) lines.push(`   - Add: ${adds.join(", ")}`);
-    if (step.usesIntermediate.length > 0) lines.push(`   - Uses: ${step.usesIntermediate.join(", ")}`);
-    if (step.produces !== null) lines.push(`   - Makes: ${step.produces}`);
-  }
-  return lines.join("\n");
-}
-
-/**
  * `cook_recipe` — open the interactive step-anchored cooking view. The structured
  * feed is authored by the MODEL, not derived from stored data — the first tool here
  * whose feed is model-authored: the assistant reads the recipe, parses it into the
@@ -196,7 +166,7 @@ export const cookRecipeTool = defineTool(
       const problem = validateCookParse(args);
       if (problem !== null) return errorResult(problem);
 
-      return toolResult(cookToMarkdown(args, recipe), {
+      return structuredResult({
         recipe_uid: recipe.uid,
         name: recipe.name,
         servings: recipe.servings,

@@ -8,7 +8,7 @@ import type { GroceryState } from "../module.js";
 import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 import { NO_AISLE_UID } from "../../aisle/ids.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
@@ -31,10 +31,10 @@ describe("move_grocery_items_to_pantry tool", () => {
     kh.setElicitResponder(() => ({ action: "decline" }));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["ITEM-1"] });
-    const text = getText(result);
+    const json = getJson<{ items: unknown[] }>(result);
 
-    expect(text).toContain("Cancelled");
-    // A decline is a valid empty success under the declared outputSchema, not isError.
+    // A decline returns JSON {items:[]} — the empty success under the declared outputSchema.
+    expect(json.items).toEqual([]);
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toEqual({ items: [] });
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
@@ -72,11 +72,11 @@ describe("move_grocery_items_to_pantry tool", () => {
     vi.mocked(kh.client().saveGroceryItems).mockReturnValue(okAsync([{ ...item, deleted: true }]));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["ITEM-1"] });
-    const text = getText(result);
+    const json = getJson<{ items: Array<{ uid: string; ingredient: string }> }>(result);
 
-    // Response mentions ingredient and moved
-    expect(text).toContain("Apples");
-    expect(text.toLowerCase()).toContain("moved");
+    // Response carries the pantry items that were created.
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0]!.ingredient.toLowerCase()).toContain("apples");
 
     // Pantry save called with correct fields
     expect(kh.client().savePantryItems).toHaveBeenCalledOnce();
@@ -164,8 +164,8 @@ describe("move_grocery_items_to_pantry tool", () => {
     const result = await kh.callTool("move_grocery_items_to_pantry", {
       uids: ["BATCH-1", "BATCH-2", "BATCH-3"],
     });
-    const text = getText(result);
-    expect(text.toLowerCase()).toContain("moved");
+    const json = getJson<{ items: Array<{ uid: string; ingredient: string }> }>(result);
+    expect(json.items).toHaveLength(3);
 
     // Single batch save for pantry
     expect(kh.client().savePantryItems).toHaveBeenCalledOnce();
@@ -332,9 +332,9 @@ describe("move_grocery_items_to_pantry tool", () => {
     vi.mocked(kh.client().saveGroceryItems).mockReturnValue(okAsync([{ ...item, deleted: true }]));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["DUP-1", "DUP-1", "DUP-1"] });
-    const text = getText(result);
+    const json = getJson<{ items: Array<{ uid: string; ingredient: string }> }>(result);
 
-    expect(text.toLowerCase()).toContain("moved");
+    expect(json.items).toHaveLength(1);
     expect(kh.client().savePantryItems).toHaveBeenCalledOnce();
     const savedPantry = vi.mocked(kh.client().savePantryItems).mock.calls[0]?.[0] as Array<unknown>;
     expect(savedPantry).toHaveLength(1);

@@ -14,7 +14,7 @@ import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 const BREAKFAST_UID = "breakfast-uid" as MealTypeUid;
 const LUNCH_UID = "lunch-uid" as MealTypeUid;
@@ -226,16 +226,11 @@ describe("schedule_menu — materialization", () => {
     expect(day1).not.toHaveProperty("menuUid");
     expect(day1).not.toHaveProperty("menu_uid");
 
-    // Compact day-grouped response with no per-meal UIDs.
-    const text = getText(result);
-    expect(text).toContain('Added 2 meal(s) to the planner from "Multi-Day" (Day 1 = 2026-05-27).');
-    expect(text).toContain("## 2026-05-27 (Day 1)");
-    expect(text).toContain("## 2026-05-29 (Day 3)");
-    expect(text).toContain("- **Dinner:** (Not) Butter Chicken");
-    expect(text).not.toMatch(/`[0-9A-F-]{36}`/); // no meal UIDs in the text
+    // The new meal rows now ride the JSON text channel — same payload as structuredContent
+    // The per-meal UID the old day-grouped text omitted is present, so the model can
+    // chain reschedule_meal / delete_meal on what it just created.
+    expect(getJson(result)).toEqual(result.structuredContent);
 
-    // The new meal UIDs ride structuredContent — the text omits them entirely, so this
-    // is the only channel the model can chain reschedule_meal / delete_meal on.
     const structured = result.structuredContent as {
       items: ReadonlyArray<{ uid: string; recipeUid: string | null; typeName: string | null }>;
     };
@@ -376,7 +371,10 @@ describe("schedule_menu — materialization", () => {
     const payload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.recipeUid).toBeNull();
     expect(payload[0]?.name).toBe("Leftovers Night");
-    expect(getText(result)).toContain("- **Dinner:** Leftovers Night");
+    expect(getJson<{ items: Array<{ name: string; typeName: string | null }> }>(result).items[0]).toMatchObject({
+      name: "Leftovers Night",
+      typeName: "Dinner",
+    });
   });
 
   it("unknown/custom typeUid → type integer falls back to 0, typeUid preserved", async () => {
@@ -402,8 +400,10 @@ describe("schedule_menu — materialization", () => {
     const payload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.typeUid).toBe("custom-unsynced-type");
     expect(payload[0]?.type).toBe(0);
-    // Type name falls back to the raw uid in the response when it can't be resolved.
-    expect(getText(result)).toContain("- **custom-unsynced-type:**");
+    // An unresolved type carries its raw typeUid in the row (typeName resolves to null).
+    expect(
+      getJson<{ items: Array<{ typeUid: string | null; typeName: string | null }> }>(result).items[0],
+    ).toMatchObject({ typeUid: "custom-unsynced-type", typeName: null });
   });
 });
 

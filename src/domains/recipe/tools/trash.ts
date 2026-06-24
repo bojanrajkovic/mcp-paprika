@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -41,10 +41,7 @@ export const trashRecipeTool = defineTool(
         // A no-op success: the recipe is already where the caller wants it, so the
         // structured payload is the trashed recipe (NOT an error).
         const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
-        return toolResult(
-          `Recipe "${recipe.name}" is already in the trash.`,
-          recipeToReadStructured(recipe, categoryNames),
-        );
+        return structuredResult(recipeToReadStructured(recipe, categoryNames));
       }
 
       const trashed = { ...recipe, inTrash: true };
@@ -61,7 +58,7 @@ export const trashRecipeTool = defineTool(
             selfHealing: false,
           });
           if (commitErr) return commitErr;
-          return toolResult(`Recipe "${recipe.name}" has been moved to the trash.`, structured);
+          return structuredResult(structured);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "saveRecipe failed");

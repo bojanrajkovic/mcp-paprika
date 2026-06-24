@@ -4,7 +4,6 @@ import type { RecipeUid } from "./ids.js";
 
 import { makeCategory, makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import {
-  recipeMetadataLines,
   recipePhotoResourceUri,
   recipeToMarkdown,
   recipeToReadStructured,
@@ -193,18 +192,6 @@ describe("shared helper functions", () => {
       const recipe = makeRecipe({ name: "Test" });
       const output = recipeToMarkdown(recipe, []);
       expect(output).not.toContain("**Last Cooked:**");
-    });
-
-    it("recipeMetadataLines includes Last Cooked when provided", () => {
-      const recipe = makeRecipe({ rating: 0 });
-      const lines = recipeMetadataLines(recipe, "2026-03-15 00:00:00");
-      expect(lines).toContain("**Last Cooked:** 2026-03-15");
-    });
-
-    it("recipeMetadataLines omits Last Cooked when null", () => {
-      const recipe = makeRecipe({ rating: 0 });
-      const lines = recipeMetadataLines(recipe, null);
-      expect(lines.some((l) => l.includes("Last Cooked"))).toBe(false);
     });
   });
 

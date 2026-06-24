@@ -2,14 +2,14 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { resolveLookup, resolveOrPick, structuredResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToReadStructured } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToReadStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
  * `read_pantry_item` — read one pantry item by UID or fuzzy name match, via the
- * shared lookup/format helpers and `pantryItemToMarkdown`.
+ * shared lookup helpers.
  */
 export const getPantryItemTool = defineTool(
   {
@@ -48,10 +48,7 @@ export const getPantryItemTool = defineTool(
         log: ctx.infra.log,
       });
       if ("result" in resolved) return resolved.result;
-      return toolResult(
-        pantryItemToMarkdown(resolved.entity, ctx.deps.aisle),
-        pantryItemToReadStructured(resolved.entity, ctx.deps.aisle),
-      );
+      return structuredResult(pantryItemToReadStructured(resolved.entity, ctx.deps.aisle));
     };
   },
 );

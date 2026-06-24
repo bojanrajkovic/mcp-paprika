@@ -5,9 +5,9 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverState } from "../module.js";
 
-import { browseContextSchema, recipeMetadataLines, recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
+import { browseContextSchema, recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, toolResult } from "../../../shared/tools.js";
+import { errorResult, structuredResult } from "../../../shared/tools.js";
 
 export const discoverRecipesInputSchema = {
   query: z.string().describe("Natural language description of what you're looking for"),
@@ -105,7 +105,7 @@ export const discoverRecipesTool = defineTool(
       if ("content" in results) return results;
       if (results.length === 0) {
         // No semantic match is a valid empty success.
-        return toolResult("No recipes found matching that description.", { context: browseContext, items: [] });
+        return structuredResult({ context: browseContext, items: [] });
       }
 
       // Enrich results and filter out recipes that are gone or trashed.
@@ -122,37 +122,19 @@ export const discoverRecipesTool = defineTool(
       }
 
       if (enriched.length === 0) {
-        return toolResult("No recipes found matching that description.", { context: browseContext, items: [] });
+        return structuredResult({ context: browseContext, items: [] });
       }
 
       // Build the structured rows through the recipe contract (it resolves each row's
       // category names against recipe's own store) once, then layer the similarity score
-      // on each. The text line reuses the row's already-resolved `categories`, so the
-      // structured and text categories can't drift and each hit resolves names once.
+      // on each.
       const rows = ctx.deps.recipe.toRows(enriched.map((entry) => entry.recipe));
-      const items: Array<z.infer<typeof discoverRowSchema>> = [];
-      const lines: Array<string> = [];
-      enriched.forEach((entry, index) => {
-        const row = rows[index]!;
-        items.push({ ...row, score: entry.result.score });
-        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, row.categories));
-      });
+      const items: Array<z.infer<typeof discoverRowSchema>> = enriched.map((entry, index) => ({
+        ...rows[index]!,
+        score: entry.result.score,
+      }));
 
-      return toolResult(lines.join("\n\n"), { context: browseContext, items });
+      return structuredResult({ context: browseContext, items });
     };
   },
 );
-
-function formatDiscoverHit(index: number, recipe: Recipe, score: number, categoryNames: Array<string>): string {
-  const percentage = Math.round(score * 100);
-  const lines: Array<string> = [];
-  lines.push(`${String(index)}. **${recipe.name}** — ${String(percentage)}% match`);
-  lines.push(`   UID: \`${recipe.uid}\``);
-  if (categoryNames.length > 0) {
-    lines.push(`   **Categories:** ${categoryNames.join(", ")}`);
-  }
-  for (const line of recipeMetadataLines(recipe)) {
-    lines.push(`   ${line}`);
-  }
-  return lines.join("\n");
-}

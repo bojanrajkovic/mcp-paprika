@@ -8,7 +8,7 @@ import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/g
 import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("add_recipe_to_grocery_list tool", () => {
   const kh = useKernelHarness<GroceryState>("grocery");
@@ -72,7 +72,7 @@ describe("add_recipe_to_grocery_list tool", () => {
       items: [{ ingredient: "Rice noodles", quantity: "8 oz" }, { ingredient: "Tamarind paste" }],
     });
 
-    expect(getText(result)).toContain('Added 2 item(s) from "Pad Thai" to "Groceries".');
+    expect(getJson<{ items: Array<unknown> }>(result).items).toHaveLength(2);
     const saved = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]![0] as ReadonlyArray<GroceryItem>;
     expect(saved).toHaveLength(2);
     for (const item of saved) {
@@ -112,8 +112,10 @@ describe("add_recipe_to_grocery_list tool", () => {
       items: [{ ingredient: "Rice Noodles" }, { ingredient: "Tamarind paste" }],
     });
 
-    expect(text).toContain('Added 1 item(s) from "Pad Thai"');
-    expect(text).toContain("Already on the list (skipped):");
+    const parsed = JSON.parse(text) as { items: Array<unknown>; skipped: Array<string> };
+    expect(parsed.items).toHaveLength(1);
+    // The already-on-the-list notice (with the existing UID + merge hint) rides `skipped`.
+    expect(parsed.skipped).toHaveLength(1);
     expect(text).toContain("Rice Noodles");
     expect(text).toContain(existing.uid);
     expect(text).toContain("update_grocery_item");
@@ -134,7 +136,7 @@ describe("add_recipe_to_grocery_list tool", () => {
       items: [{ ingredient: "Rice noodles" }],
     });
 
-    expect(text).toContain('Added 1 item(s) from "Pad Thai"');
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(1);
   });
 
   it("returns nothing-to-add when every ingredient is already on the list", async () => {
@@ -148,7 +150,8 @@ describe("add_recipe_to_grocery_list tool", () => {
       items: [{ ingredient: "Rice noodles" }],
     });
 
-    expect(text).toContain("Nothing to add");
+    // Every ingredient already present → nothing added (items:[]), notices ride `skipped`.
+    expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(0);
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 

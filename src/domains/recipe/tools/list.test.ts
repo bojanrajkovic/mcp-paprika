@@ -6,6 +6,24 @@ import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixt
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 
+type ListRecipesPayload = {
+  context: { source: string };
+  items: Array<{
+    uid: string;
+    name: string;
+    categories: string[];
+    rating: number;
+    totalTime: string | null;
+    servings: string | null;
+    isPinned: boolean;
+    onGroceryList: boolean;
+    created?: string;
+    [k: string]: unknown;
+  }>;
+  total: number;
+  offset: number;
+};
+
 describe("list_recipes tool", () => {
   const kh = useKernelHarness("recipe");
   beforeEach(kh.setup);
@@ -24,49 +42,53 @@ describe("list_recipes tool", () => {
   it("created date appears in each list entry", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", created: "2025-06-01T00:00:00Z" })] });
 
-    const text = await kh.callToolText("list_recipes", { offset: 0, limit: 25 });
-
-    expect(text).toContain("2025-06-01");
+    const payload = await kh.callToolJson<ListRecipesPayload>("list_recipes", { offset: 0, limit: 25 });
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0]!.created).toBe("2025-06-01T00:00:00Z");
   });
 
   it("rating appears in list entry when greater than zero", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", rating: 3 })] });
 
-    const text = await kh.callToolText("list_recipes", { offset: 0, limit: 25 });
+    const payload = await kh.callToolJson<ListRecipesPayload>("list_recipes", { offset: 0, limit: 25 });
 
-    expect(text).toContain("3/5");
+    expect(payload.items[0]!.rating).toBe(3);
   });
 
   it("rating omitted from list entry when zero", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", rating: 0 })] });
 
-    const text = await kh.callToolText("list_recipes", { offset: 0, limit: 25 });
+    const payload = await kh.callToolJson<ListRecipesPayload>("list_recipes", { offset: 0, limit: 25 });
 
-    expect(text).not.toContain("/5");
+    expect(payload.items[0]!.rating).toBe(0);
   });
 
   it("pinned marker appears when isPinned is true", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", isPinned: true })] });
 
-    expect(await kh.callToolText("list_recipes", { offset: 0, limit: 25 })).toContain("pinned");
+    const payload = await kh.callToolJson<ListRecipesPayload>("list_recipes", { offset: 0, limit: 25 });
+    expect(payload.items[0]!.isPinned).toBe(true);
   });
 
   it("pinned marker absent when isPinned is false", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", isPinned: false })] });
 
-    expect(await kh.callToolText("list_recipes", { offset: 0, limit: 25 })).not.toContain("pinned");
+    const payload = await kh.callToolJson<ListRecipesPayload>("list_recipes", { offset: 0, limit: 25 });
+    expect(payload.items[0]!.isPinned).toBe(false);
   });
 
   it("on-grocery-list marker appears when onGroceryList is true", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", onGroceryList: true })] });
 
-    expect(await kh.callToolText("list_recipes", { offset: 0, limit: 25 })).toContain("grocery list");
+    const payload = await kh.callToolJson<ListRecipesPayload>("list_recipes", { offset: 0, limit: 25 });
+    expect(payload.items[0]!.onGroceryList).toBe(true);
   });
 
   it("on-grocery-list marker absent when onGroceryList is false", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", onGroceryList: false })] });
 
-    expect(await kh.callToolText("list_recipes", { offset: 0, limit: 25 })).not.toContain("grocery list");
+    const payload = await kh.callToolJson<ListRecipesPayload>("list_recipes", { offset: 0, limit: 25 });
+    expect(payload.items[0]!.onGroceryList).toBe(false);
   });
 
   it("empty store returns cold-start message", async () => {
@@ -81,9 +103,11 @@ describe("list_recipes tool", () => {
       recipes: Array.from({ length: 10 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1).padStart(2, "0")}` })),
     });
 
-    const text = await kh.callToolText("list_recipes", { offset: 5, limit: 3 });
+    const payload = await kh.callToolJson<ListRecipesPayload>("list_recipes", { offset: 5, limit: 3 });
 
-    expect(text).toContain("Showing 3 of 10");
+    expect(payload.items).toHaveLength(3);
+    expect(payload.total).toBe(10);
+    expect(payload.offset).toBe(5);
   });
 
   it("emits structured recipe rows with uid, category names, and the pagination cursor (R1)", async () => {

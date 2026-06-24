@@ -2,10 +2,9 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
-import type { RecipeRow } from "../recipe-markdown.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, toolResult } from "../../../shared/tools.js";
+import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { browseContextSchema, recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -60,12 +59,7 @@ export const listRecipesTool = defineTool(
         // with an empty page = an over-paged offset (bad input → isError + hint),
         // the same split search_meal_history makes.
         if (total === 0) {
-          return toolResult("No recipes found.", {
-            context: { source: "list" },
-            items: [],
-            total: 0,
-            offset: args.offset,
-          });
+          return structuredResult({ context: { source: "list" }, items: [], total: 0, offset: args.offset });
         }
         return errorResult(
           `No recipes at offset ${args.offset.toString()} of ${total.toString()} total. ` +
@@ -73,28 +67,10 @@ export const listRecipesTool = defineTool(
         );
       }
 
-      const header = `Showing ${page.length.toString()} of ${total.toString()} recipes (offset: ${args.offset.toString()}):\n`;
-      // One pass: resolve each recipe's category names once, feeding both the
-      // structured row and the text line (no parallel-array index coupling).
-      const rows: Array<RecipeRow> = [];
-      const lines: Array<string> = [];
-      for (const recipe of page) {
-        const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
-        rows.push(recipeToRow(recipe, categoryNames));
-        const cats = categoryNames.length > 0 ? ` [${categoryNames.join(", ")}]` : "";
-        const meta: Array<string> = [`created: ${recipe.created.slice(0, 10)}`];
-        if (recipe.rating > 0) meta.push(`rating: ${recipe.rating.toString()}/5`);
-        if (recipe.isPinned) meta.push("pinned");
-        if (recipe.onGroceryList) meta.push("on grocery list");
-        lines.push(`- **${recipe.name}**${cats} (uid: ${recipe.uid}) · ${meta.join(" · ")}`);
-      }
+      // Resolve each recipe's category names once into the structured rows.
+      const rows = page.map((recipe) => recipeToRow(recipe, ctx.state.category.store.resolveNames(recipe.categories)));
 
-      return toolResult(header + "\n" + lines.join("\n"), {
-        context: { source: "list" },
-        items: rows,
-        total,
-        offset: args.offset,
-      });
+      return structuredResult({ context: { source: "list" }, items: rows, total, offset: args.offset });
     };
   },
 );

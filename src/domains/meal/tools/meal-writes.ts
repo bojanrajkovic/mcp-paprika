@@ -9,7 +9,7 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, confirmOrCancel, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, errorResult, structuredResult, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
@@ -20,7 +20,6 @@ import {
   mealListOutputSchema,
   mealRowSchema,
   mealToRow,
-  renderMealCard,
   resolveMealTypeName,
 } from "./helpers.js";
 
@@ -271,11 +270,7 @@ export const planMealsTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      // ----- Stage 5: render response -----
-      const cards = savedItems.map((meal) => renderMealCard(meal, ctx.deps.recipe, ctx.deps["meal-type"]));
-
-      const header = `Added ${savedItems.length.toString()} meal(s) to the planner.`;
-      return toolResult(`${header}\n\n${cards.join("\n\n---\n\n")}`, structured);
+      return structuredResult(structured);
     };
   },
 );
@@ -390,10 +385,7 @@ export const updateMealTool = defineTool(
           ) {
             // Idempotent no-op — meal already freeform, nothing else changing. A
             // real success (nothing to save), so success-with-structured.
-            return toolResult(
-              renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
-              mealToRow(existing, typeName(existing)),
-            );
+            return structuredResult(mealToRow(existing, typeName(existing)));
           }
           if (existing.recipeUid !== null && demoteOp.name === undefined) {
             // Demotion requires explicit name when meal is currently recipe-linked.
@@ -485,10 +477,7 @@ export const updateMealTool = defineTool(
         updated.typeUid === existing.typeUid &&
         updated.scale === existing.scale
       ) {
-        return toolResult(
-          renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]),
-          mealToRow(existing, typeName(existing)),
-        );
+        return structuredResult(mealToRow(existing, typeName(existing)));
       }
 
       const saved = (await ctx.infra.client.saveMeals([updated])).match(
@@ -506,7 +495,7 @@ export const updateMealTool = defineTool(
       });
       if (commitErr) return commitErr;
 
-      return toolResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]), structured);
+      return structuredResult(structured);
     };
   },
 );

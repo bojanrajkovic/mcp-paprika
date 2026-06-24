@@ -7,7 +7,7 @@ import type { GroceryState } from "../module.js";
 import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
+import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 import { markGroceryItemPurchasedInputSchema } from "./grocery-item-purchase.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
@@ -28,10 +28,10 @@ describe("mark_grocery_item_purchased tool", () => {
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
     const result = await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-1" });
-    const text = getText(result);
+    const json = getJson<{ uid: string; ingredient: string; purchased: boolean }>(result);
 
-    expect(text).toContain("Milk");
-    expect(text).toContain("Yes"); // Purchased: Yes
+    expect(json.ingredient).toBe("Milk");
+    expect(json.purchased).toBe(true); // purchased: true in JSON
     expect(kh.client().saveGroceryItems).toHaveBeenCalledWith([expect.objectContaining({ purchased: true })]);
     // The purchased row rides structuredContent so the model can chain on its UID.
     expect(result.isError).toBeUndefined();
