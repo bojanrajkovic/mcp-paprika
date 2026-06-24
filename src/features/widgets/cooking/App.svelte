@@ -11,6 +11,7 @@
   import {
     callTool,
     connectHost,
+    errorText,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
 
@@ -37,9 +38,10 @@
     steps: Step[];
   }
 
-  // The four built-in Paprika meal types, in day order; Dinner is the default for a
-  // just-cooked meal (matches log_cooked_meal's own default).
-  const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack"] as const;
+  // The four built-in Paprika meal types, by their exact built-in names (the 4th is
+  // "Snacks", plural) so {name} resolves to the built-in instead of auto-creating a
+  // near-duplicate custom type; Dinner is the default for a just-cooked meal.
+  const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
 
   let data = $state<CookData | null>(null);
   let phase = $state<"loading" | "ready" | "error">("loading");
@@ -57,6 +59,9 @@
   let reanchorOpen = $state(false);
   let reanchorText = $state("");
   let logState = $state<"idle" | "logging" | "logged">("idle");
+  // The error result's remediation text (cold-start / not-found / a validateCookParse
+  // hint), shown verbatim on the error screen — display only, never parsed.
+  let errorMsg = $state<string | null>(null);
   let toast = $state<{ kind: "error" | "info"; msg: string } | null>(null);
 
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -108,9 +113,16 @@
       !d ||
       typeof uid !== "string" ||
       !Array.isArray(d["steps"]) ||
+      d["steps"].length === 0 ||
       !Array.isArray(d["ingredients"])
     ) {
-      phase = "error";
+      // Don't clobber an already-loaded cook view on a later non-cooking result the
+      // host may route through this channel (e.g. the log_cooked_meal echo); only
+      // surface an error before anything has loaded.
+      if (phase !== "ready") {
+        errorMsg = errorText(result);
+        phase = "error";
+      }
       return;
     }
     data = {
@@ -126,6 +138,7 @@
     checked = new Set();
     removed = new Set();
     logState = "idle";
+    errorMsg = null;
     phase = "ready";
   }
 
@@ -252,7 +265,8 @@
     <StatusScreen
       icon="🍳"
       title="Couldn’t open the cooking view"
-      desc="Ask to cook a recipe and the step-anchored view will appear here."
+      desc={errorMsg ??
+        "Ask to cook a recipe and the step-anchored view will appear here."}
     />
   {:else}
     <header>
@@ -287,7 +301,7 @@
 
     {#if mode === "review"}
       <div class="scroll">
-        {#each groups as group (group.key)}
+        {#each groups as group (group.items[0]!.gi)}
           {#if group.items[0]?.step.group}
             <h2 class="section">{group.items[0].step.group}</h2>
           {/if}
@@ -408,7 +422,7 @@
 {#snippet chipRow(step: Step, stepIdx: number, cookMode: boolean)}
   {#if step.ingredientRefs.length > 0 || step.usesIntermediate.length > 0}
     <div class="chips">
-      {#each step.usesIntermediate as name (name)}
+      {#each step.usesIntermediate as name, i (i)}
         <button
           class="chip inter"
           onclick={() => jumpToProducer(name)}
@@ -417,7 +431,7 @@
           <span class="lead" aria-hidden="true">↑</span>{name}
         </button>
       {/each}
-      {#each step.ingredientRefs as ref (ref)}
+      {#each step.ingredientRefs as ref, i (i)}
         {@const text = data?.ingredients[ref]?.text ?? ""}
         {#if cookMode}
           <button
