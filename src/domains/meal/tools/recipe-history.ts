@@ -47,9 +47,10 @@ export const readRecipeHistoryTool = defineTool(
       'total, and its most recent cooking dates (with meal type). Answers "when did I last ' +
       'make this", "have we cooked this before", "how often do we make it". Look the recipe ' +
       "up by UID (from list_recipes, search_recipes, or read_recipe). Only PAST cooks count — " +
-      "future planner entries are excluded (use read_meal_plan for what's scheduled). For the " +
-      "full meal-by-meal list, or to filter cooking history by category, meal type, or date " +
-      "window, use search_meal_history.",
+      "future planner entries are excluded (use read_meal_plan for what's scheduled). A recipe never " +
+      "cooked returns a zero summary (timesCooked 0, lastCooked null) — use log_cooked_meal to record a " +
+      "past cooking or plan_meals to schedule one. For the full meal-by-meal list, or to filter cooking " +
+      "history by category, meal type, or date window, use search_meal_history.",
     inputSchema: {
       recipe_uid: RecipeUidSchema.describe(
         "The recipe to summarize, by UID (from list_recipes, search_recipes, or read_recipe).",

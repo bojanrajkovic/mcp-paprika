@@ -301,7 +301,7 @@ Generate a styled food photo for a recipe with an AI image model and (by default
 
 **List grocery aisles** — read-only, idempotent
 
-List all known aisles, sorted by order then name. Includes the aisle UID needed for pantry and grocery item writes.
+List all known aisles, sorted by order then name. Includes the aisle UID needed for pantry and grocery item writes. There is no create-aisle tool: a new aisle is created automatically when you add a grocery or pantry item naming an aisle that does not exist yet.
 
 _No parameters._
 
@@ -505,7 +505,7 @@ Read a recipe by UID or title. Title lookup is fuzzy (exact → starts-with → 
 
 **Read a recipe's cooking history** — read-only, idempotent
 
-Summarize ONE recipe's cooking history: when it was last cooked, how many times total, and its most recent cooking dates (with meal type). Answers "when did I last make this", "have we cooked this before", "how often do we make it". Look the recipe up by UID (from list_recipes, search_recipes, or read_recipe). Only PAST cooks count — future planner entries are excluded (use read_meal_plan for what's scheduled). For the full meal-by-meal list, or to filter cooking history by category, meal type, or date window, use search_meal_history.
+Summarize ONE recipe's cooking history: when it was last cooked, how many times total, and its most recent cooking dates (with meal type). Answers "when did I last make this", "have we cooked this before", "how often do we make it". Look the recipe up by UID (from list_recipes, search_recipes, or read_recipe). Only PAST cooks count — future planner entries are excluded (use read_meal_plan for what's scheduled). A recipe never cooked returns a zero summary (timesCooked 0, lastCooked null) — use log_cooked_meal to record a past cooking or plan_meals to schedule one. For the full meal-by-meal list, or to filter cooking history by category, meal type, or date window, use search_meal_history.
 
 **Parameters**
 
