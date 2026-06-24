@@ -70,6 +70,13 @@ spec:
               value: mcp-paprika
             - name: OTEL_TRACES_SAMPLER
               value: parentbased_always_on
+            # MCP clients (ChatGPT, Claude) send a W3C traceparent, but they export to
+            # their own backends, not ours — adopting their trace context leaves every
+            # trace rooted in a span this collector never receives ("root span not yet
+            # received" in Tempo). Disable propagation so each request is a fresh root;
+            # nothing downstream (Paprika, the OIDC provider) shares this trace backend.
+            - name: OTEL_PROPAGATORS
+              value: none
             # k8s resource attributes via the downward API — the SDK's env
             # detector reads OTEL_RESOURCE_ATTRIBUTES, so this needs no app
             # support and works without a collector-side k8sattributes
