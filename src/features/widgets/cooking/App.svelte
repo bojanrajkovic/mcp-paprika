@@ -832,7 +832,10 @@
       background 0.13s,
       opacity 0.13s;
   }
-  .nav .navbtn:hover:not(:disabled) {
+  /* Scope the subtle hover to the non-primary (Prev) button — on the filled primary it
+     would swap the accent fill for --hover while keeping dark --accent-ink text
+     (unreadable dark-on-dark). The primary brightens its own fill instead. */
+  .nav .navbtn:not(.primary):hover:not(:disabled) {
     background: var(--hover);
   }
   .nav .navbtn:disabled {
@@ -843,6 +846,9 @@
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accent-ink);
+  }
+  .nav .navbtn.primary:hover:not(:disabled) {
+    filter: brightness(1.06);
   }
   .nav .navbtn:focus-visible {
     outline: 2px solid var(--accent);
