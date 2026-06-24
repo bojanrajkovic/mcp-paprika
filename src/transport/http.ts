@@ -24,6 +24,7 @@ import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
+import { clientAttrs, clientFingerprint, recordClientConnection } from "../telemetry/client-fingerprint.js";
 import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
 import { getMeter, lazy, startTimer } from "../telemetry/scope.js";
 import { unwrapAtBoot } from "../utils/errors.js";
@@ -168,8 +169,24 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     const session = sessions.get(id);
     if (session === undefined) return;
     sessions.delete(id);
+    const elapsedSeconds = session.elapsedSeconds();
+    const fp = clientFingerprint(session.server.server);
     activeSessions().add(-1, HTTP_TRANSPORT_ATTR);
-    mcpServerSessionDuration().record(session.elapsedSeconds(), HTTP_TRANSPORT_ATTR);
+    // Label the session lifetime with the connecting client (census slice), so
+    // session duration is sliceable by client alongside the connect span/counter.
+    mcpServerSessionDuration().record(elapsedSeconds, {
+      ...HTTP_TRANSPORT_ATTR,
+      ...clientAttrs(session.server.server),
+    });
+    log.info(
+      {
+        client: fp?.name ?? "unknown",
+        clientVersion: fp?.version,
+        durationSec: Math.round(elapsedSeconds),
+        sessions: sessions.size,
+      },
+      "mcp client disconnected",
+    );
   };
 
   // DNS rebinding protection: derive once at startup. The SDK's transport
@@ -402,12 +419,19 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     // tools on N session servers is safe — exactly as buildMcpServer(app) was.
     const server = buildBrandedServer();
     kernel.registerAll(server);
-    // Log the connecting client's advertised capabilities once per session (debug) — notably
-    // whether it offers form elicitation, which the destructive-confirm and disambiguation-pick
-    // gates check before issuing a request. oninitialized fires after the client's initialized
-    // notification, so getClientCapabilities() is populated by then.
+    // Capture the connection fingerprint once per session: clientInfo + the full
+    // capability tree + the requested protocol version (from the parsed initialize
+    // body, the only place the server sees it — it does not retain the negotiated
+    // value). recordClientConnection emits the connect span + census counter + the
+    // per-server stash the tool wrapper reads; we log the same fingerprint here (the
+    // transport owns the logger). oninitialized fires after the client's initialized
+    // notification, so the client reads are populated by then.
     server.server.oninitialized = () => {
-      log.debug({ clientCapabilities: server.server.getClientCapabilities() }, "mcp client initialized");
+      const fp = recordClientConnection(server.server, {
+        transport: "http",
+        protocolVersion: body.params.protocolVersion,
+      });
+      log.info({ client: fp }, "mcp client connected");
     };
     const transport = new StreamableHTTPTransport({
       sessionIdGenerator: () => randomUUID(),

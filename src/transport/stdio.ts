@@ -1,4 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 import type { PaprikaConfig } from "../utils/config.js";
 
@@ -9,6 +10,7 @@ import { createIndexEvents } from "../server/index-events.js";
 import { createServerRef, singleServerNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
 import { shutdownTelemetry } from "../telemetry/bootstrap.js";
+import { clientAttrs, clientFingerprint, recordClientConnection } from "../telemetry/client-fingerprint.js";
 import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
 import { startTimer } from "../telemetry/scope.js";
 // Side-effect: every domain/feature module self-registers on import, so the kernel's
@@ -83,8 +85,32 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   }
 
   tlog.info("connecting stdio transport");
+
+  // Capture the connection fingerprint at the handshake — the stdio complement to
+  // the HTTP transport's oninitialized seam (clientInfo + capability tree + the
+  // connect span/counter/log + the per-server stash the tool wrapper reads). stdio
+  // sees the requested protocol version only on the wire: the server retains no
+  // negotiated value and there is no pre-parsed initialize body here, so sniff it
+  // off the transport's message stream. The wrap goes on AFTER connect (which
+  // installs the Protocol's onmessage) and delegates to it; the initialize REQUEST
+  // arrives before the initialized NOTIFICATION that fires oninitialized, so the
+  // captured value is ready by then.
+  let requestedProtocolVersion: string | undefined;
+  server.server.oninitialized = () => {
+    const fp = recordClientConnection(server.server, {
+      transport: "stdio",
+      protocolVersion: requestedProtocolVersion,
+    });
+    tlog.info({ client: fp }, "mcp client connected");
+  };
   const sessionElapsedSeconds = startTimer();
-  await server.connect(new StdioServerTransport());
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  const deliver = transport.onmessage;
+  transport.onmessage = (message) => {
+    if (isInitializeRequest(message)) requestedProtocolVersion = message.params.protocolVersion;
+    deliver?.(message);
+  };
   tlog.info("server ready");
 
   // The single end-of-session point, latched: the stdin-EOF handler below and
@@ -98,9 +124,18 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
     if (sessionEnded) return;
     sessionEnded = true;
     loop?.stop();
-    mcpServerSessionDuration().record(sessionElapsedSeconds(), {
+    const elapsedSeconds = sessionElapsedSeconds();
+    const fp = clientFingerprint(server.server);
+    // Label the session lifetime with the connecting client (census slice), the
+    // same slice the connect span/counter carry.
+    mcpServerSessionDuration().record(elapsedSeconds, {
       [ATTR_MCP_PAPRIKA_TRANSPORT]: "stdio",
+      ...clientAttrs(server.server),
     });
+    tlog.info(
+      { client: fp?.name ?? "unknown", clientVersion: fp?.version, durationSec: Math.round(elapsedSeconds) },
+      "mcp client disconnected",
+    );
   };
 
   // A normal client disconnect is the pipe closing, not a signal — and

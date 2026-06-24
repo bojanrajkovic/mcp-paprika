@@ -8,6 +8,7 @@ import type { TypedCallToolResult } from "../shared/tools.js";
 import type { DomainCtx, DomainId } from "./registry.js";
 
 import { UI_RESOURCE_URI_META_KEY } from "../shared/mcp-app.js";
+import { clientAttrs } from "../telemetry/client-fingerprint.js";
 import { mcpServerOperationDuration } from "../telemetry/instruments.js";
 import { getTracer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_OPERATION_NAME, ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
@@ -140,6 +141,9 @@ const TOOLS_CALL_METHOD = "tools/call";
 
 /** Which precondition gated a call — custom-prefixed; the MCP conventions define no gate concept. */
 const ATTR_TOOL_GATED_BY = "mcp_paprika.tool.gated_by";
+
+/** Whether the result carried `structuredContent` — the structured-output channel signal, sliceable by the client fingerprint on the same span. */
+const ATTR_TOOL_STRUCTURED_OUTPUT = "mcp_paprika.tool.structured_output";
 
 const MAX_LOGGED_STRING = 256;
 
@@ -307,13 +311,33 @@ export function defineTool<
           { attributes: spanAttributes },
           { histogram: mcpServerOperationDuration, attributes: metricAttributes },
         );
+        // Tag the span (not the metric) with the connecting client's census slice
+        // — name + major version + transport — so the structured-output channel can
+        // be sliced by host without inflating the operation-duration histogram's
+        // series count. Empty until the handshake fingerprint is recorded.
+        op.span.setAttributes(clientAttrs(ctx.server.server));
         // The protocol adapters: finish maps the SDK's CallToolResult outcomes
         // onto op.end (the doc-comment above carries the outcome-classing
         // rationale — gated keeps status UNSET); fail is the throw-transparent
         // passthrough for the SDK's throw-based callback contract.
         const finish = (result: CallToolResult, gateErrorType?: string): CallToolResult => {
           const errorType = gateErrorType ?? (result.isError === true ? "tool_error" : undefined);
+          // Whether the result used the structured-output channel — set on the span
+          // (sliceable by the client fingerprint above), and on the completion log.
+          const structuredOutput = result.structuredContent !== undefined;
+          op.span.setAttribute(ATTR_TOOL_STRUCTURED_OUTPUT, structuredOutput);
           op.end({ errorType, isError: errorType === "tool_error" });
+          // Uniform per-call completion line (debug) closing every "tool invoked"
+          // with the outcome; the client fingerprint is on the span (pivot via trace_id).
+          log.debug(
+            {
+              tool: spec.name,
+              structuredOutput,
+              isError: result.isError === true,
+              ...(gateErrorType !== undefined && { gated: true }),
+            },
+            "tool completed",
+          );
           return result;
         };
         const fail = (cause: unknown): never => {
