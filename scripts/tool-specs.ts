@@ -28,12 +28,19 @@ function isToolDef(v: unknown): v is ToolDefLike {
   return typeof o.register === "function" && typeof o.spec?.name === "string";
 }
 
-/** Every tool module — a `*.ts` file under any `tools/` directory in `src` — excluding colocated `*.test.ts`. */
+/**
+ * Every tool module — a `*.ts` file under any `tools/` directory in `src` —
+ * excluding colocated `*.test.ts` and the `diag` feature. The diag tools are
+ * config-gated diagnostics the kernel registers ONLY under `MCP_DIAG`; they are
+ * absent from the production surface, so the reference (which documents what the
+ * server registers by default) must not list them — and the drift test compares
+ * this set against the kernel's built tools, which exclude them when diag is off.
+ */
 async function toolModulePaths(): Promise<ReadonlyArray<string>> {
   const entries = await readdir(SRC, { recursive: true });
   return entries
     .map((p) => p.split(sep).join("/"))
-    .filter((p) => /(?:^|\/)tools\/[^/]+\.ts$/.test(p) && !p.includes(".test."))
+    .filter((p) => /(?:^|\/)tools\/[^/]+\.ts$/.test(p) && !p.includes(".test.") && !p.startsWith("features/diag/"))
     .sort()
     .map((p) => join(SRC, p));
 }

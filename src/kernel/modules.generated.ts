@@ -9,6 +9,7 @@ import "../domains/meal/module.js";
 import "../domains/menu/module.js";
 import "../domains/pantry/module.js";
 import "../domains/recipe/module.js";
+import "../features/diag/module.js";
 import "../features/discover/module.js";
 import "../features/photo-gen/module.js";
 import "../features/widgets/module.js";

@@ -18,6 +18,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "sync.pendingWriteTtl": "PAPRIKA_SYNC_PENDING_WRITE_TTL",
   "sync.recipeFetchConcurrency": "PAPRIKA_SYNC_RECIPE_CONCURRENCY",
   transport: "MCP_TRANSPORT",
+  diagnostics: "MCP_DIAG",
   "http.port": "MCP_HTTP_PORT",
   "http.host": "MCP_HTTP_HOST",
   "http.allowedHosts": "MCP_ALLOWED_HOSTS",
@@ -191,6 +192,13 @@ export const paprikaConfigSchema = z
     // exposes Streamable HTTP for Claude Mobile and other HTTP-based MCP
     // clients. See docs/http-transport.md for the security implications.
     transport: z.enum(["stdio", "http"]).default("stdio"),
+    // Diagnostics mode (both transports). When true, the kernel additionally
+    // registers config-gated diagnostic tools — currently `diag_forwarding_probe`,
+    // which returns a token only in the structured-output channel to determine
+    // whether a host forwards `structuredContent` to its model. Default OFF: the
+    // diagnostic tools are ABSENT from the advertised surface in production (the
+    // kernel skips them, not just no-ops), so they ship nothing into normal results.
+    diagnostics: booleanField.default(false),
     http: z
       .object({
         port: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -467,6 +475,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
     sync["recipeFetchConcurrency"] = env["PAPRIKA_SYNC_RECIPE_CONCURRENCY"];
 
   if (env["MCP_TRANSPORT"] !== undefined) overrides["transport"] = env["MCP_TRANSPORT"];
+  if (env["MCP_DIAG"] !== undefined) overrides["diagnostics"] = env["MCP_DIAG"];
   if (env["MCP_HTTP_PORT"] !== undefined) http["port"] = env["MCP_HTTP_PORT"];
   if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
   if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
