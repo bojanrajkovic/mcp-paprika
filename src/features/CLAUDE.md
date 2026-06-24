@@ -2,11 +2,9 @@
 
 ## Purpose
 
-Feature modules on the kernel — kernel modules that are optional features, not data domains. `discover/` (semantic search) and `photo-gen/` (AI photos) are each composed in a `.state` factory and opt-in on config: the semantic-search stack (`EmbeddingClient` → `VectorStore` → the owned `JsonVectorIndex`) and the photo-generation stack (`PhotographyClient` + SSRF-hardened image fetch). An unconfigured feature builds a `null` component; the kernel registers their tools (`discover_recipes`, `generate_recipe_photo`) **unconditionally**, and the feature gate lives inside the handler, which declines with a clear not-configured result when its component is `null` (ADR-0009 §5; since R1, `discover_recipes` returns that as an `isError` redirect to `search_recipes`).
+Three feature modules on the kernel — kernel modules that are optional features, not data domains. `discover/` (semantic search) and `photo-gen/` (AI photos) are each composed in a `.state` factory and opt-in on config: the semantic-search stack (`EmbeddingClient` → `VectorStore` → the owned `JsonVectorIndex`) and the photo-generation stack (`PhotographyClient` + SSRF-hardened image fetch). An unconfigured feature builds a `null` component; the kernel registers their tools (`discover_recipes`, `generate_recipe_photo`) **unconditionally**, and the feature gate lives inside the handler, which declines with a clear not-configured result when its component is `null` (ADR-0009 §5; since R1, `discover_recipes` returns that as an `isError` redirect to `search_recipes`).
 
 `widgets/` is the odd one out: it owns no entity and reads no config, registers **no tool**, and serves the prebuilt `ui://widget/{name}` HTML resources a host renders in a sandboxed iframe (ADR-0019). Its sharp edges (the build-time-only toolchain, the boot-degrade, the path resolution) live in its own `CLAUDE.md`.
-
-`diag/` is the diagnostics surface, gated by `MCP_DIAG`. Unlike discover/photo-gen, it uses **conditional registration** — its `diag_forwarding_probe` tool is in the module's `tools[]` only when the flag is on, so the diagnostic is ABSENT from the advertised `tools/list` in production, not merely inert. The probe returns a random token in `structuredContent` only (never the text), to measure whether a host forwards `structuredContent` to its model (the inverse of `structuredResult`). It is excluded from the generated tool reference (`scripts/tool-specs.ts`) since it is not part of the default surface.
 
 ## Key References
 

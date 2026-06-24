@@ -21,32 +21,19 @@ common to both transports.
 
 ### Core
 
-| Variable                          | Config path                   | Required | Default   | Description                                                                           |
-| --------------------------------- | ----------------------------- | -------- | --------- | ------------------------------------------------------------------------------------- |
-| `PAPRIKA_EMAIL`                   | `paprika.email`               | Yes      | —         | Paprika account email                                                                 |
-| `PAPRIKA_PASSWORD`                | `paprika.password`            | Yes      | —         | Paprika account password                                                              |
-| `PAPRIKA_SYNC_INTERVAL`           | `sync.interval`               | No       | `"15m"`   | Background sync polling interval                                                      |
-| `PAPRIKA_SYNC_ENABLED`            | `sync.enabled`                | No       | `true`    | Enable background sync                                                                |
-| `PAPRIKA_SYNC_PENDING_WRITE_TTL`  | `sync.pendingWriteTtl`        | No       | `"60s"`   | How long a local write is shielded from sync reconciliation                           |
-| `PAPRIKA_SYNC_RECIPE_CONCURRENCY` | `sync.recipeFetchConcurrency` | No       | `5`       | Concurrent recipe fetches during sync (see note below)                                |
-| `MCP_TRANSPORT`                   | `transport`                   | No       | `"stdio"` | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP)                 |
-| `MCP_DIAG`                        | `diagnostics`                 | No       | `false`   | Diagnostics mode: register config-gated diagnostic tools (both transports; see below) |
+| Variable                          | Config path                   | Required | Default   | Description                                                           |
+| --------------------------------- | ----------------------------- | -------- | --------- | --------------------------------------------------------------------- |
+| `PAPRIKA_EMAIL`                   | `paprika.email`               | Yes      | —         | Paprika account email                                                 |
+| `PAPRIKA_PASSWORD`                | `paprika.password`            | Yes      | —         | Paprika account password                                              |
+| `PAPRIKA_SYNC_INTERVAL`           | `sync.interval`               | No       | `"15m"`   | Background sync polling interval                                      |
+| `PAPRIKA_SYNC_ENABLED`            | `sync.enabled`                | No       | `true`    | Enable background sync                                                |
+| `PAPRIKA_SYNC_PENDING_WRITE_TTL`  | `sync.pendingWriteTtl`        | No       | `"60s"`   | How long a local write is shielded from sync reconciliation           |
+| `PAPRIKA_SYNC_RECIPE_CONCURRENCY` | `sync.recipeFetchConcurrency` | No       | `5`       | Concurrent recipe fetches during sync (see note below)                |
+| `MCP_TRANSPORT`                   | `transport`                   | No       | `"stdio"` | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP) |
 
 When `MCP_TRANSPORT=http`, see [http-transport.md](http-transport.md) and
 [oauth-configuration.md](oauth-configuration.md) for the `MCP_HTTP_*`, `MCP_OIDC_*`,
 `MCP_ALLOWED_*`, and `MCP_OAUTH_*` variables.
-
-### Diagnostics (optional)
-
-`MCP_DIAG=true` registers config-gated diagnostic tools that are **absent from the
-advertised surface in production** (the kernel skips them, so they ship nothing into
-normal tool results). Today there is one: `diag_forwarding_probe`, which returns a
-fresh random token in the result's `structuredContent` only — never the text block.
-Calling it in a host and asking the model to repeat the token back determines whether
-that host forwards `structuredContent` to the model (forwarding can no longer be
-observed passively, since every schema-bearing result now carries its payload as JSON
-text too). The connection fingerprint each host advertises is captured separately by
-telemetry — see [telemetry.md](telemetry.md) § "Connection fingerprint".
 
 ### Logging
 
