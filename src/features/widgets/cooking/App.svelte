@@ -47,11 +47,6 @@
   // done-screen hero — one read, downscaled by CSS.
   const HERO_PX = 600;
 
-  // The four built-in Paprika meal types, by their exact built-in names (the 4th is
-  // "Snacks", plural) so {name} resolves to the built-in instead of auto-creating a
-  // near-duplicate custom type; Dinner is the default for a just-cooked meal.
-  const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
-
   let data = $state<CookData | null>(null);
   let phase = $state<"loading" | "ready" | "error">("loading");
   let theme = $state<"light" | "dark">("light");
@@ -59,6 +54,11 @@
   // The cook stepper position. `cookIndex === steps.length` is the done/log screen —
   // the stepper's final screen, NOT a separate tab.
   let cookIndex = $state(0);
+  // The log action's selectable meal types: the user's full catalog (built-in + custom)
+  // once list_meal_types loads in receive(), the built-ins (4th is "Snacks", plural) until
+  // then. `mealType` is the selected name — {name} resolves against the catalog, so a custom
+  // type logs without auto-creating a duplicate.
+  let mealTypes = $state<string[]>(["Breakfast", "Lunch", "Dinner", "Snacks"]);
   let mealType = $state<string>("Dinner");
   // Per-(step,ref) UI sets: chips checked off while cooking, and raw chips flagged wrong
   // in review. Keys are `${stepIdx}:${ref}`. Both are display-only — the model is only
@@ -153,6 +153,27 @@
     errorMsg = null;
     phase = "ready";
     void loadHeroPhoto(data.photoResourceUri);
+    void loadMealTypes();
+  }
+
+  // Load the user's meal-type catalog (built-in + custom) for the log dropdown, falling
+  // back to the built-ins on failure (e.g. the preview shim no-ops callServerTool, or the
+  // catalog is still syncing). Re-points the selected type if the user renamed the Dinner
+  // built-in so the default name always exists in the catalog.
+  async function loadMealTypes() {
+    const res = await callTool(app, "list_meal_types", {});
+    const items = res.structuredContent?.["items"];
+    if (!Array.isArray(items)) return;
+    const names = items
+      .map((i) =>
+        typeof i === "object" && i !== null
+          ? (i as Record<string, unknown>)["name"]
+          : null,
+      )
+      .filter((n): n is string => typeof n === "string" && n !== "");
+    if (names.length === 0) return;
+    mealTypes = names;
+    if (!names.includes(mealType)) mealType = names[0]!;
   }
 
   // Read the cover photo into a data: URI for the header thumbnail + done-screen hero.
@@ -400,7 +421,7 @@
               bind:value={mealType}
               aria-label="Meal type"
             >
-              {#each MEAL_TYPES as t (t)}
+              {#each mealTypes as t (t)}
                 <option value={t}>{t}</option>
               {/each}
             </select>
