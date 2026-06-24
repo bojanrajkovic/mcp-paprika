@@ -566,22 +566,46 @@ export async function buildKernel(
     const cycleSpan = getTracer().startSpan("paprika.sync_cycle", { attributes: { [ATTR_SYNC_TRIGGER]: trigger } });
     const cycleElapsedSeconds = startTimer();
     const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): ReadonlyArray<AnySyncResult> => {
+      const elapsedSeconds = cycleElapsedSeconds();
       cycleSpan.setAttribute(ATTR_SYNC_OUTCOME, outcome);
       if (outcome !== "ok") cycleSpan.setStatus({ code: SpanStatusCode.ERROR });
       cycleSpan.end();
-      syncCycleDuration().record(cycleElapsedSeconds(), {
+      syncCycleDuration().record(elapsedSeconds, {
         [ATTR_SYNC_TRIGGER]: trigger,
         [ATTR_SYNC_OUTCOME]: outcome,
       });
+      let total = 0;
+      const entitiesChanged: string[] = [];
       for (const r of results) {
         const counts = [
           ["added", r.changes.added.length],
           ["updated", r.changes.updated.length],
           ["removed", r.changes.removedUids.length],
         ] as const;
+        let entityTotal = 0;
         for (const [kind, n] of counts) {
           if (n > 0) syncChanges().add(n, { [ATTR_SYNC_ENTITY]: r.changeType, [ATTR_SYNC_CHANGE_KIND]: kind });
+          entityTotal += n;
         }
+        total += entityTotal;
+        if (entityTotal > 0) entitiesChanged.push(r.changeType);
+      }
+      // Close every cycle with a summary line (the interval loop is otherwise
+      // silent on success): a change-bearing cycle at info, a clean no-op at
+      // debug. The aborted outcomes already logged their err/warn above, so they
+      // close at debug here without a second error line. Trace correlation via the
+      // span; per-entity counts live on the sync_changes metric.
+      const fields = {
+        trigger,
+        outcome,
+        durationSec: Math.round(elapsedSeconds),
+        changes: total,
+        entities: entitiesChanged,
+      };
+      if (outcome === "ok" && total > 0) {
+        infra.log.info(fields, "sync cycle complete");
+      } else {
+        infra.log.debug(fields, "sync cycle complete");
       }
       return results;
     };
