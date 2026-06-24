@@ -90,10 +90,6 @@
   .act:hover {
     background: color-mix(in oklch, var(--ink) 6%, var(--bg));
   }
-  .act:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
   .act.primary {
     background: var(--accent);
     border-color: var(--accent);

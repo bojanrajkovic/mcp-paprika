@@ -596,10 +596,6 @@
     background: var(--hover);
     color: var(--ink);
   }
-  .pbtn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
   .pbtn.off {
     color: var(--faint);
     opacity: 0.7;

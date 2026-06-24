@@ -91,4 +91,21 @@
     --danger-bg: oklch(0.31 0.075 27);
     color-scheme: dark;
   }
+
+  /* Widget-wide focus ring — the one home for the keyboard-focus outline every widget
+     would otherwise re-declare. A control overrides only for an inset ring or a corner
+     radius; its scoped local `:focus-visible` outspecifies this low-specificity rule. */
+  main :global(:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Widget-wide reduced motion for CSS animations/transitions. Svelte's JS transitions
+     (`transition:` / `animate:flip`) are NOT CSS and are gated separately in motion.ts. */
+  @media (prefers-reduced-motion: reduce) {
+    main :global(*) {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
 </style>

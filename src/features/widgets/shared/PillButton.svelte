@@ -50,10 +50,6 @@
       color 0.13s,
       border-color 0.13s;
   }
-  .pill:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
   .pill.neutral:hover {
     background: var(--hover);
     color: var(--ink);

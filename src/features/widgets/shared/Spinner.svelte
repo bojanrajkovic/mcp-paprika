@@ -32,9 +32,4 @@
       transform: rotate(360deg);
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .spin {
-      animation-duration: 0.001ms;
-    }
-  }
 </style>
