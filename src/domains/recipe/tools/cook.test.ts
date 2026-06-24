@@ -1,26 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { RecipeUid } from "../ids.js";
+import type { CookRecipeInput } from "./cook.js";
+
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 
-interface CookStep {
-  text: string;
-  group: string | null;
-  ingredientRefs: number[];
-  produces: string | null;
-  usesIntermediate: string[];
-}
-interface CookArgs {
-  recipe_uid: string;
-  ingredients: { text: string; group: string | null }[];
-  steps: CookStep[];
-}
-
-// A minimal flat (no-intermediate) parse for the given recipe UID.
-function flatArgs(uid: string): CookArgs {
+// A minimal flat (no-intermediate) parse for the given recipe UID. Typed as the tool's own
+// CookRecipeInput so the test tracks the schema; the cast covers the not-found / cold-start
+// cases that deliberately pass a non-resolving UID string.
+function flatArgs(uid: string): CookRecipeInput {
   return {
-    recipe_uid: uid,
+    recipe_uid: uid as RecipeUid,
     ingredients: [
       { text: "2 cups flour", group: null },
       { text: "1 cup sugar", group: null },
@@ -39,7 +31,7 @@ describe("cook_recipe tool", () => {
 
   // A named type isn't assignable to Record<string, unknown> without an index signature
   // (only fresh object literals are), so spread into a literal at the call boundary.
-  const callCook = (args: CookArgs) => kh.callTool("cook_recipe", { ...args });
+  const callCook = (args: CookRecipeInput) => kh.callTool("cook_recipe", { ...args });
 
   it("echoes the validated parse and enriches it with the stored recipe's identity", async () => {
     const recipe = makeRecipe({ name: "Pound Cake", servings: "8", totalTime: "1 hr" });
