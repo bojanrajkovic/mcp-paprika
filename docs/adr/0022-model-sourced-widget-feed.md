@@ -1,6 +1,6 @@
 # ADR-0022: A model-sourced widget feed for the step-anchored cooking surface
 
-**Status:** Proposed (preliminary — the widget chip-language direction is still being settled in a design playground, and the `cook_recipe` tool + cooking widget are not yet built; see "Open" below)
+**Status:** Accepted
 
 ## Context
 
@@ -57,13 +57,7 @@ Rejected because no such field exists; persisting it would require owning the da
 - A new kind of artifact: a widget feed whose correctness rests on the model plus the human confirm, not on server-derived truth. This is a different trust model from every other widget and must be documented as such.
 - The mapping is ephemeral — re-derived per cook, with harmless cross-cook naming drift in the intermediate names.
 - A large structured input is more for the agent to get right than a typical tool call (the concern [ADR-0008](0008-tool-surface-command-language.md) raises); it is mitigated by the mechanical validation and the human confirm, but it is real.
-- If the model calls `cook_recipe` without having read the recipe it can confabulate ingredients; v1 leans on the `recipe_uid`-resolves check plus the confirm view, with a server-side ingredients-vs-blob cross-check held as a hedged follow-up.
-
-## Open (preliminary status)
-
-- The widget **chip-language direction** — how a raw-ingredient chip and an intermediate chip are visually distinguished, and which intermediate encoding reads clearest — is being settled in a design playground before the Svelte components are built.
-- The `cook_recipe` tool and the `ui://widget/cooking` widget are **not yet implemented**; this ADR records the decision, and the implementation design (schema, validation, widget modes, component reuse) lives in the Outline "C6 (#337): cooking widget" design doc.
-- Two follow-ups are intended after the design lands: a hedged "cook widget hardening" item (the confabulation cross-check + a step-text coverage check, which may prove unnecessary if confabulation stays as low as the spike suggests) and a v2 "cook-mode timers + Wake Lock" item.
+- If the model calls `cook_recipe` without having read the recipe it can confabulate ingredients; the `recipe_uid`-resolves check plus the human confirm view are the guardrails, and a server-side ingredients-vs-blob cross-check could harden it further should confabulation prove to be a problem.
 
 ## References
 
