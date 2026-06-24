@@ -114,10 +114,6 @@
     cursor: default;
     border-color: transparent;
   }
-  .wn-btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
   .wn-btn svg {
     width: 15px;
     height: 15px;
@@ -162,7 +158,6 @@
     background: var(--hover);
   }
   .day-chip:focus-visible {
-    outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
   .dc-name {

@@ -580,10 +580,6 @@
     background: color-mix(in oklch, var(--accent) 14%, transparent);
     color: var(--accent);
   }
-  .tab:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
 
   .scroll {
     flex: 1;
@@ -716,12 +712,6 @@
     font-weight: 700;
     opacity: 0.8;
   }
-  .chip:focus-visible,
-  .chip .x:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 999px;
-  }
 
   .reanchor {
     margin-top: 18px;
@@ -756,10 +746,6 @@
     border-radius: 8px;
     padding: 8px 10px;
   }
-  .reanchor-box:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 0;
-  }
   .reanchor-actions {
     display: flex;
     gap: 8px;
@@ -792,10 +778,6 @@
   }
   .cta:hover {
     filter: brightness(1.05);
-  }
-  .cta:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
 
   .cook {
@@ -871,10 +853,6 @@
   .nav .navbtn.primary:hover:not(:disabled) {
     filter: brightness(1.06);
   }
-  .nav .navbtn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
 
   .done {
     flex: 1;
@@ -946,11 +924,6 @@
     padding: 0 8px;
     cursor: pointer;
   }
-  .split-main:focus-visible,
-  .split-select:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
 
   .link {
     appearance: none;
@@ -972,14 +945,6 @@
     filter: brightness(1.08);
   }
   .link:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
     border-radius: 6px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    * {
-      transition-duration: 0.001ms !important;
-    }
   }
 </style>

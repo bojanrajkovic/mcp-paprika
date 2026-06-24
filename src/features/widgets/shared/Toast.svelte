@@ -72,9 +72,4 @@
       transform: none;
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .toast {
-      animation-duration: 0.001ms;
-    }
-  }
 </style>

@@ -430,7 +430,6 @@
     background: var(--hover);
   }
   .row:focus-visible {
-    outline: 2px solid var(--accent);
     outline-offset: -2px;
     border-radius: 6px;
   }
@@ -490,11 +489,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *,
-    .tick {
-      animation-duration: 0.001ms !important;
-      transition-duration: 0.001ms !important;
-    }
     .tick {
       stroke-dashoffset: 0;
     }

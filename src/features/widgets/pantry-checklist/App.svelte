@@ -616,11 +616,4 @@
     text-decoration: line-through;
     text-decoration-color: color-mix(in oklch, var(--faint) 55%, transparent);
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    * {
-      animation-duration: 0.001ms !important;
-      transition-duration: 0.001ms !important;
-    }
-  }
 </style>
