@@ -91,6 +91,18 @@ Clear all purchased items from a grocery list.
 
 - `listUid` — Grocery list UID to clear purchased items from
 
+## `cook_recipe`
+
+**Open the step-anchored cooking view** — read-only, idempotent
+
+Open the interactive step-anchored cooking view for a recipe. FIRST read the recipe (read_recipe), THEN parse its ingredients and directions into this structure and pass it here — the server validates and echoes your parse, it does not parse for you. Anchor each direction step to the RAW ingredients it adds fresh (ingredientRefs index into the ingredients array). Model multi-component recipes with intermediates: when a step makes something set aside and used later (a spice paste, a glaze, a baked crust), give it a `produces` name and reference it from the consuming step's `usesIntermediate` — by name, not by re-listing its raw parts. Only name an intermediate that is genuinely set aside (used by a non-adjacent or by multiple later steps); when a result flows straight into the next step, leave `produces` null. Keep ingredient lines and step text verbatim; ingredient/direction section headers become the `group` on each line.
+
+**Parameters**
+
+- `recipe_uid` — UID of the recipe being cooked (from read_recipe / search_recipes).
+- `ingredients` — Every ingredient line, in the recipe's order.
+- `steps` — Every direction step, in order, each anchored to the ingredients it uses.
+
 ## `create_category`
 
 **Create a recipe category** — write

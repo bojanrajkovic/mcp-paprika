@@ -179,6 +179,9 @@ export const cookRecipeTool = defineTool(
       "step text verbatim; ingredient/direction section headers become the `group` on each line.",
     inputSchema: cookRecipeInputSchema,
     outputSchema: cookRecipeOutputSchema,
+    // Hosts with the apps surface render this result as the step-anchored cooking
+    // widget; others show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/cooking" },
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
