@@ -70,13 +70,16 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
     // update_category, update_meal_type echo the full reordered catalog list).
     // R1 — the photo tools, beside their image content block (generate_recipe_photo,
     // upload_recipe_photo echo the recipe + new photo UID, or the recipe + pending
-    // generation token on a preview). Add each later batch's tool names as they land.
+    // generation token on a preview). The step-anchored cooking read (cook_recipe)
+    // validates and echoes a model-authored parse for the cooking widget. Add each
+    // later batch's tool names as they land.
     expect(withSchema).toEqual([
       "add_grocery_items",
       "add_menu_items",
       "add_pantry_items",
       "add_recipe_to_grocery_list",
       "categorize_recipe",
+      "cook_recipe",
       "create_category",
       "create_grocery_list",
       "create_menu",
