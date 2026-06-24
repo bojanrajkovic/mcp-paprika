@@ -168,9 +168,7 @@ export const cookRecipeTool = defineTool(
     title: "Open the step-anchored cooking view",
     annotations: { readOnlyHint: true, idempotentHint: true },
     description:
-      "Open the interactive step-anchored cooking view for a recipe. FIRST read the recipe with read_recipe — which " +
-      "resolves a recipe by its title directly, so you do not need search_recipes first when the user names a recipe " +
-      "to cook — THEN " +
+      "Open the interactive step-anchored cooking view for a recipe. FIRST read the recipe (read_recipe), THEN " +
       "parse its ingredients and directions into this structure and pass it here — the server validates and echoes " +
       "your parse, it does not parse for you. Anchor each direction step to the RAW ingredients it adds fresh " +
       "(ingredientRefs index into the ingredients array). Model multi-component recipes with intermediates: when a " +
