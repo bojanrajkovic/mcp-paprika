@@ -38,6 +38,7 @@ import { photosSync } from "./syncs/photo-sync.js";
 import { recipesSync } from "./syncs/recipe-sync.js";
 import { categorizeRecipeTool } from "./tools/categorize.js";
 import { categoryWriteTools } from "./tools/category-writes.js";
+import { cookRecipeTool } from "./tools/cook.js";
 import { createRecipeTool } from "./tools/create.js";
 import { deleteCategoryTool } from "./tools/delete-category.js";
 import { favoriteRecipeTools } from "./tools/favorite.js";
@@ -382,6 +383,7 @@ register(
           listRecipesTool,
           readRecipeTool,
           searchRecipesTool,
+          cookRecipeTool,
           createRecipeTool,
           updateRecipeTool,
           categorizeRecipeTool,
