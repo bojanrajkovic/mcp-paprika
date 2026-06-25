@@ -3,6 +3,7 @@
 
   import { onMount } from "svelte";
 
+  import Chevron from "../shared/Chevron.svelte";
   import PillButton from "../shared/PillButton.svelte";
   import RecipeDetail from "../shared/RecipeDetail.svelte";
   import Spinner from "../shared/Spinner.svelte";
@@ -282,9 +283,7 @@
                 {#if loadingItemUid === item.uid}
                   <Spinner size={14} />
                 {:else}
-                  <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"
-                    ><path d="M6 4l4 4-4 4" /></svg
-                  >
+                  <Chevron />
                 {/if}
               </button>
             {:else}
@@ -451,16 +450,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .chev {
-    flex: none;
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: var(--faint);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
   }
   /* Freeform item (no recipe to open) — muted, not interactive. */
   .freeform {

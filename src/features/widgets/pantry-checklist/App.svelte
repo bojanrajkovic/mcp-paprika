@@ -6,6 +6,7 @@
   import { slide } from "svelte/transition";
 
   import BrandMark from "../shared/BrandMark.svelte";
+  import Chevron from "../shared/Chevron.svelte";
   import GroupedList from "../shared/GroupedList.svelte";
   import ItemRow from "../shared/ItemRow.svelte";
   import PillButton from "../shared/PillButton.svelte";
@@ -370,7 +371,7 @@
             }}
             aria-expanded={drawerOpen}
           >
-            <span class="chev">▸</span>
+            <Chevron size={13} color="var(--muted)" open={drawerOpen} />
             <span class="grow">Out of stock ({outOfStock.length})</span>
           </button>
           {#if confirmingClear}
@@ -579,12 +580,6 @@
     padding: 12px 0 12px 16px;
     cursor: pointer;
     text-align: left;
-  }
-  .drawer-head .chev {
-    transition: transform 0.18s;
-  }
-  .drawer.open .drawer-head .chev {
-    transform: rotate(90deg);
   }
   .drawer-head .grow {
     flex: 1;
