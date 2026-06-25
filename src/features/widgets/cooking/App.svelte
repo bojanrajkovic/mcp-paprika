@@ -30,12 +30,16 @@
     ingredientRefs: number[];
     produces: string | null;
     usesIntermediate: string[];
+    phase: "prep" | "cook";
   }
   interface CookData {
     recipeUid: string;
     name: string;
     servings: string | null;
     totalTime: string | null;
+    prepTime: string | null;
+    prepActiveMin: number;
+    prepPassiveMin: number;
     photoResourceUri: string | null;
     ingredients: Ingredient[];
     steps: Step[];
@@ -51,9 +55,12 @@
   let phase = $state<"loading" | "ready" | "error">("loading");
   let theme = $state<"light" | "dark">("light");
   let mode = $state<"review" | "cook">("review");
-  // The cook stepper position. `cookIndex === steps.length` is the done/log screen —
-  // the stepper's final screen, NOT a separate tab.
-  let cookIndex = $state(0);
+  // The cooking flow has two phases. `cookPhase === "prep"` is the mise-en-place screen —
+  // the stepper's slot 0; `"steps"` is the per-step stepper. `stepPos` indexes the COOK-phase
+  // steps only (prep-phase steps live on the prep screen); `stepPos === cookCount` is the
+  // done/log screen — the stepper's final screen, NOT a separate tab.
+  let cookPhase = $state<"prep" | "steps">("prep");
+  let stepPos = $state(0);
   // The log action's selectable meal types: the user's full catalog (built-in + custom)
   // once list_meal_types loads in receive(), the built-ins (4th is "Snacks", plural) until
   // then. `mealType` is the selected name — {name} resolves against the catalog, so a custom
@@ -65,6 +72,9 @@
   // re-engaged through the "Re-anchor differently" path, never on a single chip toggle.
   let checked = $state<Set<string>>(new Set());
   let removed = $state<Set<string>>(new Set());
+  // Prep-screen check-off: keys `i<ingredientIdx>` for gather chips, `s<stepIdx>` for
+  // prep-action rows. Display-only, like `checked`/`removed`.
+  let prepChecked = $state<Set<string>>(new Set());
   let reanchorOpen = $state(false);
   let reanchorText = $state("");
   let logState = $state<"idle" | "logging" | "logged">("idle");
@@ -103,7 +113,36 @@
     return m;
   });
 
-  const stepCount = $derived(data?.steps.length ?? 0);
+  // Steps tagged with their global index, split by phase: the cook stepper pages the
+  // cook-phase steps; the prep screen lists the prep-phase ones. `cookCount` is the stepper
+  // length — the done/log screen sits at `stepPos === cookCount`.
+  const cookSteps = $derived(
+    data
+      ? data.steps
+          .map((step, gi) => ({ step, gi }))
+          .filter((x) => x.step.phase === "cook")
+      : [],
+  );
+  const prepStepItems = $derived(
+    data
+      ? data.steps
+          .map((step, gi) => ({ step, gi }))
+          .filter((x) => x.step.phase === "prep")
+      : [],
+  );
+  // The mise-en-place gather list: every ingredient tagged with its index, grouped into
+  // consecutive same-component runs (a flat recipe yields one run, headed "Gather").
+  const ingredientGroups = $derived(
+    data
+      ? groupConsecutive(
+          data.ingredients.map((ing, ii) => ({ ing, ii })),
+          (x) => x.ing.group ?? "",
+        )
+      : [],
+  );
+  const cookCount = $derived(cookSteps.length);
+  // Progress spans the prep screen (slot 0) plus every cook step.
+  const progressMax = $derived(cookCount + 1);
 
   onMount(() => {
     connectHost(app, {
@@ -136,19 +175,29 @@
       return;
     }
     const photoUri = d["photoResourceUri"];
+    const prepRaw = (
+      typeof d["prep"] === "object" && d["prep"] !== null ? d["prep"] : {}
+    ) as Record<string, unknown>;
+    const nonNegInt = (v: unknown): number =>
+      typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.round(v) : 0;
     data = {
       recipeUid: uid,
       name: typeof d["name"] === "string" ? d["name"] : "Recipe",
       servings: typeof d["servings"] === "string" ? d["servings"] : null,
       totalTime: typeof d["totalTime"] === "string" ? d["totalTime"] : null,
+      prepTime: typeof d["prepTime"] === "string" ? d["prepTime"] : null,
+      prepActiveMin: nonNegInt(prepRaw["activeMin"]),
+      prepPassiveMin: nonNegInt(prepRaw["passiveWaitMin"]),
       photoResourceUri: typeof photoUri === "string" ? photoUri : null,
       ingredients: (d["ingredients"] as unknown[]).map(toIngredient),
       steps: (d["steps"] as unknown[]).map(toStep),
     };
     mode = "review";
-    cookIndex = 0;
+    cookPhase = "prep";
+    stepPos = 0;
     checked = new Set();
     removed = new Set();
+    prepChecked = new Set();
     logState = "idle";
     errorMsg = null;
     phase = "ready";
@@ -219,6 +268,7 @@
       usesIntermediate: uses.filter(
         (n): n is string => typeof n === "string" && n !== "",
       ),
+      phase: r["phase"] === "prep" ? "prep" : "cook",
     };
   }
 
@@ -235,18 +285,65 @@
 
   function startCooking() {
     mode = "cook";
-    cookIndex = 0;
+    cookPhase = "prep";
+    stepPos = 0;
+  }
+
+  // Leave the prep screen for the first cook step (or straight to the done screen for a
+  // no-cook assembly, where cookCount is 0).
+  function beginSteps() {
+    cookPhase = "steps";
+    stepPos = 0;
+  }
+
+  // Return to the stepper from the done screen — its last cook step, or the prep screen
+  // when there are no cook steps at all.
+  function backToSteps() {
+    if (cookCount === 0) {
+      cookPhase = "prep";
+      return;
+    }
+    cookPhase = "steps";
+    stepPos = cookCount - 1;
+  }
+
+  function togglePrep(k: string) {
+    const next = new Set(prepChecked);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    prepChecked = next;
+  }
+
+  // Whole minutes → "45 min" / "1 hr" / "1 hr 30 min", for the prep-time budget.
+  function formatMinutes(min: number): string {
+    if (min < 60) return `${min.toString()} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    const hrs = `${h.toString()} hr`;
+    return m === 0 ? hrs : `${hrs} ${m.toString()} min`;
   }
 
   function jumpToProducer(name: string) {
-    const i = producerIndex.get(name);
-    if (i === undefined) return;
-    if (mode === "cook") cookIndex = i;
-    else
-      stepEls[i]?.scrollIntoView({
+    const gi = producerIndex.get(name);
+    if (gi === undefined || !data) return;
+    if (mode === "cook") {
+      // A producer on the prep screen (a made-ahead sub-component) sends the cook to prep;
+      // otherwise map its global index to the cook stepper's position.
+      if (data.steps[gi]?.phase === "prep") {
+        cookPhase = "prep";
+      } else {
+        const pos = cookSteps.findIndex((c) => c.gi === gi);
+        if (pos >= 0) {
+          cookPhase = "steps";
+          stepPos = pos;
+        }
+      }
+    } else {
+      stepEls[gi]?.scrollIntoView({
         behavior: reduced ? "auto" : "smooth",
         block: "center",
       });
+    }
   }
 
   function toggleChecked(stepIdx: number, ref: number) {
@@ -394,7 +491,69 @@
       <footer class="bar">
         <button class="cta" onclick={startCooking}>Start cooking →</button>
       </footer>
-    {:else if cookIndex >= stepCount}
+    {:else if cookPhase === "prep"}
+      <!-- Prep screen: the stepper's slot 0 — gather + mise-en-place before first heat. -->
+      <div class="cook prep">
+        {@render progressBar(1)}
+        <p class="kn">Prep · gather &amp; measure</p>
+
+        <div class="budget">
+          <p class="budget-active">
+            ⏱ ~{formatMinutes(data.prepActiveMin)} hands-on
+          </p>
+          {#if data.prepPassiveMin > 0}
+            <p class="budget-passive">
+              ⧖ {formatMinutes(data.prepPassiveMin)} hands-off — start it first
+            </p>
+          {/if}
+          {#if data.prepTime}
+            <p class="budget-stated">recipe says {data.prepTime}</p>
+          {/if}
+        </div>
+
+        {#each ingredientGroups as group (group.items[0]!.ii)}
+          <h2 class="section">{group.items[0]!.ing.group ?? "Gather"}</h2>
+          <div class="chips gather">
+            {#each group.items as { ing, ii } (ii)}
+              <button
+                class="chip raw"
+                class:checked={prepChecked.has(`i${ii.toString()}`)}
+                onclick={() => togglePrep(`i${ii.toString()}`)}
+              >
+                {#if prepChecked.has(`i${ii.toString()}`)}<span
+                    class="tick"
+                    aria-hidden="true">✓</span
+                  >{/if}{ing.text}
+              </button>
+            {/each}
+          </div>
+        {/each}
+
+        {#if prepStepItems.length > 0}
+          <h2 class="section">Prep</h2>
+          <ul class="prep-actions">
+            {#each prepStepItems as { step, gi } (gi)}
+              <li>
+                <button
+                  class="prep-row"
+                  class:done={prepChecked.has(`s${gi.toString()}`)}
+                  aria-pressed={prepChecked.has(`s${gi.toString()}`)}
+                  onclick={() => togglePrep(`s${gi.toString()}`)}
+                >
+                  <span class="box" aria-hidden="true"
+                    >{prepChecked.has(`s${gi.toString()}`) ? "☑" : "☐"}</span
+                  >
+                  <span class="prep-text">{step.text}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+      <footer class="bar">
+        <button class="cta" onclick={beginSteps}>Start cooking →</button>
+      </footer>
+    {:else if stepPos >= cookCount}
       <!-- Done/log screen — the stepper's final screen, not a separate tab. -->
       <div class="done">
         {#if logState === "logged"}
@@ -429,44 +588,33 @@
           <button class="link" onclick={logDifferentDay}
             >Log a different day…</button
           >
-          <button
-            class="link subtle"
-            onclick={() => (cookIndex = stepCount - 1)}>Back to steps</button
+          <button class="link subtle" onclick={backToSteps}
+            >Back to steps</button
           >
         {/if}
       </div>
     {:else}
-      {@const step = data.steps[cookIndex]}
-      <!-- Cook stepper: one big-type step at a time. -->
+      {@const item = cookSteps[stepPos]}
+      <!-- Cook stepper: one big-type cook-phase step at a time (prep is slot 0). -->
       <div class="cook">
-        <div
-          class="progress"
-          role="progressbar"
-          aria-valuenow={cookIndex + 1}
-          aria-valuemin={1}
-          aria-valuemax={stepCount}
-        >
-          <div
-            class="progress-fill"
-            style:width={`${(((cookIndex + 1) / stepCount) * 100).toString()}%`}
-          ></div>
-        </div>
+        {@render progressBar(stepPos + 2)}
         <p class="kn">
-          Step {cookIndex + 1} of {stepCount}{step?.group
-            ? ` · ${step.group}`
+          Step {stepPos + 1} of {cookCount}{item?.step.group
+            ? ` · ${item.step.group}`
             : ""}
         </p>
-        <p class="cook-text">{step?.text}</p>
-        {#if step}{@render chipRow(step, cookIndex, true)}{/if}
+        <p class="cook-text">{item?.step.text}</p>
+        {#if item}{@render chipRow(item.step, item.gi, true)}{/if}
       </div>
       <footer class="bar nav">
         <button
           class="navbtn"
-          disabled={cookIndex === 0}
-          onclick={() => (cookIndex -= 1)}>← Prev</button
+          onclick={() =>
+            stepPos === 0 ? (cookPhase = "prep") : (stepPos -= 1)}
+          >{stepPos === 0 ? "← Prep" : "← Prev"}</button
         >
-        <button class="navbtn primary" onclick={() => (cookIndex += 1)}>
-          {cookIndex === stepCount - 1 ? "Finish →" : "Next →"}
+        <button class="navbtn primary" onclick={() => (stepPos += 1)}>
+          {stepPos === cookCount - 1 ? "Finish →" : "Next →"}
         </button>
       </footer>
     {/if}
@@ -474,6 +622,23 @@
 
   <Toast {toast} />
 </WidgetShell>
+
+<!-- The cook-flow progress bar — `now` of `progressMax` slots (slot 1 is the prep screen,
+     slots 2..cookCount+1 the cook steps). Shared by the prep screen and the stepper. -->
+{#snippet progressBar(now: number)}
+  <div
+    class="progress"
+    role="progressbar"
+    aria-valuenow={now}
+    aria-valuemin={1}
+    aria-valuemax={progressMax}
+  >
+    <div
+      class="progress-fill"
+      style:width={`${((now / progressMax) * 100).toString()}%`}
+    ></div>
+  </div>
+{/snippet}
 
 {#snippet chipRow(step: Step, stepIdx: number, cookMode: boolean)}
   {#if step.ingredientRefs.length > 0 || step.usesIntermediate.length > 0}
@@ -790,6 +955,82 @@
   .cook .chips {
     margin-left: 0;
     margin-top: 16px;
+  }
+
+  /* Prep screen — the time budget, the component-grouped gather list, and the
+     prep-phase actions, all above the stepper it leads into. */
+  .prep .section:first-of-type {
+    margin-top: 14px;
+  }
+  .prep .gather {
+    margin-top: 6px;
+  }
+  .budget {
+    margin: 14px 0 2px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: color-mix(in oklch, var(--accent) 8%, transparent);
+    border: 1px solid color-mix(in oklch, var(--accent) 18%, transparent);
+  }
+  .budget p {
+    margin: 0;
+  }
+  .budget p + p {
+    margin-top: 3px;
+  }
+  .budget-active {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .budget-passive {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .budget-stated {
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .prep-actions {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+  }
+  .prep-actions li {
+    border-top: 1px solid var(--line);
+  }
+  .prep-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    width: 100%;
+    text-align: left;
+    padding: 10px 2px;
+    color: var(--ink);
+    transition: opacity 0.13s;
+  }
+  .prep-row .box {
+    flex: none;
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--accent);
+  }
+  .prep-row .prep-text {
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .prep-row.done {
+    opacity: 0.5;
+  }
+  .prep-row.done .prep-text {
+    text-decoration: line-through;
+  }
+  .prep-row:hover {
+    color: var(--accent);
   }
 
   .nav .navbtn {
