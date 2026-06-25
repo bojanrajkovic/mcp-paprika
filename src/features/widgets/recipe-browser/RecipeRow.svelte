@@ -3,6 +3,7 @@
   // category + the single most relevant cook time (secondary), rating dots (right), an
   // optional colour tile, and a chevron that rotates when the row is expanded. The whole
   // line is one button so the host gives it keyboard focus and a tap target for free.
+  import Chevron from "../shared/Chevron.svelte";
   import { nameTile } from "../shared/tile.js";
 
   interface RowRecipe {
@@ -108,9 +109,7 @@
       aria-hidden="true"
       >{#if photoSrc}<img class="thumbimg" src={photoSrc} alt="" />{/if}</span
     >{/if}
-  <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"
-    ><path d="M6 4l4 4-4 4" /></svg
-  >
+  <Chevron size={16} {open} />
 </button>
 
 <style>
@@ -203,19 +202,5 @@
     height: 100%;
     object-fit: cover;
     display: block;
-  }
-  .chev {
-    flex: none;
-    width: 16px;
-    height: 16px;
-    fill: none;
-    stroke: var(--faint);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    transition: transform 0.15s;
-  }
-  .main.open .chev {
-    transform: rotate(90deg);
   }
 </style>

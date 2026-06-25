@@ -4,6 +4,7 @@
   // inline recipe detail; a freeform meal (no recipeUid) is a plain label; an empty slot shows
   // a `—` placeholder and a "Plan ↗" pill that routes planning to the assistant. App owns the
   // fetch and the slot-building; this only renders and reports taps.
+  import Chevron from "../shared/Chevron.svelte";
   import PillButton from "../shared/PillButton.svelte";
   import Spinner from "../shared/Spinner.svelte";
 
@@ -65,9 +66,7 @@
                 {#if loadingUid === meal.uid}
                   <Spinner size={13} />
                 {:else}
-                  <svg class="ms-chev" viewBox="0 0 16 16" aria-hidden="true"
-                    ><path d="M6 3.5 10.5 8 6 12.5" /></svg
-                  >
+                  <Chevron size={14} />
                 {/if}
               </button>
             {:else}
@@ -169,16 +168,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .ms-chev {
-    flex: none;
-    width: 14px;
-    height: 14px;
-    fill: none;
-    stroke: var(--faint);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
   }
   /* Match .ms-name's weight: a freeform meal is still a meal name, not lighter than a linked one. */
   .ms-free {
