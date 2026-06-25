@@ -78,19 +78,9 @@ describe("ADR-0018: custom telemetry names are well-formed and never identity-be
     expect(offenders).toEqual([]);
   });
 
-  // Tools are structurally safe (defineTool's wrapper is the only way to
-  // register one), but resource registration is an opaque `(ctx) => void`
-  // the kernel can't see into — the tracedResourceRead wrap is applied by
-  // hand per resource file. This gate keeps that hand-application honest:
-  // a new resource that registers a read handler without the wrap ships
-  // untraced and unmetered with no other signal.
-  it("every resource file that calls registerResource wraps its handler in tracedResourceRead", () => {
-    const unwrapped = sourceFiles()
-      .filter((p) => /^src\/domains\/[^/]+\/resources\/.+\.ts$/.test(p))
-      .filter((p) => {
-        const text = readFileSync(p, "utf8");
-        return text.includes("registerResource") && !text.includes("tracedResourceRead");
-      });
-    expect(unwrapped).toEqual([]);
-  });
+  // Resource-read tracing was once held honest by a grep gate here — any
+  // resource file calling `registerResource` had to reference `tracedResourceRead`
+  // by hand. That gate is gone because `defineResource` (kernel/resource.ts) now
+  // owns the wrap: registering a resource runs through it, so a new resource
+  // CANNOT ship untraced, the same structural property `defineTool` gives tools.
 });

@@ -1,10 +1,8 @@
-import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-
-import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryListUid } from "../ids.js";
 import type { GroceryState } from "../module.js";
 
-import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
+import { defineResource } from "../../../kernel/resource.js";
+import { resourceNotFound } from "../../../shared/resources.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
 
 /**
@@ -17,8 +15,15 @@ import { groceryListToMarkdown } from "../grocery-helpers.js";
  * The header leads with `**UID:**` then `**URI:**` — the resource's stable
  * identifier, carried in the header by every Content resource (recipe, menu too).
  */
-export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pantry">): void {
-  const template = new ResourceTemplate("paprika://grocery-list/{uid}", {
+export const groceryListResource = defineResource<GroceryState, "aisle" | "pantry">(
+  {
+    primary: {
+      name: "grocery-lists",
+      uriTemplate: "paprika://grocery-list/{uid}",
+      description: "Paprika grocery lists accessible by UID",
+    },
+  },
+  (ctx) => ({
     list: async () => {
       const lists = ctx.state.lists.store.getAll();
       return {
@@ -29,13 +34,7 @@ export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pant
         })),
       };
     },
-  });
-
-  ctx.server.registerResource(
-    "grocery-lists",
-    template,
-    { description: "Paprika grocery lists accessible by UID" },
-    tracedResourceRead("grocery-lists", async (uri, variables) => {
+    read: async (uri, variables) => {
       const uid = variables["uid"] as GroceryListUid;
       const list = ctx.state.lists.store.get(uid);
       if (!list) {
@@ -61,6 +60,6 @@ export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pant
           },
         ],
       };
-    }),
-  );
-}
+    },
+  }),
+);

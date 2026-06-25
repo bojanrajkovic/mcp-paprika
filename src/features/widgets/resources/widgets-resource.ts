@@ -1,11 +1,9 @@
-import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-
-import type { DomainCtx } from "../../../kernel/registry.js";
 import type { WidgetsState } from "../module.js";
 
+import { defineResource } from "../../../kernel/resource.js";
 import { supportsForm } from "../../../shared/elicit.js";
 import { UI_RESOURCE_MIME_TYPE } from "../../../shared/mcp-app.js";
-import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
+import { resourceNotFound } from "../../../shared/resources.js";
 import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT } from "../shared/server-caps-key.js";
 
 /**
@@ -19,8 +17,15 @@ import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT } from "../shared/server-caps-key.j
  * touches disk, and the list enumerates the built-artifact map rather than
  * scanning the directory per request.
  */
-export function widgetsResource(ctx: DomainCtx<WidgetsState, never>): void {
-  const template = new ResourceTemplate("ui://widget/{name}", {
+export const widgetsResource = defineResource<WidgetsState, never>(
+  {
+    primary: {
+      name: "widgets",
+      uriTemplate: "ui://widget/{name}",
+      description: "Interactive widget views, rendered by hosts that support the MCP apps surface (ADR-0019)",
+    },
+  },
+  (ctx) => ({
     list: async () => ({
       resources: [...ctx.state.widgets.keys()].map((name) => ({
         uri: `ui://widget/${name}`,
@@ -28,13 +33,7 @@ export function widgetsResource(ctx: DomainCtx<WidgetsState, never>): void {
         mimeType: UI_RESOURCE_MIME_TYPE,
       })),
     }),
-  });
-
-  ctx.server.registerResource(
-    "widgets",
-    template,
-    { description: "Interactive widget views, rendered by hosts that support the MCP apps surface (ADR-0019)" },
-    tracedResourceRead("widgets", async (uri, variables) => {
+    read: async (uri, variables) => {
       const name = variables["name"] as string;
       const html = ctx.state.widgets.get(name);
       if (html === undefined) {
@@ -51,6 +50,6 @@ export function widgetsResource(ctx: DomainCtx<WidgetsState, never>): void {
       return {
         contents: [{ uri: uri.href, mimeType: UI_RESOURCE_MIME_TYPE, text: injected }],
       };
-    }),
-  );
-}
+    },
+  }),
+);

@@ -25,7 +25,7 @@ function makeCtx(server: McpServer, widgets: ReadonlyMap<string, string>): Domai
 describe("widgetsResource — ui://widget/{name}", () => {
   it("serves a known widget's HTML under the apps MIME type", async () => {
     const server = buildBrandedServer();
-    widgetsResource(
+    widgetsResource.register(
       makeCtx(server, new Map([["demo", "<html><body><!-- __widget-inject__ -->demo widget</body></html>"]])),
     );
 
@@ -47,7 +47,7 @@ describe("widgetsResource — ui://widget/{name}", () => {
 
   it("enumerates the in-memory artifact map in resources/list", async () => {
     const server = buildBrandedServer();
-    widgetsResource(makeCtx(server, new Map([["demo", "<html>a</html>"]])));
+    widgetsResource.register(makeCtx(server, new Map([["demo", "<html>a</html>"]])));
 
     const mcp = await connectInMemoryMcp(server);
     try {
@@ -62,7 +62,7 @@ describe("widgetsResource — ui://widget/{name}", () => {
 
   it("answers a not-found error for an unknown widget", async () => {
     const server = buildBrandedServer();
-    widgetsResource(makeCtx(server, new Map()));
+    widgetsResource.register(makeCtx(server, new Map()));
 
     const mcp = await connectInMemoryMcp(server);
     try {

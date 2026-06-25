@@ -1,10 +1,8 @@
-import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-
-import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeUid } from "../ids.js";
 import type { RecipeState } from "../module.js";
 
-import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
+import { defineResource } from "../../../kernel/resource.js";
+import { resourceNotFound } from "../../../shared/resources.js";
 import { recipePhotoResourceUri, recipeToMarkdown } from "../recipe-markdown.js";
 
 /**
@@ -12,8 +10,15 @@ import { recipePhotoResourceUri, recipeToMarkdown } from "../recipe-markdown.js"
  * recipe, so names resolve through `ctx.state.category.store`, not a dep. Recipe is
  * one of the three Content-class entities with a resource surface.
  */
-export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
-  const template = new ResourceTemplate("paprika://recipe/{uid}", {
+export const recipeResource = defineResource<RecipeState, never>(
+  {
+    primary: {
+      name: "recipes",
+      uriTemplate: "paprika://recipe/{uid}",
+      description: "Paprika recipes accessible by UID",
+    },
+  },
+  (ctx) => ({
     list: async () => {
       const recipes = ctx.state.recipe.store.getAll();
       return {
@@ -24,13 +29,7 @@ export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
         })),
       };
     },
-  });
-
-  ctx.server.registerResource(
-    "recipes",
-    template,
-    { description: "Paprika recipes accessible by UID" },
-    tracedResourceRead("recipes", async (uri, variables) => {
+    read: async (uri, variables) => {
       const uid = variables["uid"] as RecipeUid;
       const recipe = ctx.state.recipe.store.get(uid);
       if (!recipe) {
@@ -71,6 +70,6 @@ export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
           },
         ],
       };
-    }),
-  );
-}
+    },
+  }),
+);

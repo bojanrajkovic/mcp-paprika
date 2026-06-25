@@ -10,6 +10,7 @@ import type { AnySyncResult, SyncError } from "../paprika/sync-types.js";
 import type { IndexEventEmitter } from "../server/index-events.js";
 import type { Notifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
+import type { ResourceDef, ResourceSpec } from "./resource.js";
 import type { ToolDef, ToolSpec } from "./tool.js";
 
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
@@ -204,17 +205,17 @@ interface ErasedSync {
  * state interface. `Writes` is inferred from this object; a module with no
  * tool-invoked chokepoints omits it.
  *
- * `resources` is parallel to `tools`: each entry registers an MCP resource template
- * via `ctx.server.registerResource(...)`, reading its own data via `ctx.state` and
- * any shared data via `ctx.deps.<id>` contracts. Resources are read-only (Content
- * domains only — recipe, grocery-list, menu), so they never touch
- * `ctx.writes` and most modules supply none.
+ * `resources` is parallel to `tools`: each entry is a `defineResource` {@link ResourceDef}
+ * the kernel registers via `resource.register(ctx)`, reading its own data via
+ * `ctx.state` and any shared data via `ctx.deps.<id>` contracts. Resources are
+ * read-only (Content domains only — recipe, grocery-list, menu — plus the widgets
+ * feature), so they never touch `ctx.writes` and most modules supply none.
  */
 export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, Writes = Record<never, never>> {
   readonly api: DomainRegistry[Id];
   readonly tools: ReadonlyArray<ToolDef<State, Deps, Writes>>;
   readonly writes?: Writes;
-  readonly resources?: ReadonlyArray<(ctx: DomainCtx<State, Deps>) => void>;
+  readonly resources?: ReadonlyArray<ResourceDef<State, Deps>>;
   readonly syncs?: ReadonlyArray<SyncContribution<State, Deps>>;
   readonly onReady?: BootHooks<State, Deps>;
   readonly flush?: () => ResultAsync<void, CacheError>;
@@ -237,12 +238,18 @@ interface ErasedToolDef {
   register(ctx: ErasedCtx): void;
 }
 
+/** Kernel-facing erased resource def (the `State`/`Deps` generics gone). */
+interface ErasedResourceDef {
+  readonly spec: ResourceSpec;
+  register(ctx: ErasedCtx): void;
+}
+
 interface ErasedBuild {
   readonly state: unknown;
   readonly writes?: unknown;
   readonly api: unknown;
   readonly tools: ReadonlyArray<ErasedToolDef>;
-  readonly resources?: ReadonlyArray<(ctx: ErasedCtx) => void>;
+  readonly resources?: ReadonlyArray<ErasedResourceDef>;
   readonly syncs?: ReadonlyArray<ErasedSync>;
   readonly onReady?: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>>;
   readonly flush?: () => ResultAsync<void, CacheError>;
@@ -430,7 +437,7 @@ interface Built {
   readonly state: unknown;
   readonly writes: unknown;
   readonly tools: ReadonlyArray<ErasedToolDef>;
-  readonly resources: ReadonlyArray<(ctx: ErasedCtx) => void> | undefined;
+  readonly resources: ReadonlyArray<ErasedResourceDef> | undefined;
   readonly syncs: ReadonlyArray<ErasedSync> | undefined;
   readonly onReady: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>> | undefined;
 }
@@ -712,7 +719,7 @@ export async function buildKernel(
         // tools invoke chokepoints. Empty when the module assembled none.
         const ctx: ErasedCtx = { ...bootCtxOf(b), writes: b.writes ?? {}, server };
         for (const tool of b.tools) tool.register(ctx);
-        if (b.resources !== undefined) for (const resource of b.resources) resource(ctx);
+        if (b.resources !== undefined) for (const resource of b.resources) resource.register(ctx);
       }
     },
     flushAll,

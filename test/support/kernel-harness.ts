@@ -260,7 +260,7 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
       const { server, callTool, callResourceList, callResource, setElicitResponder } = makeTestServer();
       const ctx = { state: root.state, writes: root.writes ?? {}, deps, infra, server };
       for (const tool of root.tools) tool.register(ctx);
-      for (const resource of root.resources ?? []) resource(ctx);
+      for (const resource of root.resources ?? []) resource.register(ctx);
 
       state = {
         server,
