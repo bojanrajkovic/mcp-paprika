@@ -1,11 +1,15 @@
 import { z } from "zod";
 
 import type { MealType } from "../meal-type/types.js";
+import type { RecipeUid } from "../recipe/ids.js";
+import type { RecipeRow } from "../recipe/recipe-markdown.js";
+import type { Recipe } from "../recipe/types.js";
 import type { MenuItem } from "./menu-item/types.js";
 import type { Menu } from "./types.js";
 
 import { MealTypeUidSchema } from "../meal-type/ids.js";
 import { RecipeUidSchema } from "../recipe/ids.js";
+import { recipeRowSchema } from "../recipe/recipe-markdown.js";
 import { MenuItemUidSchema, MenuUidSchema } from "./ids.js";
 
 /**
@@ -14,6 +18,12 @@ import { MenuItemUidSchema, MenuUidSchema } from "./ids.js";
  * feed (#335). `uid` drives `update_menu_item` / `delete_menu_item`; `recipeUid` chains
  * to `read_recipe` (null for a freeform item); `typeUid` is the raw FK and `typeName`
  * its resolved label (null when the type is dangling — the raw+resolved split A3 uses).
+ *
+ * `recipe` is the per-item recipe metadata denormalized from the recipe store at read
+ * time (rating, times, cover-photo URI — the same `recipeRowSchema` recipe-browse rows
+ * carry), letting the menu widget render rich rows. It is null for a freeform item
+ * (`recipeUid: null`) AND for a dangling link (a `recipeUid` whose recipe is gone from
+ * the local store) — both degrade the row to name-only.
  */
 export const menuItemRowSchema = z.object({
   uid: MenuItemUidSchema,
@@ -22,9 +32,35 @@ export const menuItemRowSchema = z.object({
   typeUid: MealTypeUidSchema,
   typeName: z.string().nullable().describe("Resolved meal-type name, or null when the type is dangling/unknown."),
   recipeUid: RecipeUidSchema.nullable(),
+  recipe: recipeRowSchema
+    .nullable()
+    .describe("Per-recipe metadata for rich rows, or null for a freeform/dangling item."),
 });
 
 export type MenuItemRow = z.infer<typeof menuItemRowSchema>;
+
+/** The slice of recipe's contract {@link resolveRecipeRows} needs (`ctx.deps.recipe` satisfies it). */
+interface RecipeRowSource {
+  get(uid: RecipeUid): Recipe | undefined;
+  toRows(recipes: ReadonlyArray<Recipe>): ReadonlyArray<RecipeRow>;
+}
+
+/**
+ * Denormalize the per-recipe metadata rows for a set of menu items, keyed by `RecipeUid`
+ * — the input every menu tool that emits {@link menuReadOutputSchema} feeds into
+ * {@link menuItemsToRows} / {@link menuToReadStructured} so the rich widget rows carry
+ * each recipe's rating/time/cover photo. Resolves only the distinct linked recipes
+ * present in the local store; a freeform item (no `recipeUid`) or a dangling link (a uid
+ * the store no longer has) contributes nothing, so its row resolves to `recipe: null`.
+ */
+export function resolveRecipeRows(
+  items: ReadonlyArray<Readonly<MenuItem>>,
+  recipes: RecipeRowSource,
+): Map<RecipeUid, RecipeRow> {
+  const linkedUids = [...new Set(items.map((i) => i.recipeUid).filter((u): u is RecipeUid => u !== null))];
+  const present = linkedUids.map((uid) => recipes.get(uid)).filter((r): r is Recipe => r !== undefined);
+  return new Map(recipes.toRows(present).map((row) => [row.uid, row]));
+}
 
 /** The structured-output payload for `read_menu` / `create_menu` (one shape per entity). */
 export const menuReadOutputSchema = z.object({
@@ -41,10 +77,15 @@ export type MenuReadStructured = z.infer<typeof menuReadOutputSchema>;
  * Map menu items into {@link MenuItemRow}s, resolving each type's name through the
  * meal-type catalog (the same resolution {@link menuToMarkdown} uses, so the text and
  * the rows agree by construction). A dangling `typeUid` resolves to `typeName: null`.
+ *
+ * `recipeRowsByUid` carries the denormalized recipe metadata the caller resolved from
+ * the recipe store (keyed by `RecipeUid`); a freeform item or a dangling link (a uid
+ * absent from the map) resolves to `recipe: null`.
  */
 export function menuItemsToRows(
   items: ReadonlyArray<Readonly<MenuItem>>,
   mealTypes: ReadonlyArray<Readonly<MealType>>,
+  recipeRowsByUid: ReadonlyMap<RecipeUid, RecipeRow>,
 ): Array<MenuItemRow> {
   const UNKNOWN_ORDER = Number.MAX_SAFE_INTEGER;
   const nameByTypeUid = new Map<string, string>();
@@ -71,6 +112,8 @@ export function menuItemsToRows(
     typeUid: item.typeUid,
     typeName: nameByTypeUid.get(item.typeUid) ?? null,
     recipeUid: item.recipeUid,
+    // A freeform item (recipeUid null) or a dangling link (uid not in the map) is name-only.
+    recipe: item.recipeUid !== null ? (recipeRowsByUid.get(item.recipeUid) ?? null) : null,
   }));
 }
 
@@ -79,13 +122,14 @@ export function menuToReadStructured(
   menu: Readonly<Menu>,
   items: ReadonlyArray<Readonly<MenuItem>>,
   mealTypes: ReadonlyArray<Readonly<MealType>>,
+  recipeRowsByUid: ReadonlyMap<RecipeUid, RecipeRow>,
 ): MenuReadStructured {
   return {
     uid: menu.uid,
     name: menu.name,
     days: menu.days,
     notes: menu.notes,
-    items: menuItemsToRows(items, mealTypes),
+    items: menuItemsToRows(items, mealTypes, recipeRowsByUid),
   };
 }
 

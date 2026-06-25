@@ -19,7 +19,7 @@ import {
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema, MenuUidSchema } from "../ids.js";
-import { menuItemRowSchema, menuItemsToRows } from "../menu-helpers.js";
+import { menuItemRowSchema, menuItemsToRows, resolveRecipeRows } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // One menuitem to add. Structurally EITHER recipe-linked (recipe_uid; display
@@ -287,7 +287,10 @@ export const addMenuItemsTool = defineTool(
       const mealTypes = ctx.deps["meal-type"].getAll();
       // Structured carries ONLY the newly-added items (the new child UIDs the model chains
       // on), distinguished from the menu's pre-existing items the text card also shows.
-      const structured = { menuUid: menu.uid, items: menuItemsToRows(savedItems, mealTypes) };
+      const structured = {
+        menuUid: menu.uid,
+        items: menuItemsToRows(savedItems, mealTypes, resolveRecipeRows(savedItems, ctx.deps.recipe)),
+      };
       const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems), {
         structuredContent: structured,
       });

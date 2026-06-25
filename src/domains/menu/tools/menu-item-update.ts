@@ -12,7 +12,7 @@ import { commitFailure, errorResult, structuredResult } from "../../../shared/to
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema } from "../ids.js";
-import { menuReadOutputSchema, menuToReadStructured } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToReadStructured, resolveRecipeRows } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // `.strict()` — `day` was promoted to move_menu_item (a day-move carries
@@ -121,7 +121,12 @@ export const updateMenuItemTool = defineTool(
       // structured payload reflects the edit whether or not the local commit lands
       // (the store still holds the pre-edit item until commitMenuItem runs).
       const items = ctx.state.items.store.getByMenuUid(parent.uid).map((it) => (it.uid === saved.uid ? saved : it));
-      const structured = menuToReadStructured(parent, items, ctx.deps["meal-type"].getAll());
+      const structured = menuToReadStructured(
+        parent,
+        items,
+        ctx.deps["meal-type"].getAll(),
+        resolveRecipeRows(items, ctx.deps.recipe),
+      );
       const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved), {
         structuredContent: structured,
       });

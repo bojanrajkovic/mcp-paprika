@@ -5,7 +5,9 @@
 
   import Chevron from "../shared/Chevron.svelte";
   import PillButton from "../shared/PillButton.svelte";
+  import RatingDots from "../shared/RatingDots.svelte";
   import RecipeDetail from "../shared/RecipeDetail.svelte";
+  import RecipeThumb from "../shared/RecipeThumb.svelte";
   import Spinner from "../shared/Spinner.svelte";
   import StatusScreen from "../shared/StatusScreen.svelte";
   import Toast from "../shared/Toast.svelte";
@@ -24,16 +26,28 @@
   } from "../shared/recipe-detail.js";
   import { nameTile } from "../shared/tile.js";
 
-  // One menu item, as read_menu's structuredContent emits it (menuItemRowSchema). The feed is
-  // name-only — no rating/time/photo — so a row is the meal-type label + the name, and tapping a
-  // recipe-linked row reads the full recipe (read_recipe → shared RecipeDetail). A freeform item
-  // (recipeUid: null) has no recipe to open, so it renders muted and non-tappable.
+  // The per-recipe metadata read_menu denormalizes onto a recipe-linked row (a slice of the
+  // shared recipeRowSchema — only the fields a row renders). Null for a freeform item and for a
+  // dangling link (a recipeUid whose recipe is gone from the local store) — both stay name-only.
+  interface RecipeMeta {
+    rating: number;
+    prepTime: string | null;
+    cookTime: string | null;
+    totalTime: string | null;
+    photoResourceUri: string | null;
+  }
+  // One menu item, as read_menu's structuredContent emits it (menuItemRowSchema). A recipe-linked
+  // row with `recipe` metadata renders rich (cover thumb + rating + one time, like recipe-browse);
+  // tapping it reads the full recipe (read_recipe → shared RecipeDetail). A freeform item
+  // (recipeUid: null) has no recipe to open, so it renders muted and non-tappable; a dangling link
+  // (recipeUid set, recipe null) stays tappable but name-only.
   interface MenuItem {
     uid: string;
     day: number;
     name: string;
     typeName: string | null;
     recipeUid: string | null;
+    recipe: RecipeMeta | null;
   }
   interface Menu {
     name: string;
@@ -216,8 +230,30 @@
         typeof o["recipeUid"] === "string" && o["recipeUid"] !== ""
           ? o["recipeUid"]
           : null,
+      recipe: toRecipeMeta(o["recipe"]),
     };
   }
+
+  // Parse the embedded recipe metadata defensively (the host payload is untrusted). A missing or
+  // malformed value — or any non-object — yields null, so the row falls back to name-only.
+  function toRecipeMeta(r: unknown): RecipeMeta | null {
+    if (typeof r !== "object" || r === null) return null;
+    const o = r as Record<string, unknown>;
+    const str = (v: unknown): string | null =>
+      typeof v === "string" && v !== "" ? v : null;
+    return {
+      rating: typeof o["rating"] === "number" ? o["rating"] : 0,
+      prepTime: str(o["prepTime"]),
+      cookTime: str(o["cookTime"]),
+      totalTime: str(o["totalTime"]),
+      photoResourceUri: str(o["photoResourceUri"]),
+    };
+  }
+
+  // The row shows ONE duration — the most decision-relevant of cook → total → prep (the same rule
+  // recipe-browse's row applies).
+  const relevantTime = (r: RecipeMeta): string | null =>
+    r.cookTime ?? r.totalTime ?? r.prepTime;
 
   // The detail pane's hero photo: read the photo proxy resource and turn its blob into an image
   // `data:` URI (or null on failure). Closes over `app`, passed to RecipeDetail so it stays
@@ -267,7 +303,41 @@
           <div class="empty">No meals planned</div>
         {:else}
           {#each sec.items as item (item.uid)}
-            {#if item.recipeUid !== null}
+            {#if item.recipe !== null}
+              <button
+                class="row rich"
+                onclick={() => openRecipe(item)}
+                disabled={loadingItemUid !== null}
+                aria-label="Open {item.name}"
+              >
+                <RecipeThumb
+                  photoResourceUri={item.recipe.photoResourceUri}
+                  name={item.name}
+                  dark={theme === "dark"}
+                  {loadPhoto}
+                />
+                <span class="info">
+                  <span class="name">{item.name}</span>
+                  <span class="sub">
+                    {#if item.typeName !== null}<span class="eyebrow"
+                        >{item.typeName}</span
+                      >{/if}
+                    {#if item.typeName !== null && relevantTime(item.recipe)}<span
+                        class="sep">·</span
+                      >{/if}
+                    {#if relevantTime(item.recipe)}<span class="time"
+                        >{relevantTime(item.recipe)}</span
+                      >{/if}
+                    <RatingDots rating={item.recipe.rating} />
+                  </span>
+                </span>
+                {#if loadingItemUid === item.uid}
+                  <Spinner size={14} />
+                {:else}
+                  <Chevron />
+                {/if}
+              </button>
+            {:else if item.recipeUid !== null}
               <button
                 class="row"
                 onclick={() => openRecipe(item)}
@@ -443,6 +513,45 @@
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Rich recipe row — cover thumb + a two-line name/metadata column, reading like a
+     recipe-browse row. The meal-type label takes recipe-browse's category eyebrow slot. */
+  .rich {
+    gap: 12px;
+  }
+  .info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    min-width: 0;
+  }
+  .eyebrow {
+    flex: none;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sep {
+    flex: none;
+    font-size: 10px;
+    color: var(--faint);
+  }
+  .time {
+    flex: none;
+    font-size: 12px;
+    color: var(--faint);
     white-space: nowrap;
   }
   /* Freeform item (no recipe to open) — muted, not interactive. */

@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { MealTypeUid } from "../../meal-type/ids.js";
+import type { RecipeUid } from "../../recipe/ids.js";
 import type { MenuItemUid, MenuUid } from "../ids.js";
 
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getJson, getText } from "../../../../test/support/tool-test-utils.js";
 
@@ -126,8 +128,28 @@ describe("read_menu tool", () => {
         typeUid: "dinner-uid",
         typeName: "Dinner",
         recipeUid: "recipe-77",
+        // recipe-77 isn't seeded into the recipe store, so the link is dangling → name-only row.
+        recipe: null,
       },
     ]);
+  });
+
+  it("denormalizes the linked recipe's metadata onto the row for rich widget rows", async () => {
+    const menu = makeMenu({ uid: "m-rich" as MenuUid, name: "Rich Week", days: 1 });
+    const item = makeMenuItem({
+      uid: "mi-rich" as MenuItemUid,
+      menuUid: "m-rich",
+      day: 1,
+      typeUid: "dinner-uid",
+      name: "Pot Roast",
+      recipeUid: "r-1",
+    });
+    const recipe = makeRecipe({ uid: "r-1" as RecipeUid, name: "Pot Roast", rating: 4, totalTime: "3 hr" });
+    kh.seed({ recipes: [recipe], menus: [menu], menuItems: [item], mealTypes: [BREAKFAST, DINNER] });
+    const result = await kh.callTool("read_menu", { lookup: { uid: "m-rich" } });
+
+    const structured = result.structuredContent as { items: Array<{ recipe: Record<string, unknown> | null }> };
+    expect(structured.items[0]?.recipe).toMatchObject({ uid: "r-1", rating: 4, totalTime: "3 hr" });
   });
 
   it("a not-found read carries no structuredContent (errorResult, B1/#321)", async () => {
