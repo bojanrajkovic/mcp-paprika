@@ -94,7 +94,6 @@
     border-bottom: 1px solid var(--line);
   }
   .wn-btn {
-    appearance: none;
     background: var(--bg);
     border: 1px solid color-mix(in oklch, var(--ink) 22%, transparent);
     border-radius: 999px;
@@ -102,7 +101,6 @@
     height: 28px;
     display: grid;
     place-items: center;
-    cursor: pointer;
     color: var(--ink);
     transition: background 0.1s;
   }

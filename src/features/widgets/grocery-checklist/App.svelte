@@ -418,12 +418,7 @@
     gap: 12px;
     width: 100%;
     padding: 11px 16px;
-    border: 0;
-    background: transparent;
     text-align: left;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
     transition: background 0.13s;
   }
   .row:hover {

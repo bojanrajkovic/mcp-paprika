@@ -558,16 +558,11 @@
     flex: none;
   }
   .tab {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    font: inherit;
     font-size: 12.5px;
     font-weight: 600;
     color: var(--muted);
     padding: 5px 10px;
     border-radius: 999px;
-    cursor: pointer;
     transition:
       background 0.13s,
       color 0.13s;
@@ -656,10 +651,7 @@
     border-color: color-mix(in oklch, var(--accent) 22%, transparent);
   }
   button.chip.raw {
-    appearance: none;
-    font: inherit;
     font-weight: 500;
-    cursor: pointer;
     transition:
       opacity 0.13s,
       background 0.13s;
@@ -680,29 +672,19 @@
     text-decoration: line-through;
   }
   .chip .x {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
     font-size: 14px;
     line-height: 1;
     padding: 0 0 0 2px;
     margin: 0;
-    cursor: pointer;
     opacity: 0.65;
   }
   .chip .x:hover {
     opacity: 1;
   }
   .chip.inter {
-    appearance: none;
-    font: inherit;
     font-weight: 500;
-    background: transparent;
     color: var(--accent);
     border: 1px dashed color-mix(in oklch, var(--accent) 55%, transparent);
-    cursor: pointer;
     transition: background 0.13s;
   }
   .chip.inter:hover {
@@ -719,13 +701,8 @@
     border-top: 1px solid var(--line);
   }
   .reanchor-open {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    font: inherit;
     font-size: 12.5px;
     color: var(--muted);
-    cursor: pointer;
     padding: 0;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -763,17 +740,13 @@
     background: var(--bg);
   }
   .cta {
-    appearance: none;
     flex: 1;
-    border: 0;
     background: var(--accent);
     color: var(--accent-ink);
-    font: inherit;
     font-size: 14px;
     font-weight: 600;
     padding: 11px 14px;
     border-radius: 10px;
-    cursor: pointer;
     transition: filter 0.13s;
   }
   .cta:hover {
@@ -820,17 +793,13 @@
   }
 
   .nav .navbtn {
-    appearance: none;
     flex: 1;
     border: 1px solid var(--line);
-    background: transparent;
     color: var(--ink);
-    font: inherit;
     font-size: 14px;
     font-weight: 600;
     padding: 11px 14px;
     border-radius: 10px;
-    cursor: pointer;
     transition:
       background 0.13s,
       opacity 0.13s;
@@ -893,15 +862,11 @@
     margin-top: 4px;
   }
   .split-main {
-    appearance: none;
-    border: 0;
     background: var(--accent);
     color: var(--accent-ink);
-    font: inherit;
     font-size: 14px;
     font-weight: 600;
     padding: 10px 14px;
-    cursor: pointer;
     transition: filter 0.13s;
   }
   .split-main:hover:not(:disabled) {
@@ -926,14 +891,9 @@
   }
 
   .link {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    font: inherit;
     font-size: 13px;
     font-weight: 500;
     color: var(--accent);
-    cursor: pointer;
     padding: 2px 4px;
     text-decoration: underline;
     text-underline-offset: 2px;

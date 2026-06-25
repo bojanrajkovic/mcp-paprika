@@ -401,14 +401,8 @@
 
   /* Recipe row — the whole line is one button so the host gives it focus + a tap target. */
   .row {
-    appearance: none;
     width: 100%;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
     text-align: left;
-    cursor: pointer;
     padding: 9px 18px;
     display: flex;
     align-items: center;

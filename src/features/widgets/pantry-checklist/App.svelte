@@ -570,15 +570,10 @@
     gap: 8px;
     flex: 1;
     min-width: 0;
-    appearance: none;
-    border: 0;
-    background: transparent;
     color: var(--muted);
-    font: inherit;
     font-size: 12.5px;
     font-weight: 600;
     padding: 12px 0 12px 16px;
-    cursor: pointer;
     text-align: left;
   }
   .drawer-head .grow {

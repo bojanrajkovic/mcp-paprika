@@ -141,17 +141,11 @@
   }
 
   .ms-name {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    font: inherit;
-    color: inherit;
     text-align: left;
     width: 100%;
     padding: 2px 0;
     font-size: 14px;
     font-weight: 550;
-    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-between;
