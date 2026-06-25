@@ -5,12 +5,12 @@
 // seam, which owns the logger) a structured connect log — then stashed so the kernel
 // tool wrapper can tag each session's tools/call spans with WHICH client drove them.
 //
-// Telemetry RECORDING lives here (the global OTel API, per ADR-0018); the LOG is
+// Telemetry RECORDING lives here (the global OTel API); the LOG is
 // emitted by the transport, which threads the pino logger via `Infra`. So
 // `recordClientConnection` records the span + counter + stash and RETURNS the rich
 // {@link ClientFingerprint} for the transport to log — one capture, every channel.
 //
-// Discipline (ADR-0018 + the telemetry-attributes conformance gate): `clientInfo` is
+// Discipline (enforced by the telemetry-attributes conformance gate): `clientInfo` is
 // the MCP CLIENT APP's self-reported identity (name/version), NOT the OAuth user — no
 // PII or token material rides here on either transport. The census COUNTER carries only
 // name + major-version + transport (cardinality-bounded); the full version string and
@@ -63,7 +63,7 @@ export interface ClientFingerprint {
   readonly capabilities: Readonly<Record<string, unknown>>;
 }
 
-// Custom telemetry names (the `mcp_paprika.` prefix per ADR-0018; the
+// Custom telemetry names (the `mcp_paprika.` prefix; the
 // telemetry-attributes conformance gate validates their shape + that no terminal
 // is an identity/credential segment). `transport` reuses the shared
 // `mcp_paprika.transport` constant so a session's connect span, census counter,
@@ -227,7 +227,7 @@ function censusAttrs(fp: ClientFingerprint): Attributes {
  * labeled with the census slice via {@link clientAttrs}).
  *
  * Never throws (OTel API calls don't, and the reads are guarded) — telemetry
- * must not alter the handshake (ADR-0018).
+ * must not alter the handshake.
  */
 export function recordClientConnection(
   server: FingerprintServer,
