@@ -166,6 +166,17 @@ describe("cook_recipe tool", () => {
     expect(getText(result)).toContain('both produce "Base"');
   });
 
+  it("rejects a prep-phase step that follows a cook-phase step", async () => {
+    const recipe = makeRecipe();
+    kh.seed({ recipes: [recipe] });
+    const args = flatArgs(recipe.uid);
+    args.steps[0]!.phase = "cook";
+    args.steps[1]!.phase = "prep"; // a prep step after cooking has started — would reorder the recipe
+    const result = await callCook(args);
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('tagged "prep"');
+  });
+
   it("returns an isError naming read_recipe when the UID is not in the store", async () => {
     kh.seed({ recipes: [makeRecipe()] }); // seed something so the store is past cold-start
     const result = await callCook(flatArgs("nonexistent-uid"));

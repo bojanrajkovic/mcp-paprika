@@ -135,9 +135,23 @@ export const cookRecipeOutputSchema = z.object({
 export function validateCookParse(args: CookRecipeInput): string | null {
   const n = args.ingredients.length;
   const produced = new Set<string>();
+  let cookStarted = false;
   for (let i = 0; i < args.steps.length; i++) {
     const step = args.steps[i]!;
     const stepNo = i + 1;
+    // Prep is the mise-en-place done BEFORE first heat, so the widget collects every
+    // prep-phase step onto a pre-stepper prep screen. A `prep` step tagged AFTER a `cook`
+    // step would be hoisted ahead of the cook sequence — reordering the recipe — so reject
+    // it: the model must re-tag a mid-cook action as `cook`.
+    if (step.phase === "cook") {
+      cookStarted = true;
+    } else if (cookStarted) {
+      return (
+        `Step ${stepNo.toString()} is tagged "prep", but an earlier step is already "cook". ` +
+        "Prep is the mise-en-place done before cooking starts, so every prep step must come before the " +
+        'first cook step. Re-tag this step as "cook" (it happens once cooking is underway), or reorder the steps.'
+      );
+    }
     for (const ref of step.ingredientRefs) {
       if (ref >= n) {
         return (
