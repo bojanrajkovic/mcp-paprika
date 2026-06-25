@@ -3,6 +3,8 @@
   // category + the single most relevant cook time (secondary), rating dots (right), an
   // optional colour tile, and a chevron that rotates when the row is expanded. The whole
   // line is one button so the host gives it keyboard focus and a tap target for free.
+  import { nameTile } from "../shared/tile.js";
+
   interface RowRecipe {
     uid: string;
     name: string;
@@ -80,16 +82,8 @@
   const time = $derived(recipe.cookTime ?? recipe.totalTime ?? recipe.prepTime);
   const category = $derived(recipe.categories[0] ?? "");
 
-  // Deterministic placeholder tile in the absence of real photos: a food-range hue
-  // (38–130, clear of the brand red at 22–35) derived from the name's char codes, with
-  // lightness/chroma fixed per theme. Stable per recipe, intentional-looking, not random.
-  const hue = $derived.by(() => {
-    let sum = 0;
-    for (let i = 0; i < recipe.name.length; i++)
-      sum += recipe.name.charCodeAt(i);
-    return 38 + (sum % 92);
-  });
-  const tile = $derived(`oklch(${dark ? "0.32" : "0.7"} 0.06 ${hue})`);
+  // Deterministic placeholder tile in the absence of real photos (shared with the menu header).
+  const tile = $derived(nameTile(recipe.name, dark));
 </script>
 
 <button class="main" class:open onclick={onToggle} aria-expanded={open}>
