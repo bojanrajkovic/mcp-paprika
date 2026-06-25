@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import type { MealTypeUid } from "../meal-type/ids.js";
+import type { RecipeUid } from "../recipe/ids.js";
+import type { RecipeRow } from "../recipe/recipe-markdown.js";
+import type { Recipe } from "../recipe/types.js";
 import type { MenuItemUid, MenuUid } from "./ids.js";
 
 import { makeMealType } from "../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../test/domains/menu/__fixtures__/menus.js";
-import { menuToMarkdown, menuToReadStructured } from "./menu-helpers.js";
+import { makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
+import { recipeToRow } from "../recipe/recipe-markdown.js";
+import { menuToMarkdown, menuToReadStructured, resolveRecipeRows } from "./menu-helpers.js";
+
+// No recipe metadata to denormalize unless a test supplies it; the markdown tests and the
+// name-only structured tests pass this through unchanged (rows resolve recipe: null).
+const NO_RECIPES = new Map<RecipeUid, RecipeRow>();
 
 const breakfast = makeMealType({
   uid: "breakfast-uid" as MealTypeUid,
@@ -106,11 +115,36 @@ describe("menuToMarkdown", () => {
       name: "Curry",
       recipeUid: "recipe-xyz",
     });
-    const structured = menuToReadStructured(menu, [item], [dinner]);
+    const structured = menuToReadStructured(menu, [item], [dinner], NO_RECIPES);
     expect(structured).toMatchObject({ uid: "m-8", name: "Plan", days: 1, notes: "" });
     expect(structured.items).toEqual([
-      { uid: "mi-8", day: 1, name: "Curry", typeUid: "dinner-uid", typeName: "Dinner", recipeUid: "recipe-xyz" },
+      {
+        uid: "mi-8",
+        day: 1,
+        name: "Curry",
+        typeUid: "dinner-uid",
+        typeName: "Dinner",
+        recipeUid: "recipe-xyz",
+        // recipe-xyz isn't in the supplied map (not resolved), so the row stays name-only.
+        recipe: null,
+      },
     ]);
+  });
+
+  it("denormalizes the linked recipe's metadata onto the row when present", () => {
+    const menu = makeMenu({ uid: "m-rich" as MenuUid, days: 1 });
+    const item = makeMenuItem({
+      uid: "mi-rich" as MenuItemUid,
+      menuUid: "m-rich",
+      day: 1,
+      typeUid: "dinner-uid",
+      name: "Pot Roast",
+      recipeUid: "r-1",
+    });
+    const row = recipeToRow(makeRecipe({ uid: "r-1" as RecipeUid, rating: 4, totalTime: "3 hr" }), []);
+    const map = new Map<RecipeUid, RecipeRow>([["r-1" as RecipeUid, row]]);
+    const [out] = menuToReadStructured(menu, [item], [dinner], map).items;
+    expect(out?.recipe).toMatchObject({ uid: "r-1", rating: 4, totalTime: "3 hr" });
   });
 
   it("menuToReadStructured carries recipeUid: null for freeform and typeName: null for a dangling type (B1/#321)", () => {
@@ -123,8 +157,8 @@ describe("menuToMarkdown", () => {
       name: "Freeform Night",
       recipeUid: null,
     });
-    const [row] = menuToReadStructured(menu, [freeform], [dinner]).items;
-    expect(row).toMatchObject({ uid: "mi-9", recipeUid: null, typeUid: "ghost-type", typeName: null });
+    const [row] = menuToReadStructured(menu, [freeform], [dinner], NO_RECIPES).items;
+    expect(row).toMatchObject({ uid: "mi-9", recipeUid: null, typeUid: "ghost-type", typeName: null, recipe: null });
   });
 
   it("menuToReadStructured emits rows in display order — day, meal-type orderFlag, item orderFlag (B1/#321)", () => {
@@ -155,10 +189,25 @@ describe("menuToMarkdown", () => {
       orderFlag: 0,
     });
 
-    const rows = menuToReadStructured(menu, [d2dinner, d1dinner, d1breakfast], [breakfast, dinner]).items;
+    const rows = menuToReadStructured(menu, [d2dinner, d1dinner, d1breakfast], [breakfast, dinner], NO_RECIPES).items;
 
     // breakfast orderFlag 0 < dinner orderFlag 2; day 1 before day 2 — matches the text render.
     expect(rows.map((r) => r.uid)).toEqual(["d1b", "d1d", "d2d"]);
+  });
+
+  it("resolveRecipeRows keys only the linked recipes present in the store (freeform + dangling drop out)", () => {
+    const present = makeRecipe({ uid: "r-here" as RecipeUid, rating: 5 });
+    const source = {
+      get: (uid: RecipeUid): Recipe | undefined => (uid === present.uid ? present : undefined),
+      toRows: (rs: ReadonlyArray<Recipe>): ReadonlyArray<RecipeRow> => rs.map((r) => recipeToRow(r, [])),
+    };
+    const items = [
+      makeMenuItem({ menuUid: "m", recipeUid: "r-here" }), // present → resolved
+      makeMenuItem({ menuUid: "m", recipeUid: "r-gone" }), // dangling → dropped
+      makeMenuItem({ menuUid: "m", recipeUid: null }), // freeform → dropped
+    ];
+    const map = resolveRecipeRows(items, source);
+    expect([...map.keys()]).toEqual(["r-here"]);
   });
 
   it("omits per-item UIDs from the text (they ride structuredContent now)", () => {

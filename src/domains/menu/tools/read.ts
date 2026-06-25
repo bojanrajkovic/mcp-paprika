@@ -4,7 +4,7 @@ import type { MenuState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { resolveLookup, resolveOrPick, structuredResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuReadOutputSchema, menuToReadStructured } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToReadStructured, resolveRecipeRows } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -53,7 +53,8 @@ export const readMenuTool = defineTool(
       if ("result" in resolved) return resolved.result;
       const items = ctx.state.items.store.getByMenuUid(resolved.entity.uid);
       const mealTypes = ctx.deps["meal-type"].getAll();
-      return structuredResult(menuToReadStructured(resolved.entity, items, mealTypes));
+      const recipeRows = resolveRecipeRows(items, ctx.deps.recipe);
+      return structuredResult(menuToReadStructured(resolved.entity, items, mealTypes, recipeRows));
     };
   },
 );

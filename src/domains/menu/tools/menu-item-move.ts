@@ -9,7 +9,7 @@ import type { Menu } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { MenuItemUidSchema } from "../ids.js";
-import { menuReadOutputSchema, menuToReadStructured } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToReadStructured, resolveRecipeRows } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // `.strict()` — moving a menu item to a different day is its own act: it can
@@ -70,7 +70,12 @@ export const moveMenuItemTool = defineTool(
       // is included.
       const structuredFor = (menu: Menu, item: MenuItem): z.infer<typeof menuReadOutputSchema> => {
         const items = ctx.state.items.store.getByMenuUid(menu.uid).map((it) => (it.uid === item.uid ? item : it));
-        return menuToReadStructured(menu, items, ctx.deps["meal-type"].getAll());
+        return menuToReadStructured(
+          menu,
+          items,
+          ctx.deps["meal-type"].getAll(),
+          resolveRecipeRows(items, ctx.deps.recipe),
+        );
       };
 
       // Idempotent no-op: already on the requested day. Returning early avoids a
