@@ -67,18 +67,15 @@
   }
   .act {
     flex: 1;
-    appearance: none;
     /* Adaptive outline: a percentage of the theme's ink, so the border stays visible against
        the `--hover` strip background in both light and dark — `--line` washes out on dark. */
     border: 1px solid color-mix(in oklch, var(--ink) 22%, transparent);
     background: var(--bg);
     color: var(--ink);
-    font: inherit;
     font-size: 12px;
     font-weight: 500;
     padding: 6px 10px;
     border-radius: 999px;
-    cursor: pointer;
     white-space: nowrap;
     text-align: center;
     transition: background 0.1s;

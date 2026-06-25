@@ -33,17 +33,13 @@
 
 <style>
   .pill {
-    appearance: none;
     flex: none;
     border: 1px solid var(--line);
-    background: transparent;
     color: var(--muted);
-    font: inherit;
     font-size: 12px;
     font-weight: 600;
     padding: 5px 11px;
     border-radius: 999px;
-    cursor: pointer;
     white-space: nowrap;
     transition:
       background 0.13s,

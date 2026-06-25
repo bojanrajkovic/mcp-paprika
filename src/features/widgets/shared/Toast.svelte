@@ -52,14 +52,9 @@
     overflow-wrap: anywhere;
   }
   .undo {
-    appearance: none;
     flex: none;
-    border: 0;
-    background: transparent;
     color: var(--accent);
-    font: inherit;
     font-weight: 700;
-    cursor: pointer;
     padding: 2px 4px;
   }
   @keyframes toastIn {

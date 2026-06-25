@@ -100,6 +100,20 @@
     outline-offset: 2px;
   }
 
+  /* Widget-wide button reset — the one home for the native-chrome strip every widget button
+     would otherwise repeat. Every button here is fully custom-styled, so there is no native
+     look to preserve. A control's own class (specificity 0,1,0) overrides any of these base
+     values (this rule is 0,0,2), so a button that wants a border / background / colour just
+     sets it; the focus ring above stays the accessible affordance. */
+  main :global(button) {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
   /* Widget-wide reduced motion for CSS animations/transitions. Svelte's JS transitions
      (`transition:` / `animate:flip`) are NOT CSS and are gated separately in motion.ts. */
   @media (prefers-reduced-motion: reduce) {

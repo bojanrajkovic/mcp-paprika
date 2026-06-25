@@ -114,14 +114,8 @@
 
 <style>
   .main {
-    appearance: none;
     width: 100%;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
     text-align: left;
-    cursor: pointer;
     padding: 10px 16px;
     display: flex;
     align-items: center;

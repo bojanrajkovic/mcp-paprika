@@ -503,12 +503,8 @@
     color: var(--faint);
   }
   .sclr {
-    appearance: none;
     flex: none;
-    border: 0;
-    background: transparent;
     padding: 0;
-    cursor: pointer;
     line-height: 0;
     color: var(--faint);
   }
@@ -545,16 +541,13 @@
   }
   .chip {
     flex: none;
-    appearance: none;
     padding: 4px 12px;
     border-radius: 999px;
     border: 1px solid color-mix(in oklch, var(--ink) 18%, transparent);
     background: var(--bg);
     color: var(--muted);
-    font: inherit;
     font-size: 12px;
     font-weight: 500;
-    cursor: pointer;
     white-space: nowrap;
     transition:
       background 0.12s,
@@ -577,7 +570,6 @@
     gap: 6px;
   }
   .pbtn {
-    appearance: none;
     flex: none;
     display: grid;
     place-items: center;
@@ -585,9 +577,7 @@
     height: 28px;
     border: 1px solid color-mix(in oklch, var(--ink) 18%, transparent);
     border-radius: 999px;
-    background: transparent;
     color: var(--muted);
-    cursor: pointer;
     transition:
       background 0.12s,
       color 0.12s;
