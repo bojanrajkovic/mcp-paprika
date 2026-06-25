@@ -61,6 +61,12 @@ spec:
             # and bypass DCR rate limiting. See docs/configuration.md § "Trust proxy".
             - name: MCP_TRUST_PROXY
               value: "false"
+            # Let AI photo generation (generate_recipe_photo) reuse the embeddings
+            # provider's API key + base URL instead of a separate IMAGE_GEN_API_KEY.
+            # Requires features.embeddings to be configured (creds live in the Secret).
+            # See docs/configuration.md § image generation.
+            - name: IMAGE_GEN_REUSE_EMBEDDINGS_CREDS
+              value: "true"
             # OpenTelemetry: traces + metrics export over OTLP/HTTP to the cluster
             # collector (Grafana Alloy). The image's --import preload makes the OTel
             # ESM loader hook effective here. See docs/telemetry.md.
