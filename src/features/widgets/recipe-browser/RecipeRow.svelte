@@ -4,7 +4,8 @@
   // optional colour tile, and a chevron that rotates when the row is expanded. The whole
   // line is one button so the host gives it keyboard focus and a tap target for free.
   import Chevron from "../shared/Chevron.svelte";
-  import { nameTile } from "../shared/tile.js";
+  import RatingDots from "../shared/RatingDots.svelte";
+  import RecipeThumb from "../shared/RecipeThumb.svelte";
 
   interface RowRecipe {
     uid: string;
@@ -33,58 +34,10 @@
     onToggle: () => void;
   } = $props();
 
-  // The thumbnail slot is 48px; request ~2× for crisp rendering on hi-dpi screens.
-  const THUMB_REQUEST_PX = 96;
-
-  // The cover photo, loaded lazily once the row scrolls into view (a browse list can be long, and
-  // each load is a server round-trip). `null` until loaded or when the recipe has no photo — the
-  // OKLCH placeholder tile shows underneath until then.
-  let photoSrc = $state<string | null>(null);
-  let loadStarted = false;
-
-  async function ensureLoaded() {
-    if (loadStarted || recipe.photoResourceUri === null) return;
-    loadStarted = true;
-    photoSrc = await loadPhoto(
-      `${recipe.photoResourceUri}?w=${THUMB_REQUEST_PX.toString()}`,
-    );
-  }
-
-  // Svelte action: load when the thumb nears the viewport. Falls back to an immediate load where
-  // IntersectionObserver is unavailable.
-  function lazyLoad(node: HTMLElement) {
-    if (recipe.photoResourceUri === null) return;
-    if (typeof IntersectionObserver === "undefined") {
-      void ensureLoaded();
-      return;
-    }
-    const obs = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            void ensureLoaded();
-            obs.disconnect();
-            break;
-          }
-        }
-      },
-      { rootMargin: "100px" },
-    );
-    obs.observe(node);
-    return {
-      destroy() {
-        obs.disconnect();
-      },
-    };
-  }
-
   // The browse line shows ONE duration — the most decision-relevant of cook → total → prep.
   // Prep and cook separated belong to the expanded strip, not the collapsed line.
   const time = $derived(recipe.cookTime ?? recipe.totalTime ?? recipe.prepTime);
   const category = $derived(recipe.categories[0] ?? "");
-
-  // Deterministic placeholder tile in the absence of real photos (shared with the menu header).
-  const tile = $derived(nameTile(recipe.name, dark));
 </script>
 
 <button class="main" class:open onclick={onToggle} aria-expanded={open}>
@@ -94,21 +47,15 @@
       {#if category}<span class="cat">{category}</span>{/if}
       {#if category && time}<span class="sep">·</span>{/if}
       {#if time}<span class="time">{time}</span>{/if}
-      <span class="dots" role="img" aria-label="Rated {recipe.rating} of 5">
-        {#each [0, 1, 2, 3, 4] as i (i)}<span
-            class="dot"
-            class:on={i < recipe.rating}
-          ></span>{/each}
-      </span>
+      <RatingDots rating={recipe.rating} />
     </span>
   </span>
-  {#if photos}<span
-      class="thumb"
-      use:lazyLoad
-      style={photoSrc ? "" : `background: ${tile};`}
-      aria-hidden="true"
-      >{#if photoSrc}<img class="thumbimg" src={photoSrc} alt="" />{/if}</span
-    >{/if}
+  {#if photos}<RecipeThumb
+      photoResourceUri={recipe.photoResourceUri}
+      name={recipe.name}
+      {dark}
+      {loadPhoto}
+    />{/if}
   <Chevron size={16} {open} />
 </button>
 
@@ -167,34 +114,5 @@
     color: var(--faint);
     white-space: nowrap;
     flex: none;
-  }
-  .dots {
-    display: flex;
-    gap: 2px;
-    margin-left: auto;
-    flex: none;
-  }
-  .dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    opacity: 0.2;
-  }
-  .dot.on {
-    opacity: 1;
-  }
-  .thumb {
-    flex: none;
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .thumbimg {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
   }
 </style>
