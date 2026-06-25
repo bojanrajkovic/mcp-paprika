@@ -77,8 +77,9 @@ const cookPrepSchema = z.object({
     .int()
     .nonnegative()
     .describe(
-      "Unattended wait the cook must schedule before the dish is done — marinating, soaking, chilling, resting. " +
-        "0 when there is none. Surfaced so a long marinade reads as 'start this first', which a stated prep time hides.",
+      "Unattended wait BEFORE first heat that the cook must start ahead of cooking — marinating, soaking, brining, " +
+        "chilling a dough. 0 when there is none. It is surfaced on the prep screen as 'start this first', so do NOT " +
+        "include post-cook rests (resting meat, cooling): those happen after cooking and stay as cook steps.",
     ),
 });
 
