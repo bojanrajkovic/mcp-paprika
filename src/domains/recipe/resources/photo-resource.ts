@@ -1,15 +1,14 @@
-import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
 import type { ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 
-import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeUid } from "../ids.js";
 import type { RecipeState } from "../module.js";
 import type { Photo } from "../photo/types.js";
 import type { Recipe } from "../types.js";
 
+import { defineResource } from "../../../kernel/resource.js";
 import { fetchImageBytes } from "../../../shared/photo-fetch.js";
-import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
+import { resourceNotFound } from "../../../shared/resources.js";
 import { MAX_PHOTO_DIMENSION, resizePhotoJpeg } from "../photo-helpers.js";
 import { PhotoByteCache } from "../photo/byte-cache.js";
 import { recipePhotoResourceUri } from "../recipe-markdown.js";
@@ -78,13 +77,40 @@ function blobResult(uri: URL, bytes: Buffer): ReadResourceResult {
  * matcher anchors on the full URI and can't express an optional query, so the handler
  * parses dimensions and the index off the real `URL` rather than the template vars.
  */
-export function recipePhotoResource(ctx: DomainCtx<RecipeState, never>): void {
-  // One cache per session registration: regenerable bytes, evict-oldest on overflow.
-  const cache = new PhotoByteCache(PHOTO_BYTE_CACHE_MAX);
+export const recipePhotoResource = defineResource<RecipeState, never>(
+  {
+    primary: {
+      name: "recipe-photo",
+      uriTemplate: "ui://recipe/{uid}/photo",
+      description: "A recipe's cover photo, served as image bytes by UID (ui://recipe/{uid}/photo)",
+    },
+    // The catch-all template routes sized/indexed reads to the same handler — the SDK's
+    // matcher anchors on the full URI and can't express an optional query, so two
+    // templates share one read. Both record under the `recipe-photos` telemetry kind.
+    aliases: [
+      {
+        name: "recipe-photo-sized",
+        uriTemplate: "ui://recipe/{uid}/photo{+rest}",
+        description: "A recipe photo by gallery index and/or size (ui://recipe/{uid}/photo/{n}?w=&h=)",
+      },
+    ],
+    kind: "recipe-photos",
+  },
+  (ctx) => {
+    // One cache per session registration: regenerable bytes, evict-oldest on overflow.
+    const cache = new PhotoByteCache(PHOTO_BYTE_CACHE_MAX);
 
-  const read = tracedResourceRead(
-    "recipe-photos",
-    async (uri: URL, variables: Variables): Promise<ReadResourceResult> => {
+    // Bare template carries the `list` (one entry per recipe that has a photo, the
+    // primary URI); the catch-all alias routes sized/indexed reads to the same handler.
+    const list = async () => ({
+      resources: ctx.state.recipe.store
+        .getAll()
+        .map((recipe) => ({ recipe, uri: recipePhotoResourceUri(recipe) }))
+        .filter((r): r is { recipe: Recipe; uri: string } => r.uri !== null)
+        .map(({ recipe, uri }) => ({ uri, name: `${recipe.name} photo`, mimeType: "image/jpeg" })),
+    });
+
+    const read = async (uri: URL, variables: Variables): Promise<ReadResourceResult> => {
       const uid = variables["uid"] as RecipeUid;
 
       // Path shape is [uid, "photo"] or [uid, "photo", n]; anything else is malformed.
@@ -151,32 +177,8 @@ export function recipePhotoResource(ctx: DomainCtx<RecipeState, never>): void {
       const resized = await resizePhotoJpeg(fetched.bytes, { width, height });
       cache.set(cacheKey, resized);
       return blobResult(uri, resized);
-    },
-  );
+    };
 
-  // Bare template carries the `list` (one entry per recipe that has a photo, the
-  // primary URI); the catch-all routes sized/indexed reads to the same handler.
-  const bare = new ResourceTemplate("ui://recipe/{uid}/photo", {
-    list: async () => ({
-      resources: ctx.state.recipe.store
-        .getAll()
-        .map((recipe) => ({ recipe, uri: recipePhotoResourceUri(recipe) }))
-        .filter((r): r is { recipe: Recipe; uri: string } => r.uri !== null)
-        .map(({ recipe, uri }) => ({ uri, name: `${recipe.name} photo`, mimeType: "image/jpeg" })),
-    }),
-  });
-  const sized = new ResourceTemplate("ui://recipe/{uid}/photo{+rest}", { list: undefined });
-
-  ctx.server.registerResource(
-    "recipe-photo",
-    bare,
-    { description: "A recipe's cover photo, served as image bytes by UID (ui://recipe/{uid}/photo)" },
-    read,
-  );
-  ctx.server.registerResource(
-    "recipe-photo-sized",
-    sized,
-    { description: "A recipe photo by gallery index and/or size (ui://recipe/{uid}/photo/{n}?w=&h=)" },
-    read,
-  );
-}
+    return { list, read };
+  },
+);
