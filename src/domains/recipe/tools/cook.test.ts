@@ -18,9 +18,24 @@ function flatArgs(uid: string): CookRecipeInput {
       { text: "1 cup sugar", group: null },
     ],
     steps: [
-      { text: "Mix flour and sugar.", group: null, ingredientRefs: [0, 1], produces: null, usesIntermediate: [] },
-      { text: "Bake 30 minutes.", group: null, ingredientRefs: [], produces: null, usesIntermediate: [] },
+      {
+        text: "Mix flour and sugar.",
+        group: null,
+        ingredientRefs: [0, 1],
+        produces: null,
+        usesIntermediate: [],
+        phase: "prep",
+      },
+      {
+        text: "Bake 30 minutes.",
+        group: null,
+        ingredientRefs: [],
+        produces: null,
+        usesIntermediate: [],
+        phase: "cook",
+      },
     ],
+    prep: { activeMin: 5, passiveWaitMin: 0 },
   };
 }
 
@@ -34,22 +49,32 @@ describe("cook_recipe tool", () => {
   const callCook = (args: CookRecipeInput) => kh.callTool("cook_recipe", { ...args });
 
   it("echoes the validated parse and enriches it with the stored recipe's identity", async () => {
-    const recipe = makeRecipe({ name: "Pound Cake", servings: "8", totalTime: "1 hr" });
+    const recipe = makeRecipe({ name: "Pound Cake", servings: "8", totalTime: "1 hr", prepTime: "15 min" });
     kh.seed({ recipes: [recipe] });
     const result = await callCook(flatArgs(recipe.uid));
     expect(result.isError).toBeUndefined();
-    // The model's parse passes straight through; the server adds name/servings/totalTime.
+    // The model's parse passes straight through; the server adds name/servings/totalTime/prepTime.
     const sc = result.structuredContent as {
       ingredients: unknown[];
-      steps: { text: string; ingredientRefs: number[] }[];
+      prep: { activeMin: number; passiveWaitMin: number };
+      steps: { text: string; ingredientRefs: number[]; phase: string }[];
     };
-    expect(sc).toMatchObject({ recipe_uid: recipe.uid, name: "Pound Cake", servings: "8", totalTime: "1 hr" });
+    expect(sc).toMatchObject({
+      recipe_uid: recipe.uid,
+      name: "Pound Cake",
+      servings: "8",
+      totalTime: "1 hr",
+      prepTime: "15 min", // the recipe's STATED prep, enriched from the store
+    });
     expect(sc.ingredients).toEqual([
       { text: "2 cups flour", group: null },
       { text: "1 cup sugar", group: null },
     ]);
+    // The model's own prep estimate and the per-step phase split pass straight through.
+    expect(sc.prep).toEqual({ activeMin: 5, passiveWaitMin: 0 });
     expect(sc.steps).toHaveLength(2);
-    expect(sc.steps[0]).toMatchObject({ text: "Mix flour and sugar.", ingredientRefs: [0, 1] });
+    expect(sc.steps[0]).toMatchObject({ text: "Mix flour and sugar.", ingredientRefs: [0, 1], phase: "prep" });
+    expect(sc.steps[1]).toMatchObject({ phase: "cook" });
     // The text channel carries the same structured payload as JSON; assert the name is present.
     expect(getJson<{ name: string }>(result).name).toBe("Pound Cake");
   });
@@ -71,6 +96,7 @@ describe("cook_recipe tool", () => {
           ingredientRefs: [0, 1],
           produces: "Spice Paste",
           usesIntermediate: [],
+          phase: "prep" as const,
         },
         {
           text: "Toss pork with the paste.",
@@ -78,8 +104,10 @@ describe("cook_recipe tool", () => {
           ingredientRefs: [2],
           produces: null,
           usesIntermediate: ["Spice Paste"],
+          phase: "prep" as const,
         },
       ],
+      prep: { activeMin: 20, passiveWaitMin: 45 },
     };
     const result = await callCook(args);
     expect(result.isError).toBeUndefined();
@@ -136,6 +164,17 @@ describe("cook_recipe tool", () => {
     const result = await callCook(args);
     expect(result.isError).toBe(true);
     expect(getText(result)).toContain('both produce "Base"');
+  });
+
+  it("rejects a prep-phase step that follows a cook-phase step", async () => {
+    const recipe = makeRecipe();
+    kh.seed({ recipes: [recipe] });
+    const args = flatArgs(recipe.uid);
+    args.steps[0]!.phase = "cook";
+    args.steps[1]!.phase = "prep"; // a prep step after cooking has started — would reorder the recipe
+    const result = await callCook(args);
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('tagged "prep"');
   });
 
   it("returns an isError naming read_recipe when the UID is not in the store", async () => {

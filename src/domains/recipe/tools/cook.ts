@@ -48,6 +48,39 @@ const cookStepSchema = z.object({
   usesIntermediate: z
     .array(z.string().min(1))
     .describe("Names of intermediates this step consumes — each must match a `produces` from an EARLIER step."),
+  phase: z
+    .enum(["prep", "cook"])
+    .describe(
+      'Which side of the first application of heat this step is on. "prep" = mise-en-place done before cooking ' +
+        "starts (knife work the ingredient line doesn't already state, making a sub-component, a marinade or soak, " +
+        "oven/grill/equipment setup); the cooking view collects the prep-phase steps onto a prep screen ahead of " +
+        'the stepper. "cook" = a step performed once cooking is underway. When an ingredient line already states ' +
+        'its cut ("1 onion, diced"), you usually do NOT need a separate prep step — the gather chip carries it; ' +
+        "reserve prep steps for the work the ingredient list cannot express.",
+    ),
+});
+
+// The model's split of the prep budget, surfaced on the prep screen as a real,
+// schedulable step. `activeMin` is hands-on mise-en-place; `passiveWaitMin` is the
+// unattended wait (marinate/soak/chill/rest) that, when long, must be started first.
+const cookPrepSchema = z.object({
+  activeMin: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Your estimate of hands-on prep minutes before first heat — knife work, measuring, making sub-components. " +
+        "Active work only; do NOT fold marinating/resting time in here.",
+    ),
+  passiveWaitMin: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Unattended wait BEFORE first heat that the cook must start ahead of cooking — marinating, soaking, brining, " +
+        "chilling a dough. 0 when there is none. It is surfaced on the prep screen as 'start this first', so do NOT " +
+        "include post-cook rests (resting meat, cooling): those happen after cooking and stay as cook steps.",
+    ),
 });
 
 export const cookRecipeInputSchema = z
@@ -58,21 +91,28 @@ export const cookRecipeInputSchema = z
       .array(cookStepSchema)
       .min(1)
       .describe("Every direction step, in order, each anchored to the ingredients it uses."),
+    prep: cookPrepSchema.describe(
+      "Your prep-time estimate, split into hands-on (activeMin) and unattended wait (passiveWaitMin).",
+    ),
   })
   .strict();
 
 export type CookRecipeInput = z.infer<typeof cookRecipeInputSchema>;
 
 // The validated echo: the model's parse passed straight through, plus the stored
-// recipe's identity (name/servings/totalTime/photo) so the model never retypes what
-// the store already holds. The widget renders entirely off this structured channel.
+// recipe's identity (name/servings/totalTime/prepTime/photo) so the model never retypes
+// what the store already holds. The widget renders entirely off this structured channel.
+// `prepTime` is the recipe's STATED prep (enriched from the store) — shown as a secondary
+// to the model's own `prep` estimate, which the stated value routinely under- or over-reports.
 export const cookRecipeOutputSchema = z.object({
   recipe_uid: RecipeUidSchema,
   name: z.string(),
   servings: z.string().nullable(),
   totalTime: z.string().nullable(),
+  prepTime: z.string().nullable(),
   photoResourceUri: z.string().nullable(),
   ingredients: z.array(z.object({ text: z.string(), group: z.string().nullable() })),
+  prep: cookPrepSchema,
   steps: z.array(
     z.object({
       text: z.string(),
@@ -80,6 +120,7 @@ export const cookRecipeOutputSchema = z.object({
       ingredientRefs: z.array(z.number().int()),
       produces: z.string().nullable(),
       usesIntermediate: z.array(z.string()),
+      phase: z.enum(["prep", "cook"]),
     }),
   ),
 });
@@ -95,9 +136,23 @@ export const cookRecipeOutputSchema = z.object({
 export function validateCookParse(args: CookRecipeInput): string | null {
   const n = args.ingredients.length;
   const produced = new Set<string>();
+  let cookStarted = false;
   for (let i = 0; i < args.steps.length; i++) {
     const step = args.steps[i]!;
     const stepNo = i + 1;
+    // Prep is the mise-en-place done BEFORE first heat, so the widget collects every
+    // prep-phase step onto a pre-stepper prep screen. A `prep` step tagged AFTER a `cook`
+    // step would be hoisted ahead of the cook sequence — reordering the recipe — so reject
+    // it: the model must re-tag a mid-cook action as `cook`.
+    if (step.phase === "cook") {
+      cookStarted = true;
+    } else if (cookStarted) {
+      return (
+        `Step ${stepNo.toString()} is tagged "prep", but an earlier step is already "cook". ` +
+        "Prep is the mise-en-place done before cooking starts, so every prep step must come before the " +
+        'first cook step. Re-tag this step as "cook" (it happens once cooking is underway), or reorder the steps.'
+      );
+    }
     for (const ref of step.ingredientRefs) {
       if (ref >= n) {
         return (
@@ -146,7 +201,10 @@ export const cookRecipeTool = defineTool(
       "name and reference it from the consuming step's `usesIntermediate` — by name, not by re-listing its raw " +
       "parts. Only name an intermediate that is genuinely set aside (used by a non-adjacent or by multiple later " +
       "steps); when a result flows straight into the next step, leave `produces` null. Keep ingredient lines and " +
-      "step text verbatim; ingredient/direction section headers become the `group` on each line.",
+      "step text verbatim; ingredient/direction section headers become the `group` on each line. Tag each step's " +
+      "`phase` — `prep` for mise-en-place done before first heat, `cook` once cooking is underway — and give a " +
+      "`prep` time estimate split into hands-on `activeMin` and unattended `passiveWaitMin` (marinate/soak/rest); " +
+      "the view leads with a prep screen built from the prep-phase steps over the ingredient gather list.",
     inputSchema: cookRecipeInputSchema,
     outputSchema: cookRecipeOutputSchema,
     // Hosts with the apps surface render this result as the step-anchored cooking
@@ -171,8 +229,10 @@ export const cookRecipeTool = defineTool(
         name: recipe.name,
         servings: recipe.servings,
         totalTime: recipe.totalTime,
+        prepTime: recipe.prepTime,
         photoResourceUri: recipePhotoResourceUri(recipe),
         ingredients: args.ingredients,
+        prep: args.prep,
         steps: args.steps,
       });
     };
