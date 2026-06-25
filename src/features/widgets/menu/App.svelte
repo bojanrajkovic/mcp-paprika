@@ -24,6 +24,7 @@
     parseRecipeDetail,
     type RecipeDetailData,
   } from "../shared/recipe-detail.js";
+  import { relevantTime } from "../shared/recipe-time.js";
   import { nameTile } from "../shared/tile.js";
 
   // The per-recipe metadata read_menu denormalizes onto a recipe-linked row (a slice of the
@@ -250,11 +251,6 @@
     };
   }
 
-  // The row shows ONE duration — the most decision-relevant of cook → total → prep (the same rule
-  // recipe-browse's row applies).
-  const relevantTime = (r: RecipeMeta): string | null =>
-    r.cookTime ?? r.totalTime ?? r.prepTime;
-
   // The detail pane's hero photo: read the photo proxy resource and turn its blob into an image
   // `data:` URI (or null on failure). Closes over `app`, passed to RecipeDetail so it stays
   // host-agnostic — the same loader the recipe-browse and meal-week-planner widgets inject.
@@ -303,7 +299,8 @@
           <div class="empty">No meals planned</div>
         {:else}
           {#each sec.items as item (item.uid)}
-            {#if item.recipe !== null}
+            {#if item.recipe !== null && item.recipeUid !== null}
+              {@const time = relevantTime(item.recipe)}
               <button
                 class="row rich"
                 onclick={() => openRecipe(item)}
@@ -322,12 +319,10 @@
                     {#if item.typeName !== null}<span class="eyebrow"
                         >{item.typeName}</span
                       >{/if}
-                    {#if item.typeName !== null && relevantTime(item.recipe)}<span
-                        class="sep">·</span
+                    {#if item.typeName !== null && time}<span class="sep"
+                        >·</span
                       >{/if}
-                    {#if relevantTime(item.recipe)}<span class="time"
-                        >{relevantTime(item.recipe)}</span
-                      >{/if}
+                    {#if time}<span class="time">{time}</span>{/if}
                     <RatingDots rating={item.recipe.rating} />
                   </span>
                 </span>

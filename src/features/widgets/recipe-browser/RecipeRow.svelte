@@ -6,6 +6,7 @@
   import Chevron from "../shared/Chevron.svelte";
   import RatingDots from "../shared/RatingDots.svelte";
   import RecipeThumb from "../shared/RecipeThumb.svelte";
+  import { relevantTime } from "../shared/recipe-time.js";
 
   interface RowRecipe {
     uid: string;
@@ -34,9 +35,9 @@
     onToggle: () => void;
   } = $props();
 
-  // The browse line shows ONE duration — the most decision-relevant of cook → total → prep.
-  // Prep and cook separated belong to the expanded strip, not the collapsed line.
-  const time = $derived(recipe.cookTime ?? recipe.totalTime ?? recipe.prepTime);
+  // The browse line shows ONE duration (relevantTime: cook → total → prep). Prep and cook
+  // separated belong to the expanded strip, not the collapsed line.
+  const time = $derived(relevantTime(recipe));
   const category = $derived(recipe.categories[0] ?? "");
 </script>
 
