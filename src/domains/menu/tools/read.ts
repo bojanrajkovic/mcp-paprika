@@ -31,6 +31,10 @@ export const readMenuTool = defineTool(
       }),
     },
     outputSchema: menuReadOutputSchema,
+    // Hosts with the apps surface render this result as the day-sectioned menu widget
+    // (browse the recipes, tap for detail, hand scheduling to the assistant); others show
+    // the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/menu" },
   },
   [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
