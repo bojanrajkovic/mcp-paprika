@@ -7,8 +7,10 @@ import { serve, type ServerType } from "@hono/node-server";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import { trace } from "@opentelemetry/api";
 import { Hono } from "hono";
 import type { Context, MiddlewareHandler, Next } from "hono";
+import { routePath } from "hono/route";
 import type { Logger } from "pino";
 
 import type { PaprikaConfig } from "../utils/config.js";
@@ -24,8 +26,10 @@ import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
+import { clientAttrs, clientFingerprint, recordClientConnection } from "../telemetry/client-fingerprint.js";
 import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
 import { getMeter, lazy, startTimer } from "../telemetry/scope.js";
+import { ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
 import { unwrapAtBoot } from "../utils/errors.js";
 import { buildFaviconRouter } from "./favicon.js";
 import { buildWidgetPreviewRouter } from "./widget-preview.js";
@@ -88,13 +92,53 @@ const PROBE_PATHS = new Set(["/healthz"]);
  * Exported for isolated unit testing, same seam as {@link accessLog}.
  */
 export function tracedRequests(): MiddlewareHandler {
-  const instrument = httpInstrumentationMiddleware();
+  // Name a POST /mcp span after the JSON-RPC method the handler stashed on the
+  // context (e.g. `POST /mcp tools/call`), so tool calls stand out from the
+  // protocol chatter (initialize, tools/list, ping, notifications) that otherwise
+  // all share the generic `POST /mcp` name. The factory runs at span finalize too,
+  // by which point the stash is set; every other route keeps @hono/otel's default
+  // (`METHOD <routePath>`).
+  const instrument = httpInstrumentationMiddleware({
+    spanNameFactory: (c) => {
+      const method = c.get("mcpMethod");
+      return typeof method === "string" ? `${c.req.method} /mcp ${method}` : `${c.req.method} ${routePath(c)}`;
+    },
+  });
   return async (c, next) => {
     if (PROBE_PATHS.has(c.req.path) || (c.req.method === "GET" && c.req.path === "/mcp")) {
       return next();
     }
     return instrument(c, next);
   };
+}
+
+/**
+ * Tag the active request span with the JSON-RPC method (and, for a `tools/call`,
+ * the tool name) from a parsed `POST /mcp` body — so the span carries
+ * `mcp.method.name` / `gen_ai.tool.name` (matching the kernel's tool span) and
+ * the name factory above can title it. Stashes the method on the context for the
+ * factory. A body with no `method` (a JSON-RPC response to a server request) is
+ * skipped. Best-effort: never throws into request handling.
+ */
+function tagMcpRequestSpan(c: Context, body: unknown): void {
+  const messages = Array.isArray(body) ? body : [body];
+  const methods: string[] = [];
+  const tools: string[] = [];
+  for (const m of messages) {
+    const method = (m as { method?: unknown } | null)?.method;
+    if (typeof method !== "string") continue;
+    methods.push(method);
+    const name = method === "tools/call" ? (m as { params?: { name?: unknown } }).params?.name : undefined;
+    if (typeof name === "string") tools.push(name);
+  }
+  if (methods.length === 0) return;
+  const method = methods.join(",");
+  c.set("mcpMethod", method);
+  const span = trace.getActiveSpan();
+  if (span !== undefined) {
+    span.setAttribute(ATTR_MCP_METHOD_NAME, method);
+    if (tools.length > 0) span.setAttribute(ATTR_GEN_AI_TOOL_NAME, tools.join(","));
+  }
 }
 
 export function accessLog(log: Logger) {
@@ -114,7 +158,11 @@ export function accessLog(log: Logger) {
       // and guarantees access-log telemetry for every request.
       const durationMs = Math.round(performance.now() - t0);
       const status = c.res.status;
-      const fields = { method: c.req.method, path: c.req.path, status, durationMs };
+      // The mcp-session-id header groups a client's /mcp request sequence into one
+      // session (and ties back to its `mcp client connected` fingerprint); absent on
+      // initialize and non-/mcp routes.
+      const session = c.req.header?.(MCP_SESSION_HEADER);
+      const fields = { method: c.req.method, path: c.req.path, status, durationMs, ...(session && { session }) };
 
       if (status >= 500) {
         log.error(fields, "http request 5xx");
@@ -168,8 +216,24 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     const session = sessions.get(id);
     if (session === undefined) return;
     sessions.delete(id);
+    const elapsedSeconds = session.elapsedSeconds();
+    const fp = clientFingerprint(session.server.server);
     activeSessions().add(-1, HTTP_TRANSPORT_ATTR);
-    mcpServerSessionDuration().record(session.elapsedSeconds(), HTTP_TRANSPORT_ATTR);
+    // Label the session lifetime with the connecting client (census slice), so
+    // session duration is sliceable by client alongside the connect span/counter.
+    mcpServerSessionDuration().record(elapsedSeconds, {
+      ...HTTP_TRANSPORT_ATTR,
+      ...clientAttrs(session.server.server),
+    });
+    log.info(
+      {
+        client: fp?.name ?? "unknown",
+        clientVersion: fp?.version,
+        durationSec: Math.round(elapsedSeconds),
+        sessions: sessions.size,
+      },
+      "mcp client disconnected",
+    );
   };
 
   // DNS rebinding protection: derive once at startup. The SDK's transport
@@ -364,6 +428,17 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   }
 
   hono.all("/mcp", async (c) => {
+    // Tag the request span with the JSON-RPC method (POST only). Hono caches the
+    // parsed body, so the transport (and the initialize branch below) re-read it
+    // for free; a non-JSON body is left for the transport to reject.
+    if (c.req.method === "POST") {
+      try {
+        tagMcpRequestSpan(c, await c.req.json());
+      } catch {
+        /* not JSON / not a JSON-RPC message — the transport returns the error */
+      }
+    }
+
     const sessionId = c.req.header(MCP_SESSION_HEADER);
 
     if (sessionId !== undefined) {
@@ -402,12 +477,23 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     // tools on N session servers is safe — exactly as buildMcpServer(app) was.
     const server = buildBrandedServer();
     kernel.registerAll(server);
-    // Log the connecting client's advertised capabilities once per session (debug) — notably
-    // whether it offers form elicitation, which the destructive-confirm and disambiguation-pick
-    // gates check before issuing a request. oninitialized fires after the client's initialized
-    // notification, so getClientCapabilities() is populated by then.
+    // Capture the connection fingerprint once per session: clientInfo + the full
+    // capability tree + the requested protocol version (from the parsed initialize
+    // body, the only place the server sees it — it does not retain the negotiated
+    // value). recordClientConnection emits the connect span + census counter + the
+    // per-server stash the tool wrapper reads; we log the same fingerprint here (the
+    // transport owns the logger). oninitialized fires after the client's initialized
+    // notification, so the client reads are populated by then.
     server.server.oninitialized = () => {
-      log.debug({ clientCapabilities: server.server.getClientCapabilities() }, "mcp client initialized");
+      const fp = recordClientConnection(server.server, {
+        transport: "http",
+        protocolVersion: body.params.protocolVersion,
+        // The RAW capabilities (from the parsed initialize body) — they carry the
+        // `extensions` map (the apps/widget `io.modelcontextprotocol/ui` axis) that
+        // the SDK's getClientCapabilities() strips.
+        rawCapabilities: body.params.capabilities,
+      });
+      log.info({ client: fp }, "mcp client connected");
     };
     const transport = new StreamableHTTPTransport({
       sessionIdGenerator: () => randomUUID(),
