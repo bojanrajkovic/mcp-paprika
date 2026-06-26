@@ -3,9 +3,9 @@
 
 # Paprika MCP tools
 
-A generated reference for every tool the server registers, derived from the `defineTool` specs in
-each domain's `tools/*.ts` (no runtime boot — the spec IS the source). Two tools are opt-in and only
-behave when configured: `discover_recipes` (semantic search) and `generate_recipe_photo` (AI photos).
+A generated reference for every model-facing tool the server registers, derived from the `defineTool`
+specs in each domain's `tools/*.ts` (no runtime boot — the spec IS the source). Two tools are opt-in and
+only behave when configured: `discover_recipes` (semantic search) and `generate_recipe_photo` (AI photos).
 
 ## `add_grocery_items`
 

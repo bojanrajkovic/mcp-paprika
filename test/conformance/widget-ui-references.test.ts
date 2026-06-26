@@ -26,11 +26,14 @@ describe("ADR-0019 C1: every tool ui.resourceUri points at a real widget", () =>
     const specs = await collectToolSpecs();
     const offenders: string[] = [];
     for (const spec of specs) {
-      if (spec.ui === undefined) continue;
-      const match = UI_WIDGET_URI.exec(spec.ui.resourceUri);
+      // A view-less app-only tool (`ui.visibility: ["app"]`, no resourceUri — the
+      // record_widget_timing sink) declares `ui` but references no widget.
+      const resourceUri = spec.ui?.resourceUri;
+      if (resourceUri === undefined) continue;
+      const match = UI_WIDGET_URI.exec(resourceUri);
       const name = match?.[1];
       if (name === undefined) {
-        offenders.push(`${spec.name}: malformed ui.resourceUri "${spec.ui.resourceUri}"`);
+        offenders.push(`${spec.name}: malformed ui.resourceUri "${resourceUri}"`);
         continue;
       }
       if (!existsSync(join(WIDGETS_SRC, name, "main.ts"))) {

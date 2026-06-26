@@ -217,6 +217,8 @@ export interface KernelHarness<State = unknown, Writes = unknown> {
   /** The resource-list-changed spy on the stub notifier. */
   readonly resourceListChanged: () => ReturnType<typeof vi.fn>;
   readonly client: () => PaprikaClient;
+  /** The stub server the root module's tools/resources are registered on (e.g. to stash a session id). */
+  readonly server: () => McpServer;
 }
 
 export function useKernelHarness<State = unknown, Writes = unknown>(
@@ -296,6 +298,7 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
     infra: () => live().infra,
     notifier: () => live().notifier,
     resourceListChanged: () => live().resourceListChanged,
+    server: () => live().server,
     client: () => live().infra.client,
   };
 }

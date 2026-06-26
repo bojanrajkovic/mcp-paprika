@@ -64,7 +64,16 @@ export interface ToolSpec<
   readonly annotations: ToolAnnotations;
   readonly inputSchema: I;
   readonly outputSchema?: O extends Record<string, unknown> ? ZodType<O> : never;
-  readonly ui?: { readonly resourceUri: string };
+  readonly ui?: {
+    /** The `ui://widget/{name}` resource a host renders for this tool's result. Omitted by a view-less app-only tool. */
+    readonly resourceUri?: string;
+    /**
+     * Who may call this tool (ext-apps `_meta.ui.visibility`; default `["model", "app"]`). `["app"]`
+     * registers an app-only tool — callable by a widget via `callServerTool`, hidden from the model's
+     * `tools/list` where the host honors it (the `record_widget_timing` sink). Host-advisory.
+     */
+    readonly visibility?: readonly ("model" | "app")[];
+  };
 }
 
 /**
@@ -412,8 +421,13 @@ export function defineTool<
           ...(spec.outputSchema && { outputSchema: spec.outputSchema }),
           ...(spec.ui && {
             _meta: {
-              ui: { resourceUri: spec.ui.resourceUri },
-              [UI_RESOURCE_URI_META_KEY]: spec.ui.resourceUri,
+              ui: {
+                ...(spec.ui.resourceUri !== undefined && { resourceUri: spec.ui.resourceUri }),
+                ...(spec.ui.visibility !== undefined && { visibility: spec.ui.visibility }),
+              },
+              // Legacy flat key mirrors resourceUri for older hosts; omitted for a view-less
+              // (visibility-only) tool such as the widget-timing sink.
+              ...(spec.ui.resourceUri !== undefined && { [UI_RESOURCE_URI_META_KEY]: spec.ui.resourceUri }),
             },
           }),
         },

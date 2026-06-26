@@ -3,6 +3,7 @@ import type { WidgetsApi } from "./api.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { loadWidgetArtifacts, widgetsDir } from "./artifacts.js";
 import { widgetsResource } from "./resources/widgets-resource.js";
+import { recordWidgetTimingTool } from "./tools/record-widget-timing.js";
 
 declare module "../../kernel/registry.js" {
   interface DomainRegistry {
@@ -13,9 +14,10 @@ declare module "../../kernel/registry.js" {
 /**
  * The widgets module's state: the built widget HTML, keyed by name, loaded ONCE
  * at construction (see {@link loadWidgetArtifacts}). A FEATURE module — it owns
- * no Paprika entity, so there is no store/cache pair and no `syncs[]`; it only
- * serves the `ui://widget/{name}` resource (ADR-0019). A missing build degrades
- * to an empty map rather than failing boot, so the stdio transport and a fresh
+ * no Paprika entity, so there is no store/cache pair and no `syncs[]`; it serves
+ * the `ui://widget/{name}` resource (ADR-0019) and the app-only
+ * `record_widget_timing` telemetry sink (0b). A missing build degrades to an
+ * empty map rather than failing boot, so the stdio transport and a fresh
  * `pnpm dev` are unaffected.
  */
 export interface WidgetsState {
@@ -30,7 +32,7 @@ register(
     }))
     .build(() => ({
       api: {},
-      tools: [],
+      tools: [recordWidgetTimingTool],
       resources: [widgetsResource],
     })),
 );
