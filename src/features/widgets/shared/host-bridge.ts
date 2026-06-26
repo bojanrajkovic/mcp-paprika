@@ -1,6 +1,7 @@
 import type { App } from "@modelcontextprotocol/ext-apps";
 
 import { applyHostStyles } from "./host-style.js";
+import { perfMark, perfMeasure } from "./perf.js";
 
 /**
  * The two result shapes a widget's `receive()` accepts: a real ext-apps tool result (from
@@ -95,7 +96,21 @@ export function connectHost(
     handlers.onContext?.(ctx);
     applyHostStyles(ctx);
   };
-  app.ontoolresult = (result) => handlers.onResult(result);
+  // 0a marks: `connected` closes the handshake interval, `first-result` the data-delivery interval
+  // (the gap the widget spends on its own loading screen waiting for the host's tool-result push).
+  let firstResult = true;
+  app.ontoolresult = (result) => {
+    if (firstResult) {
+      firstResult = false;
+      perfMark("first-result");
+      perfMeasure("connected-to-first-result", "connected", "first-result");
+    }
+    handlers.onResult(result);
+  };
   app.onhostcontextchanged = apply;
-  Promise.resolve(app.connect()).then(apply);
+  Promise.resolve(app.connect()).then(() => {
+    perfMark("connected");
+    perfMeasure("boot-to-connected", "boot", "connected");
+    apply();
+  });
 }

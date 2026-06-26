@@ -20,6 +20,7 @@ import { join } from "node:path";
 import { diag, type DiagLogger, DiagLogLevel } from "@opentelemetry/api";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { NetInstrumentation } from "@opentelemetry/instrumentation-net";
 import { RuntimeNodeInstrumentation } from "@opentelemetry/instrumentation-runtime-node";
 import { UndiciInstrumentation } from "@opentelemetry/instrumentation-undici";
 import { containerDetector } from "@opentelemetry/resource-detector-container";
@@ -121,10 +122,10 @@ function serviceVersion(): string | undefined {
  * Returns the shutdown thunk (flush + stop) on success. The loader hook only
  * has effect when this module loads via the `--import` preload path (the
  * container CMD); under the first-import fallback the main graph is already
- * linked and registration is harmless — none of the configured
- * instrumentations need it (undici and runtime-node are diagnostics_channel/
- * perf-hooks based). It exists for headroom: any future module-patching
- * instrumentation Just Works wherever `--import` is used.
+ * linked and registration is harmless. `NetInstrumentation` is module-patching
+ * (it wraps `net`/`tls`), so it takes effect ONLY under the `--import` path — a
+ * silent no-op on the npm-bin/stdio path, by design; undici and runtime-node
+ * are diagnostics_channel/perf-hooks based and work either way.
  */
 export function startTelemetry(): Result<() => Promise<void>, Error> {
   return Result.fromThrowable(
@@ -191,7 +192,7 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
               ],
             }
           : { metricReaders: [] }),
-        instrumentations: [new UndiciInstrumentation(), new RuntimeNodeInstrumentation()],
+        instrumentations: [new UndiciInstrumentation(), new RuntimeNodeInstrumentation(), new NetInstrumentation()],
       });
       sdk.start();
       return async (): Promise<void> => {
