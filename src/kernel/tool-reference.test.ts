@@ -31,12 +31,23 @@ describe("tool reference (docs/tools/README.md)", () => {
       const built = await m.build(infra, {});
       for (const tool of built.tools) registered.add(tool.spec.name);
     }
-    // What the generator documents: the globbed `defineTool` specs.
+    // What the generator DISCOVERS: the globbed `defineTool` specs. (Whether a discovered tool is
+    // then RENDERED into the README is a separate, visibility-filtered pass — see the next test.)
     const documented = new Set((await collectToolSpecs()).map((s) => s.name));
 
-    // Equal sets ⇒ "documented ⇔ registered": no tool wired but undocumented, and
-    // none documented but unwired. (Spec CONTENT can't drift — same object.)
+    // Equal sets ⇒ "discovered ⇔ registered": no tool wired but undiscoverable, and none discovered
+    // but unwired. (Spec CONTENT can't drift — same object.)
     expect([...documented].sort()).toEqual([...registered].sort());
+  });
+
+  it("excludes app-only tools from the rendered reference", async () => {
+    // An app-only tool (`ui.visibility: ["app"]` — the record_widget_timing sink) is registered and
+    // discovered, but it is not part of the model-facing surface, so `renderToolReference` drops it.
+    const specs = await collectToolSpecs();
+    const appOnly = specs.filter((s) => s.ui?.visibility !== undefined && !s.ui.visibility.includes("model"));
+    expect(appOnly.length).toBeGreaterThan(0); // record_widget_timing
+    const rendered = renderToolReference(specs);
+    for (const s of appOnly) expect(rendered).not.toContain(`## \`${s.name}\``);
   });
 
   it("is up to date — run `pnpm generate:tool-reference` if this fails", async () => {

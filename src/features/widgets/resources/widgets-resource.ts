@@ -66,7 +66,9 @@ export const widgetsResource = defineResource<WidgetsState, never>(
       const injectScript =
         `window["${SERVER_CAPS_KEY}"]=${serverCaps};` +
         (traceparent !== undefined ? `window["${TRACEPARENT_KEY}"]=${JSON.stringify(traceparent)};` : "");
-      const injected = html.replace(WIDGET_INJECT_SLOT, `<script>${injectScript}</script>`);
+      // Function replacement (not a string), so a `$` in injectScript is never read as a `String.replace`
+      // substitution pattern ($&, $1, …) — the same guard `widget-preview.ts` documents at its inject site.
+      const injected = html.replace(WIDGET_INJECT_SLOT, () => `<script>${injectScript}</script>`);
       return {
         contents: [{ uri: uri.href, mimeType: UI_RESOURCE_MIME_TYPE, text: injected }],
       };

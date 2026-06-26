@@ -66,6 +66,21 @@ describe("record_widget_timing", () => {
     expect(span.attributes[ATTR_MCP_SESSION_ID]).toBe("sess-widget-1");
   });
 
+  it("clamps a garbage timeOrigin/duration so it cannot overflow the OTLP epoch", async () => {
+    await kh.callTool("record_widget_timing", {
+      traceparent: TRACEPARENT,
+      timeOrigin: 1e300, // absurd client clock
+      clientReportTime: 1_000,
+      measures: [{ name: "paprika-widget:boot-to-mounted", startTime: 0, duration: 1e300 }],
+    });
+    const span = telemetry.spansNamed("paprika-widget:boot-to-mounted")[0]!;
+    // Duration clamped to the render window, not 1e300.
+    expect(ms(span.duration)).toBe(600_000);
+    // Start anchored near the server clock (seconds), never a ~1e297 overflow.
+    expect(span.startTime[0]).toBeGreaterThan(0);
+    expect(span.startTime[0]).toBeLessThan(Date.now() / 1000 + 86_400);
+  });
+
   it("degrades a malformed traceparent to a local-root span without throwing", async () => {
     const result = await kh.callTool("record_widget_timing", {
       traceparent: "not-a-traceparent",

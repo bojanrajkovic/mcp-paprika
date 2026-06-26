@@ -6,7 +6,7 @@
  * `resources/list`, and an unknown name answers a protocol not-found.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { DomainCtx, Infra } from "../../../kernel/registry.js";
 import type { WidgetsState } from "../module.js";
@@ -20,7 +20,8 @@ import { SERVER_CAPS_KEY, TRACEPARENT_KEY } from "../shared/server-caps-key.js";
 import { widgetsResource } from "./widgets-resource.js";
 
 // A recording span provider so the resources/read span has a valid context to inject.
-installTestTelemetry();
+const telemetry = installTestTelemetry();
+beforeEach(() => telemetry.spanExporter.reset());
 
 function makeCtx(server: McpServer, widgets: ReadonlyMap<string, string>): DomainCtx<WidgetsState, never> {
   return { state: { widgets }, writes: {}, deps: {}, infra: { log: SILENT_LOG } as unknown as Infra, server };
@@ -60,8 +61,12 @@ describe("widgetsResource — ui://widget/{name}", () => {
       const result = await mcp.client.readResource({ uri: "ui://widget/demo" });
       const content = result.contents[0];
       const text = content !== undefined && "text" in content ? (content.text as string) : "";
-      // The recording read span's context serializes to a W3C traceparent: 00-<32hex>-<16hex>-<2hex>.
-      expect(text).toMatch(new RegExp(`window\\["${TRACEPARENT_KEY}"\\]="00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}"`));
+      // The injected traceparent must be THIS read's span context, not just any well-formed value —
+      // so the widget's reported marks re-parent under the read that served them. Pin trace + span id.
+      const readSpan = telemetry.spansNamed("resources/read")[0];
+      expect(readSpan).toBeDefined();
+      const sc = readSpan!.spanContext();
+      expect(text).toContain(`window["${TRACEPARENT_KEY}"]="00-${sc.traceId}-${sc.spanId}-`);
     } finally {
       await mcp.close();
     }

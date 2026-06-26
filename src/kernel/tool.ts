@@ -421,12 +421,10 @@ export function defineTool<
           ...(spec.outputSchema && { outputSchema: spec.outputSchema }),
           ...(spec.ui && {
             _meta: {
-              ui: {
-                ...(spec.ui.resourceUri !== undefined && { resourceUri: spec.ui.resourceUri }),
-                ...(spec.ui.visibility !== undefined && { visibility: spec.ui.visibility }),
-              },
-              // Legacy flat key mirrors resourceUri for older hosts; omitted for a view-less
-              // (visibility-only) tool such as the widget-timing sink.
+              // `spec.ui` IS the wire `_meta.ui` shape ({ resourceUri?, visibility? }), so it passes through
+              // whole — a new `ui` field is carried with no edit here. The legacy flat key mirrors resourceUri
+              // for older hosts; omitted for a view-less (visibility-only) tool such as the widget-timing sink.
+              ui: spec.ui,
               ...(spec.ui.resourceUri !== undefined && { [UI_RESOURCE_URI_META_KEY]: spec.ui.resourceUri }),
             },
           }),

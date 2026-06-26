@@ -18,6 +18,15 @@ import { getTracer } from "../../../telemetry/scope.js";
  */
 const propagator = new W3CTraceContextPropagator();
 
+/**
+ * Render-timeline span window. The widget's `timeOrigin`/marks/durations are untrusted (a host owns the
+ * iframe), so a forged or drifted value could otherwise hand OTel an epoch that overflows the OTLP int64
+ * and corrupts the export batch. Clamping every client time into ±this window of the server clock is
+ * transparent to an honest sub-second render and bounds the damage of garbage. 10 min is generous slack.
+ */
+const MAX_RENDER_MS = 600_000;
+const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n));
+
 /** One reported render interval — a `performance.measure` the widget collected, offset from its `timeOrigin`. */
 const measureSchema = z.object({
   name: z.string().min(1).max(128),
@@ -65,15 +74,19 @@ export const recordWidgetTimingTool = defineTool(
       // The read span the widget's HTML carried — the parent for its render spans. Invalid →
       // ROOT_CONTEXT, so the spans become local roots (safe degrade).
       const parent = propagator.extract(ROOT_CONTEXT, { traceparent: args.traceparent }, defaultTextMapGetter);
-      const skew = Date.now() - args.clientReportTime;
       const tracer = getTracer();
       const attributes = sessionAttrs(ctx.server.server);
+      const serverNow = Date.now();
       for (const measure of args.measures) {
-        // Client epoch (timeOrigin + offset) shifted onto the server clock by the skew.
-        const start = args.timeOrigin + measure.startTime + skew;
+        // Anchor the client timeline to the server clock at the report instant — `start = serverNow +
+        // (clientMeasureStart − clientReportTime)`, the skew correction — then CLAMP both the offset
+        // (a measure started at most MAX_RENDER_MS ago, no later than now) and the duration. Algebraically
+        // identical to the raw skew formula for honest sub-second data; the clamp only bites on garbage.
+        const start = serverNow + clamp(measure.startTime + args.timeOrigin - args.clientReportTime, -MAX_RENDER_MS, 0);
+        const duration = clamp(measure.duration, 0, MAX_RENDER_MS);
         tracer
           .startSpan(measure.name, { startTime: start, kind: SpanKind.INTERNAL, attributes }, parent)
-          .end(start + measure.duration);
+          .end(start + duration);
       }
       return toolResult("recorded");
     };
