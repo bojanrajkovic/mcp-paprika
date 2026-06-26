@@ -1,10 +1,20 @@
+import { context, defaultTextMapSetter } from "@opentelemetry/api";
+import { W3CTraceContextPropagator } from "@opentelemetry/core";
+
 import type { WidgetsState } from "../module.js";
 
 import { defineResource } from "../../../kernel/resource.js";
 import { supportsForm } from "../../../shared/elicit.js";
 import { UI_RESOURCE_MIME_TYPE } from "../../../shared/mcp-app.js";
 import { resourceNotFound } from "../../../shared/resources.js";
-import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT } from "../shared/server-caps-key.js";
+import { SERVER_CAPS_KEY, TRACEPARENT_KEY, WIDGET_INJECT_SLOT } from "../shared/server-caps-key.js";
+
+/**
+ * Explicit W3C propagator — the GLOBAL propagator is `OTEL_PROPAGATORS=none` (so
+ * `propagation.inject` no-ops), and this serializes the active span's context regardless.
+ * Pure object, no MeterProvider/late-binding hazard, so module scope is safe (unlike instruments).
+ */
+const traceparentPropagator = new W3CTraceContextPropagator();
 
 /**
  * `ui://widget/{name}` — serve a prebuilt, self-contained widget HTML for a host
@@ -46,7 +56,17 @@ export const widgetsResource = defineResource<WidgetsState, never>(
       const serverCaps = JSON.stringify({
         supportsElicitation: supportsForm(ctx.server.server),
       });
-      const injected = html.replace(WIDGET_INJECT_SLOT, `<script>window["${SERVER_CAPS_KEY}"]=${serverCaps};</script>`);
+      // Smuggle the active resources/read span's W3C traceparent into the same <script>, so the
+      // widget can report its render-timing marks back as child spans of THIS read (0b). An
+      // absent or non-recording span yields no carrier entry → the key is omitted and the widget
+      // simply doesn't report. JSON.stringify quotes the value safely (it is our own hex id).
+      const carrier: Record<string, string> = {};
+      traceparentPropagator.inject(context.active(), carrier, defaultTextMapSetter);
+      const traceparent = carrier["traceparent"];
+      const injectScript =
+        `window["${SERVER_CAPS_KEY}"]=${serverCaps};` +
+        (traceparent !== undefined ? `window["${TRACEPARENT_KEY}"]=${JSON.stringify(traceparent)};` : "");
+      const injected = html.replace(WIDGET_INJECT_SLOT, `<script>${injectScript}</script>`);
       return {
         contents: [{ uri: uri.href, mimeType: UI_RESOURCE_MIME_TYPE, text: injected }],
       };
