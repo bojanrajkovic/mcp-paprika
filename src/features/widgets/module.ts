@@ -16,7 +16,7 @@ declare module "../../kernel/registry.js" {
  * at construction (see {@link loadWidgetArtifacts}). A FEATURE module — it owns
  * no Paprika entity, so there is no store/cache pair and no `syncs[]`; it serves
  * the `ui://widget/{name}` resource (ADR-0019) and the app-only
- * `record_widget_timing` telemetry sink (0b). A missing build degrades to an
+ * `record_widget_timing` telemetry sink. A missing build degrades to an
  * empty map rather than failing boot, so the stdio transport and a fresh
  * `pnpm dev` are unaffected.
  */

@@ -303,7 +303,7 @@ export function recordSessionId(server: FingerprintServer, sessionId: string): v
  * The `mcp.session.id` span attribute for a session's server, or an empty object when none
  * was recorded (stdio, or a span before the session initialized). SPAN-ONLY — per-session,
  * so it must never label a metric. The tool wrapper and the resource-read wrapper spread it
- * onto their spans so a turn's tool calls and widget render spans group by session (0b/S2).
+ * onto their spans so a turn's tool calls and widget render spans group by session.
  */
 export function sessionAttrs(server: FingerprintServer): Attributes {
   const id = sessionIds.get(server);

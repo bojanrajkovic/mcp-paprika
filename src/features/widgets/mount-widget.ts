@@ -22,7 +22,7 @@ interface WidgetInfo {
  *
  * `perfMark("boot")` is the FIRST line: its `timeOrigin`-relative offset is the parse/eval bucket
  * (HTML parse + the inlined ext-apps runtime + this bundle), the largest slice of the placeholder
- * window. `mounted` closes the initial-render interval (0a).
+ * window. `mounted` closes the initial-render interval.
  */
 export function mountWidget(info: WidgetInfo, component: Component<{ app: App }>): void {
   perfMark("boot");

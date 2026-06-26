@@ -3,7 +3,7 @@ export const SERVER_CAPS_KEY = "__MCP_SERVER_CAPS__";
 
 /**
  * Key under which the widgets resource injects the `resources/read` span's W3C `traceparent`
- * into the served HTML (0b). The widget reads it on mount and reports its render-timing marks
+ * into the served HTML. The widget reads it on mount and reports its render-timing marks
  * back through `record_widget_timing`, which re-parents them under that span. Absent when the
  * read had no recording span (telemetry off), so the widget simply doesn't report.
  */

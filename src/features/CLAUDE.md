@@ -4,7 +4,7 @@
 
 Three feature modules on the kernel — kernel modules that are optional features, not data domains. `discover/` (semantic search) and `photo-gen/` (AI photos) are each composed in a `.state` factory and opt-in on config: the semantic-search stack (`EmbeddingClient` → `VectorStore` → the owned `JsonVectorIndex`) and the photo-generation stack (`PhotographyClient` + SSRF-hardened image fetch). An unconfigured feature builds a `null` component; the kernel registers their tools (`discover_recipes`, `generate_recipe_photo`) **unconditionally**, and the feature gate lives inside the handler, which declines with a clear not-configured result when its component is `null` (ADR-0009 §5; since R1, `discover_recipes` returns that as an `isError` redirect to `search_recipes`).
 
-`widgets/` is the odd one out: it owns no entity and reads no config, and serves the prebuilt `ui://widget/{name}` HTML resources a host renders in a sandboxed iframe (ADR-0019). It registers a single **app-only** tool — `record_widget_timing`, the widget render-timing sink (0b), hidden from the model's `tools/list`. Its sharp edges (the build-time-only toolchain, the boot-degrade, the path resolution) live in its own `CLAUDE.md`.
+`widgets/` is the odd one out: it owns no entity and reads no config, and serves the prebuilt `ui://widget/{name}` HTML resources a host renders in a sandboxed iframe (ADR-0019). It registers a single **app-only** tool — `record_widget_timing`, the widget render-timing sink, hidden from the model's `tools/list`. Its sharp edges (the build-time-only toolchain, the boot-degrade, the path resolution) live in its own `CLAUDE.md`.
 
 ## Key References
 

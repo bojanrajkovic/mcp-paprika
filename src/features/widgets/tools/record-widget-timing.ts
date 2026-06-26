@@ -42,7 +42,7 @@ export const recordWidgetTimingInputSchema = z.object({
 });
 
 /**
- * `record_widget_timing` — the server-side sink for a widget's client-side render timeline (0b).
+ * `record_widget_timing` — the server-side sink for a widget's client-side render timeline.
  *
  * A rendered widget reports `{ traceparent, timeOrigin, clientReportTime, measures }` after paint:
  * the traceparent the `resources/read` smuggled into its HTML, plus the `performance.measure`

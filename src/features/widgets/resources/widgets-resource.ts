@@ -57,7 +57,7 @@ export const widgetsResource = defineResource<WidgetsState, never>(
         supportsElicitation: supportsForm(ctx.server.server),
       });
       // Smuggle the active resources/read span's W3C traceparent into the same <script>, so the
-      // widget can report its render-timing marks back as child spans of THIS read (0b). An
+      // widget can report its render-timing marks back as child spans of THIS read. An
       // absent or non-recording span yields no carrier entry → the key is omitted and the widget
       // simply doesn't report. JSON.stringify quotes the value safely (it is our own hex id).
       const carrier: Record<string, string> = {};

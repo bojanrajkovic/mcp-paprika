@@ -100,7 +100,7 @@ export function defineResource<State, Deps extends DomainId>(
           return read(...args);
         },
         // Tag the read span with `mcp.session.id` (span-only) so a widget's render spans —
-        // parented under this read via the smuggled traceparent (0b) — group by session.
+        // parented under this read via the smuggled traceparent — group by session.
         () => sessionAttrs(ctx.server.server),
       );
       const register = (t: ResourceTemplateSpec, listCb: ListResourcesCallback | undefined): void => {

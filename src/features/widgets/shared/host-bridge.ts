@@ -9,7 +9,7 @@ const WIDGET_MEASURE_PREFIX = "paprika-widget:";
 
 /**
  * After the first result, report this widget's render-timing measures to the server's
- * `record_widget_timing` sink (0b), carrying the W3C traceparent the `resources/read` smuggled into the
+ * `record_widget_timing` sink, carrying the W3C traceparent the `resources/read` smuggled into the
  * HTML (`window[__MCP_TRACEPARENT__]`). The server re-parents the measures as child spans of that read,
  * so the client-side render timeline lands in our Tempo — no `@opentelemetry/*` in the bundle.
  *
@@ -129,7 +129,7 @@ export function connectHost(
     handlers.onContext?.(ctx);
     applyHostStyles(ctx);
   };
-  // 0a marks: `connected` closes the handshake interval, `first-result` the data-delivery interval
+  // `connected` closes the handshake interval, `first-result` the data-delivery interval
   // (the gap the widget spends on its own loading screen waiting for the host's tool-result push).
   let firstResult = true;
   app.ontoolresult = (result) => {
@@ -138,7 +138,7 @@ export function connectHost(
       perfMark("first-result");
       perfMeasure("connected-to-first-result", "connected", "first-result");
       // The render marks are all in by now (mount + handshake + first data); report them once,
-      // deferred, so the whole boot timeline reaches our Tempo via record_widget_timing (0b).
+      // deferred, so the whole boot timeline reaches our Tempo via record_widget_timing.
       reportWidgetTiming(app);
     }
     handlers.onResult(result);

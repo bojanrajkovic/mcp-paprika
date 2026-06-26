@@ -1,10 +1,10 @@
 /**
- * Render-attribution marks (0a). Labels the widget boot timeline so the iframe's Performance
+ * Render-attribution marks. Label the widget boot timeline so the iframe's Performance
  * panel (User Timing track) and `performance.getEntriesByType("measure")` decompose the
  * host-placeholder window into parse/eval (timeOrigin → boot) vs handshake (boot → connected)
  * vs data delivery (connected → first-result) vs initial render (boot → mounted).
  *
- * Pure client-side measurement, read during a profile; 0b reports it back to the server. Browser
+ * Pure client-side measurement, read during a profile and reported back to the server. Browser
  * only (compiled by esbuild / svelte-check, never the node tsc), so `performance` is the DOM global.
  */
 const PREFIX = "paprika-widget";

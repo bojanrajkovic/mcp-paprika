@@ -541,7 +541,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
       onsessioninitialized: (id) => {
         sessions.set(id, { server, transport, elapsedSeconds: startTimer() });
         // Stash the session id so the tool/resource span seams can tag spans with
-        // `mcp.session.id` — the cross-request grouping key for a turn's spans (0b/S2).
+        // `mcp.session.id` — the cross-request grouping key for a turn's spans.
         recordSessionId(server.server, id);
         activeSessions().add(1, HTTP_TRANSPORT_ATTR);
       },
