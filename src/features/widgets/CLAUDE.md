@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The kernel module that serves the interactive widget surface (ADR-0019): it registers the `ui://widget/{name}` resource and serves prebuilt, self-contained HTML for a host to render in a sandboxed iframe. It owns no Paprika entity and reads no config, registers no tool, and exposes `EmptyApi`. A tool opts a result into a widget by declaring `ToolSpec.ui.resourceUri` (the kernel maps it onto `_meta`); this module is the other half — the resource that URI points at.
+The kernel module that serves the interactive widget surface (ADR-0019): it registers the `ui://widget/{name}` resource and serves prebuilt, self-contained HTML for a host to render in a sandboxed iframe. It owns no Paprika entity, reads no config, and exposes `EmptyApi`. A tool opts a result into a widget by declaring `ToolSpec.ui.resourceUri` (the kernel maps it onto `_meta`); this module is the other half — the resource that URI points at. It registers ONE tool: `record_widget_timing`, the **app-only** (`ui.visibility: ["app"]`) render-timing sink (0b) — callable by a widget via `callServerTool`, hidden from the model's `tools/list`.
 
 Canonical home: `docs/architecture.md` ("Widget surface") + [ADR-0019](../../../docs/adr/0019-mcp-app-widget-surface.md). The build pipeline lives in `scripts/build-widgets.ts`; the dev preview in `src/transport/widget-preview.ts`. The **visual design system** — shared with the OAuth consent screen — is the root `/PRODUCT.md` (strategic register), `/DESIGN.md` (Stitch-format visual system), and `/.impeccable/design.json` (machine-readable sidecar).
 
