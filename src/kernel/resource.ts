@@ -4,6 +4,7 @@ import type { ListResourcesCallback, ReadResourceTemplateCallback } from "@model
 import type { DomainCtx, DomainId } from "./registry.js";
 
 import { tracedResourceRead } from "../shared/resources.js";
+import { sessionAttrs } from "../telemetry/client-fingerprint.js";
 
 /**
  * One URI template within a resource family — its registration name (the
@@ -92,10 +93,16 @@ export function defineResource<State, Deps extends DomainId>(
       const { read, list } = factory(ctx);
       // One traced handler shared by the primary and every alias: the span + metric
       // and the uniform invoke log live here, so an alias can't diverge.
-      const tracedRead = tracedResourceRead(kind, async (...args: Parameters<ReadResourceTemplateCallback>) => {
-        log.info({ resource: kind }, "resource read");
-        return read(...args);
-      });
+      const tracedRead = tracedResourceRead(
+        kind,
+        async (...args: Parameters<ReadResourceTemplateCallback>) => {
+          log.info({ resource: kind }, "resource read");
+          return read(...args);
+        },
+        // Tag the read span with `mcp.session.id` (span-only) so a widget's render spans —
+        // parented under this read via the smuggled traceparent (0b) — group by session.
+        () => sessionAttrs(ctx.server.server),
+      );
       const register = (t: ResourceTemplateSpec, listCb: ListResourcesCallback | undefined): void => {
         ctx.server.registerResource(
           t.name,

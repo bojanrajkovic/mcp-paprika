@@ -1,5 +1,5 @@
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
-import { context, trace } from "@opentelemetry/api";
+import { type Attributes, context, trace } from "@opentelemetry/api";
 
 import { mcpServerOperationDuration } from "../telemetry/instruments.js";
 import { getTracer } from "../telemetry/scope.js";
@@ -32,6 +32,7 @@ const ATTR_RESOURCE_BYTES = "mcp_paprika.resource.bytes";
 export function tracedResourceRead<Args extends ReadonlyArray<unknown>, Out>(
   kind: string,
   handler: (...args: Args) => Promise<Out>,
+  extraSpanAttrs?: () => Attributes,
 ): (...args: Args) => Promise<Out> {
   const attributes = { [ATTR_MCP_METHOD_NAME]: RESOURCES_READ_METHOD, [ATTR_RESOURCE_KIND]: kind };
   return async (...args: Args): Promise<Out> => {
@@ -41,6 +42,9 @@ export function tracedResourceRead<Args extends ReadonlyArray<unknown>, Out>(
       { attributes },
       { histogram: mcpServerOperationDuration, attributes },
     );
+    // SPAN-ONLY extras the metric must not carry (the session id — per-session, unbounded),
+    // read at call time so a value known only after registration (the session id) is current.
+    if (extraSpanAttrs !== undefined) op.span.setAttributes(extraSpanAttrs());
     // URI + served size on the SPAN only — high-cardinality (per-entity), so they stay OFF the
     // duration histogram's labels (which keep method + kind). The URI separates widget HTML reads
     // from photo reads in Tempo; the byte count is the server-side transfer-size signal.

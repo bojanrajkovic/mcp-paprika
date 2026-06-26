@@ -26,7 +26,12 @@ import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
-import { clientAttrs, clientFingerprint, recordClientConnection } from "../telemetry/client-fingerprint.js";
+import {
+  clientAttrs,
+  clientFingerprint,
+  recordClientConnection,
+  recordSessionId,
+} from "../telemetry/client-fingerprint.js";
 import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
@@ -535,6 +540,9 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
         sessions.set(id, { server, transport, elapsedSeconds: startTimer() });
+        // Stash the session id so the tool/resource span seams can tag spans with
+        // `mcp.session.id` — the cross-request grouping key for a turn's spans (0b/S2).
+        recordSessionId(server.server, id);
         activeSessions().add(1, HTTP_TRANSPORT_ATTR);
       },
       onsessionclosed: (id) => {

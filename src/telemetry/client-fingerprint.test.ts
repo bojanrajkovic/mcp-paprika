@@ -20,8 +20,11 @@ import {
   clientFingerprint,
   type FingerprintServer,
   recordClientConnection,
+  recordSessionId,
+  sessionAttrs,
 } from "./client-fingerprint.js";
 import { ATTR_MCP_PAPRIKA_TRANSPORT } from "./instruments.js";
+import { ATTR_MCP_SESSION_ID } from "./semconv.js";
 
 // Module scope, before any recording — shared instruments memoize against the
 // global meter provider on first record (see the helper's doc-comment).
@@ -170,5 +173,25 @@ describe("recordClientConnection", () => {
     const name = clientAttrs(server2)[ATTR_CLIENT_NAME] as string;
     expect(name.length).toBe(64);
     expect(longName.startsWith(name)).toBe(true);
+  });
+});
+
+describe("sessionAttrs / recordSessionId", () => {
+  it("returns the stashed session id under mcp.session.id once recorded", () => {
+    const server = stub({ name: "claude-ai", version: "1.0.0" }, {});
+    expect(sessionAttrs(server)).toEqual({});
+    recordSessionId(server, "sess-123");
+    expect(sessionAttrs(server)).toEqual({ [ATTR_MCP_SESSION_ID]: "sess-123" });
+  });
+
+  it("is first-write-wins (a re-init cannot overwrite the live session id)", () => {
+    const server = stub({ name: "claude-ai", version: "1.0.0" }, {});
+    recordSessionId(server, "first");
+    recordSessionId(server, "second");
+    expect(sessionAttrs(server)).toEqual({ [ATTR_MCP_SESSION_ID]: "first" });
+  });
+
+  it("returns an empty object for an un-recorded server (stdio / pre-init)", () => {
+    expect(sessionAttrs(stub({ name: "x", version: "1" }, {}))).toEqual({});
   });
 });

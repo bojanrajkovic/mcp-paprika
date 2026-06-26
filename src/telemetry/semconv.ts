@@ -13,6 +13,14 @@
 /** The MCP protocol method handled by a span (e.g. `tools/call`). */
 export const ATTR_MCP_METHOD_NAME = "mcp.method.name";
 
+/**
+ * The MCP session id — the per-client session a request belongs to (HTTP transport;
+ * stdio is one session per process and sets none). SPAN-ONLY: per-session, so
+ * unbounded cardinality — never a metric label. The cross-request grouping key for a
+ * widget's render spans, since the inbound host trace id is per-request (0b/S2).
+ */
+export const ATTR_MCP_SESSION_ID = "mcp.session.id";
+
 /** The kind of GenAI operation a span describes (`execute_tool`, `embeddings`, `generate_content`, …). */
 export const ATTR_GEN_AI_OPERATION_NAME = "gen_ai.operation.name";
 
