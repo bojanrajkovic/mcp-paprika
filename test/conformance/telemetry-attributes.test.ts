@@ -15,14 +15,17 @@ import { REDACT_PATHS } from "../../src/utils/log.js";
  * enforces two rules:
  *
  * 1. **Shape** — lowercase dot/underscore segments only (no camelCase, no
- *    uids, no free text smuggled into a name).
+ *    free text smuggled into a name).
  * 2. **No sensitive terminal segment** — the final segment must not be one of
  *    the credential/identity key names the logger redacts (token, password,
  *    authorization, email, sub, …). A name like `mcp_paprika.user_email`
  *    fails here before it ever ships.
  *
  * Attribute VALUES are covered by the per-seam tests (which assert exact
- * enum values) and by review; this gate pins the namespace itself.
+ * enum values) and by review; this gate pins the namespace itself. A
+ * high-cardinality URI/UID VALUE is fine on a SPAN attribute (cardinality
+ * only bites metric labels) — this gate bars credential/identity KEY NAMES,
+ * not those values, so `mcp_paprika.resource.uri` is allowed.
  */
 
 const TEST_SUFFIXES = [".test.ts", ".test.integration.ts", ".e2e.test.ts", ".external.test.ts", ".property.test.ts"];
@@ -47,8 +50,6 @@ const SENSITIVE_SEGMENTS: ReadonlySet<string> = new Set([
   "email",
   "sub",
   "client_id",
-  "uid",
-  "url",
 ]);
 
 describe("ADR-0018: custom telemetry names are well-formed and never identity-bearing", () => {

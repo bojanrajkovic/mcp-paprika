@@ -100,13 +100,16 @@ export function renderToolReference(specs: ReadonlyArray<ToolSpec>): string {
     "",
     "# Paprika MCP tools",
     "",
-    "A generated reference for every tool the server registers, derived from the `defineTool` specs in",
-    "each domain's `tools/*.ts` (no runtime boot — the spec IS the source). Two tools are opt-in and only",
-    "behave when configured: `discover_recipes` (semantic search) and `generate_recipe_photo` (AI photos).",
+    "A generated reference for every model-facing tool the server registers, derived from the `defineTool`",
+    "specs in each domain's `tools/*.ts` (no runtime boot — the spec IS the source). Two tools are opt-in and",
+    "only behave when configured: `discover_recipes` (semantic search) and `generate_recipe_photo` (AI photos).",
     "",
   ];
 
+  // App-only tools (`ui.visibility: ["app"]`) are widget-internal plumbing hidden from the model's
+  // tools/list — not part of the agent-facing surface this reference catalogs, so they're excluded.
   for (const spec of specs) {
+    if (spec.ui?.visibility !== undefined && !spec.ui.visibility.includes("model")) continue;
     lines.push(`## \`${spec.name}\``, "");
     lines.push(`**${spec.title}** — ${hintLabels(spec.annotations).join(", ")}`, "");
     if (spec.description) lines.push(spec.description, "");

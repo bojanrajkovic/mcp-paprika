@@ -10,7 +10,8 @@ import type { App } from "@modelcontextprotocol/ext-apps";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { flushMicrotasks, useExtApp } from "../../../../test/support/widget-ext-app.js";
-import { blobDataUri, callTool, connectHost, errorText, readResource } from "./host-bridge.js";
+import { blobDataUri, callTool, connectHost, errorText, readResource, reportWidgetTiming } from "./host-bridge.js";
+import { TRACEPARENT_KEY } from "./server-caps-key.js";
 
 // host-style.ts calls document.documentElement.style.setProperty; stub the minimum needed.
 const setProperty = vi.fn();
@@ -93,6 +94,69 @@ describe("connectHost", () => {
     // applyHostStyles ran twice (connect + context change); count its --widget-font writes rather
     // than total setProperty calls, since each run also sets --widget-max-h.
     expect(setProperty.mock.calls.filter(([k]) => k === "--widget-font")).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reportWidgetTiming
+// ---------------------------------------------------------------------------
+describe("reportWidgetTiming", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does nothing when no traceparent was injected", async () => {
+    const { app } = useExtApp();
+    reportWidgetTiming(app as unknown as App);
+    await vi.runAllTimersAsync();
+    expect(app.callServerTool).not.toHaveBeenCalled();
+  });
+
+  it("reports only the paprika-widget measures to record_widget_timing, deferred", async () => {
+    const { app } = useExtApp();
+    app.callServerTool.mockResolvedValue({});
+    vi.stubGlobal(TRACEPARENT_KEY, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01");
+    vi.stubGlobal("performance", {
+      timeOrigin: 1_700_000_000_000,
+      getEntriesByType: (type: string) =>
+        type === "measure"
+          ? [
+              { name: "paprika-widget:boot-to-mounted", startTime: 5, duration: 42 },
+              { name: "other:thing", startTime: 0, duration: 1 },
+            ]
+          : [],
+    });
+
+    reportWidgetTiming(app as unknown as App);
+    // Deferred: nothing sent synchronously.
+    expect(app.callServerTool).not.toHaveBeenCalled();
+
+    await vi.runAllTimersAsync();
+
+    expect(app.callServerTool).toHaveBeenCalledWith({
+      name: "record_widget_timing",
+      arguments: {
+        traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+        timeOrigin: 1_700_000_000_000,
+        clientReportTime: expect.any(Number),
+        // The non-widget measure is filtered out.
+        measures: [{ name: "paprika-widget:boot-to-mounted", startTime: 5, duration: 42 }],
+      },
+    });
+  });
+
+  it("does not report when there are no widget measures", async () => {
+    const { app } = useExtApp();
+    vi.stubGlobal(TRACEPARENT_KEY, "00-aaa-bbb-01");
+    vi.stubGlobal("performance", { timeOrigin: 1, getEntriesByType: () => [] });
+
+    reportWidgetTiming(app as unknown as App);
+    await vi.runAllTimersAsync();
+
+    expect(app.callServerTool).not.toHaveBeenCalled();
   });
 });
 

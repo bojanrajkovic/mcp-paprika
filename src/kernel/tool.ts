@@ -8,7 +8,7 @@ import type { TypedCallToolResult } from "../shared/tools.js";
 import type { DomainCtx, DomainId } from "./registry.js";
 
 import { UI_RESOURCE_URI_META_KEY } from "../shared/mcp-app.js";
-import { clientAttrs } from "../telemetry/client-fingerprint.js";
+import { clientAttrs, sessionAttrs } from "../telemetry/client-fingerprint.js";
 import { mcpServerOperationDuration } from "../telemetry/instruments.js";
 import { getTracer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_OPERATION_NAME, ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
@@ -64,7 +64,16 @@ export interface ToolSpec<
   readonly annotations: ToolAnnotations;
   readonly inputSchema: I;
   readonly outputSchema?: O extends Record<string, unknown> ? ZodType<O> : never;
-  readonly ui?: { readonly resourceUri: string };
+  readonly ui?: {
+    /** The `ui://widget/{name}` resource a host renders for this tool's result. Omitted by a view-less app-only tool. */
+    readonly resourceUri?: string;
+    /**
+     * Who may call this tool (ext-apps `_meta.ui.visibility`; default `["model", "app"]`). `["app"]`
+     * registers an app-only tool — callable by a widget via `callServerTool`, hidden from the model's
+     * `tools/list` where the host honors it (the `record_widget_timing` sink). Host-advisory.
+     */
+    readonly visibility?: readonly ("model" | "app")[];
+  };
 }
 
 /**
@@ -314,8 +323,9 @@ export function defineTool<
         // Tag the span (not the metric) with the connecting client's census slice
         // — name + major version + transport — so the structured-output channel can
         // be sliced by host without inflating the operation-duration histogram's
-        // series count. Empty until the handshake fingerprint is recorded.
-        op.span.setAttributes(clientAttrs(ctx.server.server));
+        // series count. Empty until the handshake fingerprint is recorded. The session
+        // id rides alongside (span-only, per-session) as the cross-request grouping key.
+        op.span.setAttributes({ ...clientAttrs(ctx.server.server), ...sessionAttrs(ctx.server.server) });
         // The protocol adapters: finish maps the SDK's CallToolResult outcomes
         // onto op.end (the doc-comment above carries the outcome-classing
         // rationale — gated keeps status UNSET); fail is the throw-transparent
@@ -411,8 +421,11 @@ export function defineTool<
           ...(spec.outputSchema && { outputSchema: spec.outputSchema }),
           ...(spec.ui && {
             _meta: {
-              ui: { resourceUri: spec.ui.resourceUri },
-              [UI_RESOURCE_URI_META_KEY]: spec.ui.resourceUri,
+              // `spec.ui` IS the wire `_meta.ui` shape ({ resourceUri?, visibility? }), so it passes through
+              // whole — a new `ui` field is carried with no edit here. The legacy flat key mirrors resourceUri
+              // for older hosts; omitted for a view-less (visibility-only) tool such as the widget-timing sink.
+              ui: spec.ui,
+              ...(spec.ui.resourceUri !== undefined && { [UI_RESOURCE_URI_META_KEY]: spec.ui.resourceUri }),
             },
           }),
         },

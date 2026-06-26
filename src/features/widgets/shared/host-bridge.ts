@@ -1,6 +1,40 @@
 import type { App } from "@modelcontextprotocol/ext-apps";
 
 import { applyHostStyles } from "./host-style.js";
+import { perfMark, perfMeasure } from "./perf.js";
+import { TRACEPARENT_KEY } from "./server-caps-key.js";
+
+/** The `perf.ts` prefix on the render measures — the ones this widget owns and reports. */
+const WIDGET_MEASURE_PREFIX = "paprika-widget:";
+
+/**
+ * After the first result, report this widget's render-timing measures to the server's
+ * `record_widget_timing` sink, carrying the W3C traceparent the `resources/read` smuggled into the
+ * HTML (`window[__MCP_TRACEPARENT__]`). The server re-parents the measures as child spans of that read,
+ * so the client-side render timeline lands in our Tempo — no `@opentelemetry/*` in the bundle.
+ *
+ * Fire-and-forget: a `setTimeout(0)` macrotask so it never blocks the result handler or the paint that
+ * follows, a swallowed rejection, and a clean no-op when no traceparent was injected (telemetry off) or
+ * there are no widget measures yet. `performance.timeOrigin` + `Date.now()` let the server correct the
+ * client↔server clock skew.
+ */
+export function reportWidgetTiming(app: App): void {
+  const traceparent = (globalThis as Record<string, unknown>)[TRACEPARENT_KEY];
+  if (typeof traceparent !== "string") return;
+  setTimeout(() => {
+    const measures = performance
+      .getEntriesByType("measure")
+      .filter((m) => m.name.startsWith(WIDGET_MEASURE_PREFIX))
+      .map((m) => ({ name: m.name, startTime: m.startTime, duration: m.duration }));
+    if (measures.length === 0) return;
+    void app
+      .callServerTool({
+        name: "record_widget_timing",
+        arguments: { traceparent, timeOrigin: performance.timeOrigin, clientReportTime: Date.now(), measures },
+      })
+      .catch(() => undefined);
+  }, 0);
+}
 
 /**
  * The two result shapes a widget's `receive()` accepts: a real ext-apps tool result (from
@@ -95,7 +129,24 @@ export function connectHost(
     handlers.onContext?.(ctx);
     applyHostStyles(ctx);
   };
-  app.ontoolresult = (result) => handlers.onResult(result);
+  // `connected` closes the handshake interval, `first-result` the data-delivery interval
+  // (the gap the widget spends on its own loading screen waiting for the host's tool-result push).
+  let firstResult = true;
+  app.ontoolresult = (result) => {
+    if (firstResult) {
+      firstResult = false;
+      perfMark("first-result");
+      perfMeasure("connected-to-first-result", "connected", "first-result");
+      // The render marks are all in by now (mount + handshake + first data); report them once,
+      // deferred, so the whole boot timeline reaches our Tempo via record_widget_timing.
+      reportWidgetTiming(app);
+    }
+    handlers.onResult(result);
+  };
   app.onhostcontextchanged = apply;
-  Promise.resolve(app.connect()).then(apply);
+  Promise.resolve(app.connect()).then(() => {
+    perfMark("connected");
+    perfMeasure("boot-to-connected", "boot", "connected");
+    apply();
+  });
 }

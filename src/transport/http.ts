@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Server as NodeHttpServer } from "node:http";
+import type { Server as NodeHttpServer, ServerResponse } from "node:http";
 
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { bearerAuth, mcpAuthRouter } from "@hono/mcp";
@@ -7,7 +7,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
-import { trace } from "@opentelemetry/api";
+import { context, trace } from "@opentelemetry/api";
 import { Hono } from "hono";
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { routePath } from "hono/route";
@@ -26,9 +26,14 @@ import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
-import { clientAttrs, clientFingerprint, recordClientConnection } from "../telemetry/client-fingerprint.js";
+import {
+  clientAttrs,
+  clientFingerprint,
+  recordClientConnection,
+  recordSessionId,
+} from "../telemetry/client-fingerprint.js";
 import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
-import { getMeter, lazy, startTimer } from "../telemetry/scope.js";
+import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
 import { unwrapAtBoot } from "../utils/errors.js";
 import { buildFaviconRouter } from "./favicon.js";
@@ -109,6 +114,38 @@ export function tracedRequests(): MiddlewareHandler {
       return next();
     }
     return instrument(c, next);
+  };
+}
+
+/**
+ * A child `response.flush` span bracketing the response BODY write — from when the handler resolves
+ * its Response to the Node socket's `finish`. The request span (and the inner `resources/read` app
+ * span) both close at handler return, BEFORE `@hono/node-server` streams the body; this is the only
+ * server-side view of the serialize+write cost (a ~500 KB widget HTML). It measures
+ * time-to-kernel-buffer, NOT time-to-client — TCP backpressure hides the rest, which only the
+ * client's Resource Timing sees. No-ops outside the node-server adapter (the in-memory test
+ * transport sets no `outgoing`), and ends immediately if the body already flushed (a tiny response).
+ * Registered INSIDE `tracedRequests`, so `context.active()` here is the request span.
+ */
+export function tracedFlush(): MiddlewareHandler {
+  return async (c, next) => {
+    await next();
+    const outgoing = (c.env as { outgoing?: ServerResponse }).outgoing;
+    if (!outgoing || typeof outgoing.once !== "function") return;
+    const span = getTracer().startSpan("response.flush", undefined, context.active());
+    let ended = false;
+    const end = (): void => {
+      if (ended) return;
+      ended = true;
+      const len = c.res.headers.get("content-length");
+      if (len !== null) span.setAttribute("http.response.body.size", Number(len));
+      span.end();
+    };
+    if (outgoing.writableFinished) end();
+    else {
+      outgoing.once("finish", end);
+      outgoing.once("close", end);
+    }
   };
 }
 
@@ -316,6 +353,10 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // under it via the active context).
   hono.use("*", tracedRequests());
 
+  // Response-flush span: inside the request span, brackets the body write the request/app spans
+  // miss (both close at handler return). The only server-side view of serialize+write cost.
+  hono.use("*", tracedFlush());
+
   // Access log: mounted BEFORE /healthz and /mcp so every route's responses
   // are captured — including the liveness probe. Also before the auth block
   // so 401s and all other auth-mediated responses are captured.
@@ -499,6 +540,9 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
         sessions.set(id, { server, transport, elapsedSeconds: startTimer() });
+        // Stash the session id so the tool/resource span seams can tag spans with
+        // `mcp.session.id` — the cross-request grouping key for a turn's spans.
+        recordSessionId(server.server, id);
         activeSessions().add(1, HTTP_TRANSPORT_ATTR);
       },
       onsessionclosed: (id) => {

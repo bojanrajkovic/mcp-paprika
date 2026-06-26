@@ -21,6 +21,7 @@ import { type Attributes, SpanKind } from "@opentelemetry/api";
 
 import { ATTR_MCP_PAPRIKA_TRANSPORT } from "./instruments.js";
 import { getMeter, getTracer, lazy } from "./scope.js";
+import { ATTR_MCP_SESSION_ID } from "./semconv.js";
 
 /** Which transport carried the session — the value of the shared `mcp_paprika.transport` dimension. */
 export type TransportKind = "stdio" | "http";
@@ -113,6 +114,15 @@ const clientConnections = lazy(() =>
  * {@link clientFingerprint} (the full object, for the disconnect log).
  */
 const fingerprints = new WeakMap<FingerprintServer, ClientFingerprint>();
+
+/**
+ * The MCP session id stashed per server, set at the transport's `onsessioninitialized`
+ * (the only place the id and the server coincide), read at call time by the tool and
+ * resource span seams via {@link sessionAttrs}. Same `WeakMap`-keyed-by-server pattern
+ * as {@link fingerprints} — the entry dies with the server, so an evicted session leaves
+ * nothing behind. HTTP-only: stdio is one session per process and records none.
+ */
+const sessionIds = new WeakMap<FingerprintServer, string>();
 
 // `clientInfo` is client-supplied, so the values that become METRIC LABELS (name +
 // major version) are length-capped: a metric label is bounded in size, and on the
@@ -278,4 +288,24 @@ export function clientAttrs(server: FingerprintServer): Attributes {
 /** The full stashed fingerprint for a session's server, for the disconnect log; `undefined` if none was recorded. */
 export function clientFingerprint(server: FingerprintServer): ClientFingerprint | undefined {
   return fingerprints.get(server);
+}
+
+/**
+ * Stash the MCP session id for a server, called once at `onsessioninitialized`. Idempotent
+ * (the first id wins); never throws (a plain `WeakMap.set`). Keyed by the SAME per-session
+ * `server` the tool/resource span seams pass to {@link sessionAttrs}, so the lookup hits.
+ */
+export function recordSessionId(server: FingerprintServer, sessionId: string): void {
+  if (!sessionIds.has(server)) sessionIds.set(server, sessionId);
+}
+
+/**
+ * The `mcp.session.id` span attribute for a session's server, or an empty object when none
+ * was recorded (stdio, or a span before the session initialized). SPAN-ONLY — per-session,
+ * so it must never label a metric. The tool wrapper and the resource-read wrapper spread it
+ * onto their spans so a turn's tool calls and widget render spans group by session.
+ */
+export function sessionAttrs(server: FingerprintServer): Attributes {
+  const id = sessionIds.get(server);
+  return id !== undefined ? { [ATTR_MCP_SESSION_ID]: id } : {};
 }

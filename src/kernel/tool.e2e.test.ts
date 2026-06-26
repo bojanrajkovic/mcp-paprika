@@ -187,6 +187,37 @@ describe("defineTool — advertised tools/list surface", () => {
     }
   });
 
+  it("threads ui.visibility into _meta and omits the legacy key for a view-less app-only tool", async () => {
+    const server = buildBrandedServer();
+    const tool = defineTool(
+      {
+        name: "app_only_sink",
+        title: "App-only sink",
+        description: "Callable by a widget, hidden from the model.",
+        annotations: { readOnlyHint: true },
+        inputSchema: { n: z.number() },
+        ui: { visibility: ["app"] },
+      },
+      (_ctx: DomainCtx<unknown, never>) => () => toolResult("ok"),
+    );
+    tool.register(makeCtx(server));
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const { tools } = await mcp.client.listTools();
+      const advertised = tools.find((t) => t.name === "app_only_sink");
+      const meta = advertised!._meta as
+        | { ui?: { resourceUri?: string; visibility?: string[] }; [k: string]: unknown }
+        | undefined;
+      expect(meta?.ui?.visibility).toEqual(["app"]);
+      // No view → no nested resourceUri and no legacy flat key.
+      expect(meta?.ui?.resourceUri).toBeUndefined();
+      expect(meta?.[UI_RESOURCE_URI_META_KEY]).toBeUndefined();
+    } finally {
+      await mcp.close();
+    }
+  });
+
   it("routes a tools/call through the registered handler over the transport", async () => {
     const server = buildBrandedServer();
     const tool = defineTool(
