@@ -19,19 +19,34 @@ function fail(message) {
   process.exit(1);
 }
 
-// 1. The build produced at least one self-contained widget (enumerated, not a
-//    hardcoded name — survives the demo being replaced by real widgets in C2+).
-let htmlFiles = [];
+// 1. The build produced at least one widget that EXTERNALIZES the ext-apps runtime (ADR-0025): each
+//    widget keeps a bare import for the serving layer's import map to resolve and must NOT inline the
+//    runtime, and exactly one shared, content-hashed vendor module is emitted with its brotli + gzip
+//    variants. (Enumerated, not a hardcoded name — survives the widget set changing.)
+let allFiles = [];
 try {
-  htmlFiles = (await readdir(DIST_WIDGETS)).filter((file) => file.endsWith(".html"));
+  allFiles = await readdir(DIST_WIDGETS);
 } catch (err) {
   fail(`could not read dist/widgets — did \`pnpm build\` run? (${String(err)})`);
 }
+const htmlFiles = allFiles.filter((file) => file.endsWith(".html"));
+const vendorFiles = allFiles.filter((file) => /^vendor-[0-9a-f]+\.js$/.test(file));
 if (htmlFiles.length === 0) fail("dist/widgets contains no built widgets — `pnpm build` produced nothing to serve");
+if (vendorFiles.length !== 1) {
+  fail(`expected exactly one vendor-<hash>.js in dist/widgets, found ${vendorFiles.length} — the shared runtime`);
+}
+for (const ext of ["gz", "br"]) {
+  if (!allFiles.includes(`${vendorFiles[0]}.${ext}`)) fail(`dist/widgets/${vendorFiles[0]}.${ext} is missing`);
+}
 for (const file of htmlFiles) {
   const html = await readFile(join(DIST_WIDGETS, file), "utf8");
   if (html.length < 1000) fail(`dist/widgets/${file} is suspiciously small (${html.length} bytes)`);
-  if (!html.includes("globalThis.ExtApps")) fail(`dist/widgets/${file} is missing the inlined ext-apps runtime`);
+  if (!html.includes("@modelcontextprotocol/ext-apps")) {
+    fail(`dist/widgets/${file} does not import the externalized ext-apps runtime`);
+  }
+  if (html.includes("globalThis.ExtApps")) {
+    fail(`dist/widgets/${file} still inlines the ext-apps runtime (globalThis.ExtApps) — externalization regressed`);
+  }
 }
 
 // 2. Importing the runtime widget path must NOT pull a pruned devDependency. A

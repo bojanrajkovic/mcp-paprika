@@ -26,21 +26,8 @@ export interface FakeApp {
   readServerResource: ReturnType<typeof vi.fn>;
 }
 
-/**
- * The four top-level `globalThis.ExtApps` helpers that `host-style.ts` calls via the
- * inlined ext-apps runtime. `useExtApp` installs spies for all four so tests can assert
- * which helpers were (or were not) invoked.
- */
-export interface FakeExtAppsRuntime {
-  applyHostStyleVariables: ReturnType<typeof vi.fn>;
-  applyHostFonts: ReturnType<typeof vi.fn>;
-  applyDocumentTheme: ReturnType<typeof vi.fn>;
-  getDocumentTheme: ReturnType<typeof vi.fn>;
-}
-
 export interface UseExtAppResult {
   readonly app: FakeApp;
-  readonly extApps: FakeExtAppsRuntime;
   /** Drive the widget's `onResult` handler — simulates a host `ontoolresult` notification. */
   fireToolResult(result: unknown): void;
   /**
@@ -51,19 +38,19 @@ export interface UseExtAppResult {
 }
 
 /**
- * Stands up a fake `globalThis.ExtApps` (style helper spies + an `App` class stub) and
- * returns a controllable fake `App` instance with helpers to fire bridge notifications.
+ * Returns a controllable fake ext-apps `App` instance (the surface `host-bridge.ts` calls) with
+ * helpers to fire bridge notifications. The ext-apps style helpers are now real value imports
+ * (ADR-0025), so a test asserting them mocks `@modelcontextprotocol/ext-apps` directly (see
+ * `host-style.test.ts`) rather than installing a `globalThis.ExtApps` fake here.
  *
  * Usage in a widget browser test:
  * ```typescript
- * const { app, extApps, fireToolResult, fireHostContextChanged } = useExtApp({ theme: "dark", userAgent: "claude" });
+ * const { app, fireToolResult, fireHostContextChanged } = useExtApp({ theme: "dark", userAgent: "claude" });
  * connectHost(app as unknown as App, { onResult, onContext });
  * await flushMicrotasks();   // let connect().then(apply) resolve
  * fireToolResult({ structuredContent: { ... } });
  * expect(onResult).toHaveBeenCalledWith(...);
  * ```
- *
- * Teardown: call `vi.unstubAllGlobals()` in `afterEach` to restore `globalThis.ExtApps`.
  */
 export function useExtApp(initialCtx: unknown = { theme: "light" }): UseExtAppResult {
   let currentCtx = initialCtx;
@@ -77,18 +64,8 @@ export function useExtApp(initialCtx: unknown = { theme: "light" }): UseExtAppRe
     readServerResource: vi.fn(() => Promise.resolve({ contents: [] })),
   };
 
-  const extApps: FakeExtAppsRuntime = {
-    applyHostStyleVariables: vi.fn(),
-    applyHostFonts: vi.fn(),
-    applyDocumentTheme: vi.fn(),
-    getDocumentTheme: vi.fn(() => "light"),
-  };
-
-  vi.stubGlobal("ExtApps", extApps);
-
   return {
     app,
-    extApps,
     fireToolResult(result: unknown) {
       app.ontoolresult?.(result);
     },

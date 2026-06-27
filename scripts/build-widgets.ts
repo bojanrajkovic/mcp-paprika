@@ -1,44 +1,47 @@
 /**
- * Compiles each widget under `src/features/widgets/<name>/` into a single
- * self-contained `dist/widgets/<name>.html` that the widgets kernel module
- * serves as a `ui://widget/<name>` resource (ADR-0019, C1 #324).
+ * Compiles each widget under `src/features/widgets/<name>/` into a `dist/widgets/<name>.html`
+ * that the widgets kernel module serves as a `ui://widget/<name>` resource (ADR-0019), plus ONE
+ * shared `dist/widgets/vendor-<hash>.js` carrying the `@modelcontextprotocol/ext-apps` browser
+ * runtime (ext-apps + the MCP SDK + zod, ~329 KB) for every widget to import (ADR-0025).
  *
- * "Self-contained" is the whole point: the iframe a host renders the widget in
- * is CSP-sandboxed and cannot fetch external scripts, so EVERYTHING is inlined —
- * the widget's bundled JS (Svelte runtime + component + entry), its CSS (Svelte's
- * `css: "injected"`), and the `@modelcontextprotocol/ext-apps` browser runtime.
- * ext-apps ships a pre-bundled `app-with-deps` file ending in `export{…}`; we
- * rewrite that tail to `globalThis.ExtApps = {…}` (the build-mcp-app skill's
- * pattern) and prepend it, so the widget reads `globalThis.ExtApps.App` instead
- * of importing the package. That keeps ext-apps a BUILD-TIME-only devDependency:
- * the runtime reads the finished HTML as a string and never imports it, so
- * `pnpm install --prod` can omit ext-apps/esbuild/svelte entirely.
+ * The vendor is EXTERNAL, not inlined: each widget bundle keeps a bare
+ * `import … from "@modelcontextprotocol/ext-apps"` (esbuild `external`), and the served HTML
+ * carries an `<script type="importmap">` resolving that specifier — to the self-hosted
+ * `vendor-<hash>.js` URL under HTTP (fetched once, `immutable`-cached across all widgets), or to an
+ * inline `data:` URL under stdio (no HTTP server on a local pipe). The serving layer fills the
+ * `WIDGET_VENDOR_SLOT`; this build only emits the artifacts. ext-apps stays a BUILD-TIME-only
+ * devDependency: the value import lives ONLY in the browser bundles esbuild compiles (never the
+ * Node runtime path), and the vendor file is its pre-bundled `app-with-deps` copied verbatim.
  *
- * That inlined runtime is the bulk of a widget's payload (~337 KB), and the floor
- * is essentially zod: the MCP SDK models every message as a zod schema and `App`
- * reaches the protocol layer, so the runtime transitively retains almost all of
- * zod (~242 KB; ext-apps + sdk are ~57 KB between them). Importing ext-apps'
- * lighter `.` entry and letting esbuild tree-shake it was measured at ~306 KB —
- * only ~9% smaller, because zod is the bulk and zod 3 resists dead-code
- * elimination — while it would ALSO drop the `globalThis.ExtApps` seam the dev
- * preview shim depends on (`transport/widget-preview.ts`) and deviate from the
- * build-mcp-app skill's pattern. So `app-with-deps` is the effective floor (#348
- * closed: not worth the rework for ~9%); the real lever is upstream — a lighter
- * ext-apps validator (zod-mini / zod 4 jitless) — not this build.
+ * The vendor is content-hashed (so `immutable` caching is correct — the URL changes only when
+ * ext-apps changes) and pre-compressed at build (brotli-11 + gzip), so the self-hosted route serves
+ * `Content-Encoding`-negotiated bytes (~60 KB br) with zero per-request CPU.
  *
- * The build is an esbuild `context` whose `onEnd` plugin wraps each entry's
- * bundled JS in the HTML shell — so the one-shot `buildWidgets()` (a `rebuild()`)
- * and the `--watch` loop (`ctx.watch()`) share the exact same wrapping pipeline.
- * `buildWidgets` is exported and parameterized for tests; the thin CLI tail runs
- * it only when invoked directly (`tsx scripts/build-widgets.ts`).
+ * Because the vendor lives in its own `<script>`, the widget bundle no longer shares module scope
+ * with it, so it is built as **ESM** (the old IIFE existed only to avoid top-level name collisions
+ * with the inlined runtime in one shared script) and **fully minified** — env-gated (`MCP_WIDGETS_DEBUG=1`,
+ * and off by default under `--watch`) so `pnpm dev:widgets` stays readable for debugging.
+ *
+ * The build is an esbuild `context` whose `onEnd` plugin wraps each entry's bundled JS in the HTML
+ * shell — so the one-shot `buildWidgets()` (a `rebuild()`) and the `--watch` loop (`ctx.watch()`)
+ * share the exact same wrapping pipeline. `buildWidgets` is exported and parameterized for tests; the
+ * thin CLI tail runs it only when invoked directly (`tsx scripts/build-widgets.ts`).
  */
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { brotliCompressSync, gzipSync, constants as zlibConstants } from "node:zlib";
 
 import type { BuildContext, Plugin } from "esbuild";
-import { context, transform } from "esbuild";
+import { context } from "esbuild";
+
+import {
+  EXT_APPS_SPECIFIER,
+  WIDGET_INJECT_SLOT,
+  WIDGET_VENDOR_SLOT,
+} from "../src/features/widgets/shared/server-caps-key.js";
 
 const require = createRequire(import.meta.url);
 
@@ -55,8 +58,10 @@ const DEFAULT_OUT_DIR = join(REPO_ROOT, "dist", "widgets");
 export interface BuildWidgetsOptions {
   /** Directory holding the per-widget source subdirs. Defaults to `src/features/widgets`. */
   readonly srcDir?: string;
-  /** Directory the self-contained `<name>.html` files are written to. Defaults to `dist/widgets`. */
+  /** Directory the `<name>.html` files and the shared `vendor-<hash>.js` are written to. Defaults to `dist/widgets`. */
   readonly outDir?: string;
+  /** Minify the widget bundles. Defaults on (`MCP_WIDGETS_DEBUG=1` disables); `watchWidgets` defaults it off. */
+  readonly minify?: boolean;
 }
 
 /** Build every widget once and return the built widget names. */
@@ -73,10 +78,10 @@ export async function buildWidgets(options: BuildWidgetsOptions = {}): Promise<r
 /**
  * Build every widget, then watch the source tree and rebuild on change. Returns
  * the live context so a caller can `dispose()` it; the CLI keeps the process
- * alive instead.
+ * alive instead. Minification defaults OFF here so `pnpm dev:widgets` is readable.
  */
 export async function watchWidgets(options: BuildWidgetsOptions = {}): Promise<BuildContext> {
-  const { ctx } = await makeContext(options);
+  const { ctx } = await makeContext({ ...options, minify: options.minify ?? false });
   await ctx.watch();
   return ctx;
 }
@@ -84,27 +89,25 @@ export async function watchWidgets(options: BuildWidgetsOptions = {}): Promise<B
 async function makeContext(options: BuildWidgetsOptions): Promise<{ ctx: BuildContext; names: readonly string[] }> {
   const srcDir = options.srcDir ?? DEFAULT_SRC_DIR;
   const outDir = options.outDir ?? DEFAULT_OUT_DIR;
-  const extAppsBundle = await loadExtAppsBundle();
+  const minify = options.minify ?? process.env["MCP_WIDGETS_DEBUG"] !== "1";
+  await emitVendor(outDir);
   const names = await discoverWidgets(srcDir);
   const ctx = await context({
     entryPoints: Object.fromEntries(names.map((name) => [name, join(srcDir, name, "main.ts")])),
     bundle: true,
     write: false,
-    // IIFE, not ESM: the widget bundle is concatenated into the SAME inline
-    // `<script>` as the inlined ext-apps runtime, so an ESM bundle's top-level
-    // names share scope with the runtime's and a single minified-name collision
-    // is a redeclaration SyntaxError that kills the whole script (the widget then
-    // fails to load in the host). An IIFE scopes the bundle's names to itself.
-    format: "iife",
+    // ESM, not IIFE: the ext-apps runtime is a SEPARATE `<script>` (the import map's target), so the
+    // widget bundle no longer shares module scope with it and an ESM bundle's top-level names can't
+    // collide with the runtime's. esbuild keeps the bare `@modelcontextprotocol/ext-apps` import
+    // (external) for the import map to resolve at runtime.
+    format: "esm",
+    external: [EXT_APPS_SPECIFIER],
+    minify,
     platform: "browser",
     target: "es2022",
     outdir: outDir,
     logLevel: "silent",
-    plugins: [
-      esbuildSvelte({ compilerOptions: { css: "injected" } }),
-      minifyVendor(),
-      wrapAsHtml(outDir, extAppsBundle),
-    ],
+    plugins: [esbuildSvelte({ compilerOptions: { css: "injected" } }), wrapAsHtml(outDir)],
   });
   return { ctx, names };
 }
@@ -115,7 +118,7 @@ async function makeContext(options: BuildWidgetsOptions): Promise<{ ctx: BuildCo
  * `watch()` loop. esbuild is configured with `write: false`, so the raw `.js` is
  * never emitted — only the finished HTML.
  */
-function wrapAsHtml(outDir: string, extAppsBundle: string): Plugin {
+function wrapAsHtml(outDir: string): Plugin {
   return {
     name: "wrap-widget-html",
     setup(build) {
@@ -129,30 +132,9 @@ function wrapAsHtml(outDir: string, extAppsBundle: string): Plugin {
         await Promise.all(
           outputs.map((file) => {
             const name = basename(file.path).replace(/\.js$/, "");
-            return writeFile(join(outDir, `${name}.html`), renderShell(name, extAppsBundle, file.text), "utf8");
+            return writeFile(join(outDir, `${name}.html`), renderShell(name, file.text), "utf8");
           }),
         );
-      });
-    },
-  };
-}
-
-/**
- * Minify ONLY third-party (`node_modules`) modules — the Svelte runtime is the
- * bulk of a widget bundle — while leaving our own widget source (`main.ts` and
- * the compiled component) readable in the served HTML for debugging. esbuild's
- * top-level `minify` is whole-bundle; this per-file `onLoad` scopes minification
- * to vendor code. (The ext-apps runtime is inlined separately and already ships
- * minified, so it is unaffected.)
- */
-function minifyVendor(): Plugin {
-  return {
-    name: "minify-vendor",
-    setup(build) {
-      build.onLoad({ filter: /[/\\]node_modules[/\\].*\.m?js$/ }, async (args) => {
-        const source = await readFile(args.path, "utf8");
-        const { code } = await transform(source, { minify: true, loader: "js", legalComments: "none" });
-        return { contents: code, loader: "js" };
       });
     },
   };
@@ -174,28 +156,34 @@ async function discoverWidgets(srcDir: string): Promise<readonly string[]> {
 }
 
 /**
- * Read ext-apps' pre-bundled browser runtime and rewrite its trailing
- * `export{ local as Exported, … }` into `globalThis.ExtApps ??= { Exported: local, … }`
- * so it can be inlined ahead of the widget bundle and read via `globalThis.ExtApps`.
+ * Emit the ONE shared vendor file every widget imports: ext-apps' pre-bundled `app-with-deps`
+ * (ext-apps + MCP SDK + zod) copied VERBATIM — it is already minified and, being fully bundled
+ * (no top-level `import`s), is a self-contained ES module exporting `App` + the host-style helpers.
  *
- * The assignment is NULLISH (`??=`), not plain `=`: in production nothing has set
- * `globalThis.ExtApps`, so the real runtime installs normally; under the dev
- * preview route a fake host shim is injected by an earlier classic `<script>` and
- * claims the slot first, so the real runtime no-ops and the shim wins (it would
- * otherwise overwrite the shim and hang waiting for a host that isn't there).
+ * Content-hashed so `immutable` caching is correct (the URL changes only when ext-apps changes), and
+ * pre-compressed (brotli-11 + gzip) so the self-hosted route serves `Content-Encoding`-negotiated
+ * bytes with no per-request CPU. Stale `vendor-*.js*` from an earlier ext-apps version is cleared
+ * first so the serving layer finds exactly one vendor file. Returns the emitted base filename.
  */
-async function loadExtAppsBundle(): Promise<string> {
-  const raw = await readFile(require.resolve("@modelcontextprotocol/ext-apps/app-with-deps"), "utf8");
-  return raw.replace(/export\s*\{([^}]+)\};?\s*$/, (_match, body: string) => {
-    const members = body
-      .split(",")
-      .map((pair) => {
-        const [local, exported] = pair.split(" as ").map((s) => s.trim());
-        return `${exported ?? local}:${local}`;
-      })
-      .join(",");
-    return `globalThis.ExtApps??={${members}};`;
-  });
+async function emitVendor(outDir: string): Promise<string> {
+  const content = await readFile(require.resolve(`${EXT_APPS_SPECIFIER}/app-with-deps`));
+  const hash = createHash("sha256").update(content).digest("hex").slice(0, 16);
+  const base = `vendor-${hash}.js`;
+  await mkdir(outDir, { recursive: true });
+  for (const file of await readdir(outDir).catch(() => [] as string[])) {
+    if (/^vendor-[0-9a-f]+\.js(\.gz|\.br)?$/.test(file) && file !== base && !file.startsWith(`${base}.`)) {
+      await rm(join(outDir, file));
+    }
+  }
+  await Promise.all([
+    writeFile(join(outDir, base), content),
+    writeFile(join(outDir, `${base}.gz`), gzipSync(content, { level: 9 })),
+    writeFile(
+      join(outDir, `${base}.br`),
+      brotliCompressSync(content, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 } }),
+    ),
+  ]);
+  return base;
 }
 
 /**
@@ -209,7 +197,7 @@ function inlineScriptSafe(js: string): string {
   return js.replace(/<\/script/gi, "<\\/script");
 }
 
-function renderShell(name: string, extAppsBundle: string, widgetBundle: string): string {
+function renderShell(name: string, widgetBundle: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -218,10 +206,10 @@ function renderShell(name: string, extAppsBundle: string, widgetBundle: string):
     <title>${name} widget</title>
   </head>
   <body>
-    <!-- __widget-inject__ -->
+    ${WIDGET_INJECT_SLOT}
     <div id="app"></div>
+    ${WIDGET_VENDOR_SLOT}
     <script type="module">
-${inlineScriptSafe(extAppsBundle)}
 ${inlineScriptSafe(widgetBundle)}
     </script>
   </body>

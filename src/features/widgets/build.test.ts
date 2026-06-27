@@ -9,10 +9,10 @@ import { useTempDir } from "../../../test/support/disk-caches.js";
 
 /**
  * Drives the real widget build into a temp outDir against the real widget source
- * (`src/features/widgets/<name>/`), asserting each widget compiles to ONE
- * self-contained HTML file — the property the iframe sandbox requires (no external
- * fetches) and the runtime relies on (it reads the finished string and never
- * imports the build toolchain). The demo widget is the build's subject.
+ * (`src/features/widgets/<name>/`), asserting each widget compiles to ONE `<name>.html` that
+ * EXTERNALIZES the ext-apps runtime (a bare import the serving layer's import map resolves), plus the
+ * single shared, content-hashed, pre-compressed `vendor-<hash>.js` every widget imports (ADR-0025).
+ * The demo widget is the build's subject.
  */
 describe("buildWidgets", () => {
   const tmp = useTempDir("mcp-paprika-widgets-");
@@ -24,51 +24,56 @@ describe("buildWidgets", () => {
     await tmp.teardown();
   });
 
-  it("compiles each widget to a single self-contained dist/widgets/<name>.html", async () => {
+  it("compiles each widget to <name>.html plus one shared vendor file", async () => {
     const built = await buildWidgets({ outDir: tmp.dir() });
 
     // The demo widget is discovered and built.
     expect(built).toContain("demo");
 
-    // Exactly one HTML file per widget, nothing else: Svelte CSS is injected and
-    // esbuild's raw JS is wrapped into HTML (write: false), never emitted alone.
     const files = (await readdir(tmp.dir())).sort();
-    expect(files).toEqual(built.map((name) => `${name}.html`).sort());
+    // Exactly one HTML per widget (Svelte CSS is injected; esbuild's raw JS is wrapped into HTML).
+    expect(files.filter((f) => f.endsWith(".html"))).toEqual(built.map((name) => `${name}.html`).sort());
+    // Exactly one shared vendor module, with its brotli + gzip siblings (content-hashed name).
+    const vendors = files.filter((f) => /^vendor-[0-9a-f]+\.js$/.test(f));
+    expect(vendors).toHaveLength(1);
+    const vendor = vendors[0];
+    expect(files).toContain(`${vendor}.br`);
+    expect(files).toContain(`${vendor}.gz`);
 
     const html = await readFile(join(tmp.dir(), "demo.html"), "utf8");
 
-    // The ext-apps runtime is inlined and exposed as globalThis.ExtApps (the
-    // trailing `export{…}` was rewritten), so the widget never imports the package.
-    expect(html).toContain("globalThis.ExtApps");
-    // The whole ext-apps bundle is really inlined (it is ~330 KB on its own).
-    expect(html.length).toBeGreaterThan(100_000);
-    // The Svelte component compiled into the bundle — its static heading survives.
+    // The ext-apps runtime is EXTERNALIZED: the widget keeps a bare import for the import map to
+    // resolve, and the runtime is NOT inlined (no `globalThis.ExtApps` seam, no copied bundle).
+    expect(html).toContain("@modelcontextprotocol/ext-apps");
+    expect(html).not.toContain("globalThis.ExtApps");
+    // The vendor slot the serving layer fills with the import map sits before the widget module.
+    expect(html).toContain("<!-- __widget-vendor__ -->");
+    // Without the inlined ~329 KB runtime, a widget's own HTML is small.
+    expect(html.length).toBeLessThan(150_000);
+    // The Svelte component compiled into the bundle — its static heading survives minification.
     expect(html).toContain("mcp-paprika widget demo");
-    // Self-contained: the CSP-sandboxed iframe can fetch no external script.
-    expect(html).not.toMatch(/<script[^>]+\bsrc=/i);
   });
 
-  // Every widget must compile to a self-contained inline script that parses under module
-  // semantics. The grocery-checklist's larger compiled output is the more likely place a
-  // regression sneaks in, so the guard runs per widget — add a name here when a widget ships.
+  // Every widget must compile to an inline ESM script that parses under module semantics and keeps the
+  // externalized ext-apps import (never the inlined runtime). The grocery-checklist's larger compiled
+  // output is the more likely place a regression sneaks in, so the guard runs per widget — add a name
+  // here when a widget ships.
   it.each(["demo", "grocery-checklist", "pantry-checklist", "meal-week-planner", "recipe-browser"])(
-    "%s compiles to a self-contained inline script that parses under module semantics",
+    "%s compiles to an inline ESM module that externalizes the ext-apps runtime",
     async (name) => {
       await buildWidgets({ outDir: tmp.dir() });
       const html = await readFile(join(tmp.dir(), `${name}.html`), "utf8");
 
-      // Self-contained: the ext-apps runtime is inlined as globalThis.ExtApps and the
-      // CSP-sandboxed iframe fetches no external script.
-      expect(html).toContain("globalThis.ExtApps");
-      expect(html).not.toMatch(/<script[^>]+\bsrc=/i);
+      // Externalized, not inlined: the bare import is present and the runtime is not copied in.
+      expect(html).toContain("@modelcontextprotocol/ext-apps");
+      expect(html).not.toContain("globalThis.ExtApps");
 
-      // The whole widget runs in one inline `<script type="module">`, sharing top-level scope with
-      // the prepended ext-apps runtime. An ESM-format bundle's top-level names collide with the
-      // runtime's minified names — a redeclaration that is a module-parse-time SyntaxError, killing
-      // the script (the widget loads blank in the host). The bundle is built as an IIFE to scope its
-      // names; `node --check` with module semantics is the exact check that catches a regression.
+      // The widget runs in one inline `<script type="module">`; `node --check` with module semantics
+      // is the exact check that the ESM bundle (with its bare external import) parses — `--check` does
+      // syntax only, not resolution, so the unresolved bare specifier is fine.
       const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1] ?? "";
       expect(script.length).toBeGreaterThan(0);
+      expect(script).toContain('from"@modelcontextprotocol/ext-apps"');
       const scriptPath = join(tmp.dir(), `${name}.inline.mjs`);
       await writeFile(scriptPath, script, "utf8");
 

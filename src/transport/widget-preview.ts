@@ -9,7 +9,7 @@ import { Hono } from "hono";
 import type { Logger } from "pino";
 
 import { loadWidgetArtifacts, widgetsDir } from "../features/widgets/artifacts.js";
-import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT } from "../features/widgets/shared/server-caps-key.js";
+import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT, WIDGET_VENDOR_SLOT } from "../features/widgets/shared/server-caps-key.js";
 
 /**
  * A dev-only Hono router serving
@@ -24,12 +24,13 @@ import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT } from "../features/widgets/shared/
  *
  * Mount it ONLY behind the `MCP_WIDGET_PREVIEW` flag (it does not exist in
  * production) and, like the favicon, BEFORE the `/mcp` bearer guard (it is
- * unauthenticated). It serves the same self-contained HTML the `ui://` resource
- * does, with one substitution: a classic `<script>` injected ahead of the module
- * bundle installs {@link previewShim} as `globalThis.ExtApps`. The build inlines
- * the real ext-apps runtime with `??=`, so the shim — set first by the classic
- * script — wins; without it the real runtime would `postMessage` a host that
- * isn't there and hang on "Connecting…".
+ * unauthenticated). It serves the same HTML the `ui://` resource does, with one
+ * substitution: instead of the real ext-apps runtime, the vendor slot gets an
+ * `<script type="importmap">` resolving `@modelcontextprotocol/ext-apps` to a
+ * `data:` URL of the FAKE-host shim module ({@link PREVIEW_SHIM_MODULE}), so the
+ * widget's `import { App }` binds to the shim (ADR-0025). Without it the widget
+ * would import a runtime that `postMessage`s a host that isn't there and hang on
+ * "Connecting…".
  *
  * `?payload=` is untrusted, but the server never reflects it: the shim reads it
  * CLIENT-SIDE from `location.search` and feeds it to the widget's `ontoolresult`,
@@ -63,11 +64,11 @@ export function buildWidgetPreviewRouter(log: Logger, opts: { readonly dir?: str
       return c.text(`Unknown widget "${name}". Available widgets: ${available}`, 404);
     }
 
-    // Inject the shim as a classic <script> before the deferred module bundle, so
-    // it claims `globalThis.ExtApps` first and the real (`??=`) runtime no-ops. A
-    // function replacement is used so a `$` in the shim is never treated as a
-    // String.replace substitution pattern ($&, $1, …).
-    return c.html(html.replace(WIDGET_INJECT_SLOT, `<script>${PREVIEW_SHIM}</script>`));
+    // Resolve the widget's `@modelcontextprotocol/ext-apps` import to the shim module via the vendor
+    // slot's import map; the caps inject slot is unused (the shim's App constructor sets the caps).
+    // Function replacement so a `$` in the import map is never treated as a String.replace
+    // substitution pattern ($&, $1, …) — base64 has none, but the guard is free.
+    return c.html(html.replace(WIDGET_INJECT_SLOT, "").replace(WIDGET_VENDOR_SLOT, () => PREVIEW_IMPORTMAP));
   });
 
   return app;
@@ -116,56 +117,67 @@ export const SHIMMED_EXTAPPS_HELPERS = [
 ] as const satisfies readonly (keyof ExtAppsHelperShape)[];
 
 /**
- * The fake `globalThis.ExtApps` injected into a previewed widget. Its `App` constructor
- * reads `?elicitation=` and sets `window.__MCP_SERVER_CAPS__` (mirroring the injection
- * `widgets-resource.ts` does at `resources/read` time), then reads `?payload=` for the
- * `connect()` feed to `ontoolresult`. Its `getHostContext()` reflects `?theme=` (light|dark)
- * and `?userAgent=`; every other host method is a harmless no-op. Authored as a string
- * because it runs in the browser, not Node; {@link SHIMMED_HOST_METHODS} keeps its surface
- * honest against ext-apps.
+ * The fake ext-apps runtime served (as a `data:` URL ES module) to a previewed widget, so its
+ * `import { App, applyHostStyleVariables, … }` binds to these fakes. The `App` constructor reads
+ * `?elicitation=` and sets `window.__MCP_SERVER_CAPS__` (mirroring the injection `widgets-resource.ts`
+ * does at `resources/read` time), then reads `?payload=` for the `connect()` feed to `ontoolresult`.
+ * Its `getHostContext()` reflects `?theme=` (light|dark) and `?userAgent=`; every other host method
+ * is a harmless no-op. Authored as a string because it runs in the browser, not Node; the export
+ * surface is pinned against ext-apps by {@link SHIMMED_HOST_METHODS} / {@link SHIMMED_EXTAPPS_HELPERS}.
  */
-const PREVIEW_SHIM = `globalThis.ExtApps = {
-  applyHostStyleVariables() {},
-  applyHostFonts() {},
-  applyDocumentTheme() {},
-  getDocumentTheme() {
-    try { return new URLSearchParams(location.search).get("theme") === "dark" ? "dark" : "light"; }
-    catch { return "light"; }
+const PREVIEW_SHIM_MODULE = `
+export function applyHostStyleVariables() {}
+export function applyHostFonts() {}
+export function applyDocumentTheme() {}
+export function getDocumentTheme() {
+  try { return new URLSearchParams(location.search).get("theme") === "dark" ? "dark" : "light"; }
+  catch { return "light"; }
+}
+export class App {
+  ontoolresult;
+  ontoolinput;
+  onhostcontextchanged;
+  #payload;
+  constructor() {
+    try {
+      const q = new URLSearchParams(location.search);
+      window["${SERVER_CAPS_KEY}"] = { supportsElicitation: q.get("elicitation") === "1" };
+      this.#payload = q.get("payload");
+    } catch { this.#payload = null; }
+  }
+  async connect() {
+    if (this.#payload === null || this.#payload === undefined) return;
+    let structuredContent;
+    try {
+      const parsed = JSON.parse(this.#payload);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) structuredContent = parsed;
+    } catch {}
+    this.ontoolresult && this.ontoolresult({ content: [{ type: "text", text: this.#payload }], structuredContent });
+  }
+  getHostContext() {
+    let theme = "light", userAgent;
+    try {
+      const q = new URLSearchParams(location.search);
+      if (q.get("theme") === "dark") theme = "dark";
+      userAgent = q.get("userAgent") ?? undefined;
+    } catch {}
+    return userAgent ? { theme, userAgent } : { theme };
+  }
+  sendMessage(message) { console.log("[widget-preview] sendMessage", message); return Promise.resolve({}); }
+  updateModelContext() { return Promise.resolve({}); }
+  callServerTool() { return Promise.resolve({ content: [] }); }
+  openLink(args) { console.log("[widget-preview] openLink", args); return Promise.resolve({}); }
+  downloadFile() { return Promise.resolve({}); }
+}`;
+
+/**
+ * The `<script type="importmap">` injected into the vendor slot, pointing the bare ext-apps
+ * specifier at {@link PREVIEW_SHIM_MODULE} as a base64 `data:` URL module. Base64 (not percent-
+ * encoding) because its alphabet can't contain `</script`, so the data URL is safe inside the
+ * importmap `<script>`. Computed once — the shim is static.
+ */
+const PREVIEW_IMPORTMAP = `<script type="importmap">${JSON.stringify({
+  imports: {
+    "@modelcontextprotocol/ext-apps": `data:text/javascript;base64,${Buffer.from(PREVIEW_SHIM_MODULE).toString("base64")}`,
   },
-  App: class {
-    ontoolresult;
-    ontoolinput;
-    onhostcontextchanged;
-    #payload;
-    constructor() {
-      try {
-        const q = new URLSearchParams(location.search);
-        window["${SERVER_CAPS_KEY}"] = { supportsElicitation: q.get("elicitation") === "1" };
-        this.#payload = q.get("payload");
-      } catch { this.#payload = null; }
-    }
-    async connect() {
-      if (this.#payload === null || this.#payload === undefined) return;
-      let structuredContent;
-      try {
-        const parsed = JSON.parse(this.#payload);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) structuredContent = parsed;
-      } catch {}
-      this.ontoolresult && this.ontoolresult({ content: [{ type: "text", text: this.#payload }], structuredContent });
-    }
-    getHostContext() {
-      let theme = "light", userAgent;
-      try {
-        const q = new URLSearchParams(location.search);
-        if (q.get("theme") === "dark") theme = "dark";
-        userAgent = q.get("userAgent") ?? undefined;
-      } catch {}
-      return userAgent ? { theme, userAgent } : { theme };
-    }
-    sendMessage(message) { console.log("[widget-preview] sendMessage", message); return Promise.resolve({}); }
-    updateModelContext() { return Promise.resolve({}); }
-    callServerTool() { return Promise.resolve({ content: [] }); }
-    openLink(args) { console.log("[widget-preview] openLink", args); return Promise.resolve({}); }
-    downloadFile() { return Promise.resolve({}); }
-  },
-};`;
+})}</script>`;
