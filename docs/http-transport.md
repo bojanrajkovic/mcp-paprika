@@ -111,12 +111,32 @@ GET /widget-preview?widget=<name>&payload=<url-encoded-json>
 
 The route is **off by default and absent in production** — it is mounted only when
 the flag is set, before the auth block, so it is unauthenticated and exists purely
-for local development. It serves the same self-contained HTML the `ui://` resource
-does, but substitutes a fake host shim for the real apps runtime: the shim feeds
-`?payload=` to the widget's `ontoolresult` so you see it render, and logs the
-messages the widget would send back. `?payload=` is read client-side by the shim
-and never reflected into the HTML by the server. Run `pnpm build:widgets` (or
-`pnpm dev:widgets` to rebuild on change) first so there is something to preview.
+for local development. It serves the same HTML the `ui://` resource does, but
+resolves the widget's ext-apps import to a fake host shim module instead of the
+real vendor (ADR-0025): the shim feeds `?payload=` to the widget's `ontoolresult`
+so you see it render, and logs the messages the widget would send back. `?payload=`
+is read client-side by the shim and never reflected into the HTML by the server.
+Run `pnpm build:widgets` (or `pnpm dev:widgets` to rebuild on change) first so
+there is something to preview.
+
+## Widget vendor runtime
+
+The shared ext-apps browser runtime is externalized, not inlined per widget
+(ADR-0025). The HTTP transport serves it at:
+
+```
+GET /widgets/vendor-<hash>.js
+```
+
+This route is **always mounted, before the auth block, so it is unauthenticated** —
+the widget iframe fetches it with no bearer token, and it carries only ext-apps'
+public runtime (no secret). The filename is content-hashed, so the response is
+`Cache-Control: public, max-age=31536000, immutable` and the iframe fetches it once
+across every widget and session; it negotiates `Accept-Encoding` to serve a
+pre-built brotli (~60 KB) or gzip variant, and sends `Access-Control-Allow-Origin: *`.
+A served widget's `_meta.ui.csp.resourceDomains` names `${MCP_PUBLIC_URL}`'s origin
+so the host allowlists this route for the iframe's `script-src`. The route
+exact-matches the built filename and 404s anything else.
 
 ## Connector appearance
 
