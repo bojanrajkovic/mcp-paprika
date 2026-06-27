@@ -8,6 +8,11 @@ import { httpInstrumentationMiddleware } from "@hono/otel";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { context, trace } from "@opentelemetry/api";
+import {
+  ATTR_CLIENT_ADDRESS,
+  ATTR_NETWORK_PEER_ADDRESS,
+  ATTR_USER_AGENT_ORIGINAL,
+} from "@opentelemetry/semantic-conventions";
 import { Hono } from "hono";
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { routePath } from "hono/route";
@@ -36,6 +41,7 @@ import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemet
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
 import { unwrapAtBoot } from "../utils/errors.js";
+import { clientAddress, peerAddress } from "./client-ip.js";
 import { buildFaviconRouter } from "./favicon.js";
 import { buildWidgetPreviewRouter } from "./widget-preview.js";
 // Side-effect: every domain/feature module self-registers on import.
@@ -96,7 +102,7 @@ const PROBE_PATHS = new Set(["/healthz"]);
  *
  * Exported for isolated unit testing, same seam as {@link accessLog}.
  */
-export function tracedRequests(): MiddlewareHandler {
+export function tracedRequests(trustProxy = false): MiddlewareHandler {
   // Name a POST /mcp span after the JSON-RPC method the handler stashed on the
   // context (e.g. `POST /mcp tools/call`), so tool calls stand out from the
   // protocol chatter (initialize, tools/list, ping, notifications) that otherwise
@@ -104,6 +110,11 @@ export function tracedRequests(): MiddlewareHandler {
   // by which point the stash is set; every other route keeps @hono/otel's default
   // (`METHOD <routePath>`).
   const instrument = httpInstrumentationMiddleware({
+    // @hono/otel captures method/route/status/url.full but no caller fingerprint;
+    // a small allowlist of low-risk request headers rounds it out (never
+    // `authorization`/`cookie`, and never `referer` — a URL that could carry query
+    // secrets the export-path url-scrub doesn't reach inside a header value).
+    captureRequestHeaders: CAPTURED_REQUEST_HEADERS,
     spanNameFactory: (c) => {
       const method = c.get("mcpMethod");
       return typeof method === "string" ? `${c.req.method} /mcp ${method}` : `${c.req.method} ${routePath(c)}`;
@@ -113,8 +124,33 @@ export function tracedRequests(): MiddlewareHandler {
     if (PROBE_PATHS.has(c.req.path) || (c.req.method === "GET" && c.req.path === "/mcp")) {
       return next();
     }
-    return instrument(c, next);
+    return instrument(c, async () => {
+      enrichRequestSpan(c, trustProxy);
+      return next();
+    });
   };
+}
+
+/** Low-risk request headers worth a span attribute; never auth/cookie/referer. */
+const CAPTURED_REQUEST_HEADERS = ["origin", "accept-language"];
+
+/**
+ * Add the caller fingerprint @hono/otel omits to the active request span:
+ * `user_agent.original`, the real `client.address` (trustProxy-aware — see
+ * {@link clientAddress}), and the socket `network.peer.address` when it differs
+ * (the proxy hop). Runs INSIDE the instrument span, the same seam
+ * {@link tagMcpRequestSpan} uses. Best-effort: a missing value is left unset,
+ * never an error into request handling.
+ */
+function enrichRequestSpan(c: Context, trustProxy: boolean): void {
+  const span = trace.getActiveSpan();
+  if (span === undefined) return;
+  const userAgent = c.req.header("user-agent");
+  if (userAgent !== undefined) span.setAttribute(ATTR_USER_AGENT_ORIGINAL, userAgent);
+  const client = clientAddress(c, trustProxy);
+  if (client !== null) span.setAttribute(ATTR_CLIENT_ADDRESS, client);
+  const peer = peerAddress(c);
+  if (peer !== null && peer !== client) span.setAttribute(ATTR_NETWORK_PEER_ADDRESS, peer);
 }
 
 /**
@@ -351,7 +387,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // Request spans + HTTP server metrics: outermost, so the access log and
   // every downstream handler run inside the request span (tool spans parent
   // under it via the active context).
-  hono.use("*", tracedRequests());
+  hono.use("*", tracedRequests(authContext?.config.trustProxy ?? false));
 
   // Response-flush span: inside the request span, brackets the body write the request/app spans
   // miss (both close at handler return). The only server-side view of serialize+write cost.

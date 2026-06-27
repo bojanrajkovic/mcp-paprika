@@ -15,6 +15,7 @@ import type { TokenStore } from "./token-store.js";
 import type { ResolvedOAuthConfig } from "./types.js";
 import type { IdTokenPayload } from "./types.js";
 
+import { clientAddress } from "../transport/client-ip.js";
 import { toMessage } from "../utils/log.js";
 import { verifyIdentity } from "./allowlist.js";
 import { consentSecurityHeaders, renderDeniedPage, renderExpiredPage } from "./consent-page.js";
@@ -439,19 +440,7 @@ export function buildDcrRateLimit(options: { readonly trustProxy: boolean }): Mi
   const inner = rateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
     limit: 10,
-    keyGenerator: (c) => {
-      if (options.trustProxy) {
-        // RFC 7239: x-forwarded-for is comma-separated; take the leftmost (client IP).
-        const xForwardedFor = c.req.header("x-forwarded-for");
-        if (xForwardedFor) {
-          const first = xForwardedFor.split(",")[0]?.trim();
-          if (first) return first;
-        }
-        const cf = c.req.header("cf-connecting-ip");
-        if (cf) return cf;
-      }
-      return getRemoteAddress(c) ?? "unknown";
-    },
+    keyGenerator: (c) => clientAddress(c, options.trustProxy) ?? "unknown",
     standardHeaders: "draft-6",
   });
   // Hono mounts the middleware on the `/register` prefix, but RFC 7592
@@ -479,17 +468,6 @@ export function buildDcrRateLimit(options: { readonly trustProxy: boolean }): Mi
     }
     return res;
   };
-}
-
-/**
- * Read the connection's remote address from the underlying node:http
- * IncomingMessage that `@hono/node-server` attaches to `c.env`. Returns
- * `null` when running under a Hono adapter that doesn't expose it (e.g.
- * `app.request()` in tests, or non-Node adapters).
- */
-function getRemoteAddress(c: Context): string | null {
-  const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
-  return env?.incoming?.socket?.remoteAddress ?? null;
 }
 
 /**
