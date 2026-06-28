@@ -7,7 +7,7 @@ import { defineResource } from "../../../kernel/resource.js";
 import { supportsForm } from "../../../shared/elicit.js";
 import { UI_RESOURCE_MIME_TYPE } from "../../../shared/mcp-app.js";
 import { resourceNotFound } from "../../../shared/resources.js";
-import { SERVER_CAPS_KEY, TRACEPARENT_KEY, WIDGET_INJECT_SLOT } from "../shared/server-caps-key.js";
+import { SERVER_CAPS_KEY, TRACEPARENT_KEY, WIDGET_INJECT_SLOT, WIDGET_VENDOR_SLOT } from "../shared/server-caps-key.js";
 
 /**
  * Explicit W3C propagator — the GLOBAL propagator is `OTEL_PROPAGATORS=none` (so
@@ -68,9 +68,22 @@ export const widgetsResource = defineResource<WidgetsState, never>(
         (traceparent !== undefined ? `window["${TRACEPARENT_KEY}"]=${JSON.stringify(traceparent)};` : "");
       // Function replacement (not a string), so a `$` in injectScript is never read as a `String.replace`
       // substitution pattern ($&, $1, …) — the same guard `widget-preview.ts` documents at its inject site.
-      const injected = html.replace(WIDGET_INJECT_SLOT, () => `<script>${injectScript}</script>`);
+      const withCaps = html.replace(WIDGET_INJECT_SLOT, () => `<script>${injectScript}</script>`);
+      // Resolve the externalized ext-apps runtime (ADR-0025): inject the import map (vendor URL over
+      // HTTP, inline `data:` URL over stdio) and, over HTTP, allowlist the vendor's origin for the
+      // host's iframe CSP via `_meta.ui.csp` on this content item (`csp` is RESOURCE meta, not tool
+      // meta — McpUiToolMeta.csp is `never`). No vendor (degraded build) → empty slot, no `_meta`.
+      const vendor = ctx.state.vendor;
+      const injected = withCaps.replace(WIDGET_VENDOR_SLOT, () => vendor?.importMap ?? "");
       return {
-        contents: [{ uri: uri.href, mimeType: UI_RESOURCE_MIME_TYPE, text: injected }],
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: UI_RESOURCE_MIME_TYPE,
+            text: injected,
+            ...(vendor?.csp && { _meta: { ui: { csp: vendor.csp } } }),
+          },
+        ],
       };
     },
   }),

@@ -44,6 +44,7 @@ import { unwrapAtBoot } from "../utils/errors.js";
 import { clientAddress, peerAddress } from "./client-ip.js";
 import { buildFaviconRouter } from "./favicon.js";
 import { buildWidgetPreviewRouter } from "./widget-preview.js";
+import { buildWidgetVendorRouter } from "./widget-vendor.js";
 // Side-effect: every domain/feature module self-registers on import.
 import "../kernel/modules.generated.js";
 
@@ -412,6 +413,12 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // outside the auth block) so a host's connector flow can fetch it pre-auth —
   // the OAuth AS metadata logo_uri points at this path. See src/utils/branding.ts.
   hono.route("/", buildFaviconRouter());
+
+  // The shared widget vendor module (externalized ext-apps runtime), unauthenticated and
+  // immutable-cached — the widget iframe fetches it once across all widgets (ADR-0025). Mounted
+  // before the /mcp bearer guard (favicon-style) so the iframe reaches it with no bearer token.
+  // See src/transport/widget-vendor.ts.
+  hono.route("/", await buildWidgetVendorRouter(rootLog.child({ component: "widget-vendor" })));
 
   // Dev-only widget preview, config-gated and unauthenticated — mounted here,
   // favicon-style, BEFORE the /mcp bearer guard. Absent entirely in production

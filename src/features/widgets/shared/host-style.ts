@@ -1,15 +1,9 @@
-// The two ext-apps style helpers ride the inlined `globalThis.ExtApps` runtime — the same seam
-// `mount-widget` reads `App` from. The import is TYPE-ONLY (erased, like `mount-widget`'s `App`), so
-// ext-apps stays a build-time-only devDependency and nothing reaches the prod bundle; pinning the
-// runtime's shape to `typeof` the real functions makes a host-style API change a compile error here
-// rather than silent drift. Both are optional: the dev preview shim and any older host may not
-// provide them, and a missing helper is a no-op, not a crash.
-import type { applyHostFonts, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
-
-interface HostStyleRuntime {
-  applyHostStyleVariables?: typeof applyHostStyleVariables;
-  applyHostFonts?: typeof applyHostFonts;
-}
+// The two ext-apps style helpers are VALUE imports of the bare specifier the import map resolves at
+// runtime (ADR-0025) — the same vendor module `mount-widget` imports `App` from. esbuild keeps it
+// external, and this file (under `shared/`) is compiled by esbuild only, excluded from the Node
+// `tsc` graph, so the value import never reaches the prod runtime path and ext-apps stays a
+// build-time-only devDependency. Each helper no-ops internally when the host can't honor it.
+import { applyHostFonts, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
 
 // The host-context fields that drive typography. Structurally satisfied by the full
 // `app.getHostContext()` result; every field is untrusted host data, read defensively. `variables`
@@ -55,11 +49,10 @@ const SANS_STACK = `var(--font-sans, system-ui, -apple-system, "Segoe UI", Robot
  * identifier is always present and the font never resets on a partial theme-only update.
  */
 export function applyHostStyles(ctx: HostStyleContext | null | undefined): void {
-  const ext = (globalThis as unknown as { ExtApps?: HostStyleRuntime }).ExtApps;
   const variables = ctx?.styles?.variables;
   const fonts = ctx?.styles?.css?.fonts;
-  if (variables) ext?.applyHostStyleVariables?.(variables);
-  if (fonts) ext?.applyHostFonts?.(fonts);
+  if (variables) applyHostStyleVariables(variables);
+  if (fonts) applyHostFonts(fonts);
   const serif = SERIF_HOSTS.test(ctx?.userAgent ?? "");
   document.documentElement.style.setProperty("--widget-font", serif ? SERIF_STACK : SANS_STACK);
 

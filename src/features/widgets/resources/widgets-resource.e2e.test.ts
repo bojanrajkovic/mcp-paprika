@@ -9,6 +9,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { DomainCtx, Infra } from "../../../kernel/registry.js";
+import type { VendorImportMap } from "../artifacts.js";
 import type { WidgetsState } from "../module.js";
 
 import { connectInMemoryMcp } from "../../../../test/support/in-memory-mcp.js";
@@ -23,8 +24,12 @@ import { widgetsResource } from "./widgets-resource.js";
 const telemetry = installTestTelemetry();
 beforeEach(() => telemetry.spanExporter.reset());
 
-function makeCtx(server: McpServer, widgets: ReadonlyMap<string, string>): DomainCtx<WidgetsState, never> {
-  return { state: { widgets }, writes: {}, deps: {}, infra: { log: SILENT_LOG } as unknown as Infra, server };
+function makeCtx(
+  server: McpServer,
+  widgets: ReadonlyMap<string, string>,
+  vendor: VendorImportMap | null = null,
+): DomainCtx<WidgetsState, never> {
+  return { state: { widgets, vendor }, writes: {}, deps: {}, infra: { log: SILENT_LOG } as unknown as Infra, server };
 }
 
 describe("widgetsResource — ui://widget/{name}", () => {
@@ -67,6 +72,36 @@ describe("widgetsResource — ui://widget/{name}", () => {
       expect(readSpan).toBeDefined();
       const sc = readSpan!.spanContext();
       expect(text).toContain(`window["${TRACEPARENT_KEY}"]="00-${sc.traceId}-${sc.spanId}-`);
+    } finally {
+      await mcp.close();
+    }
+  });
+
+  it("injects the vendor import map and emits _meta.ui.csp when externalized (HTTP)", async () => {
+    const server = buildBrandedServer();
+    const vendor: VendorImportMap = {
+      importMap:
+        '<script type="importmap">{"imports":{"@modelcontextprotocol/ext-apps":"https://host.example/widgets/vendor-abc.js"}}</script>',
+      csp: { resourceDomains: ["https://host.example"] },
+    };
+    widgetsResource.register(
+      makeCtx(
+        server,
+        new Map([["demo", "<html><body><!-- __widget-inject__ --><!-- __widget-vendor__ -->demo</body></html>"]]),
+        vendor,
+      ),
+    );
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const result = await mcp.client.readResource({ uri: "ui://widget/demo" });
+      const content = result.contents[0];
+      const text = content !== undefined && "text" in content ? (content.text as string) : "";
+      // The vendor slot is filled with the import map that resolves the externalized ext-apps runtime.
+      expect(text).toContain('<script type="importmap">');
+      expect(text).toContain("https://host.example/widgets/vendor-abc.js");
+      // And the served content item carries _meta.ui.csp so the host allowlists the vendor origin.
+      expect(content?._meta).toEqual({ ui: { csp: { resourceDomains: ["https://host.example"] } } });
     } finally {
       await mcp.close();
     }

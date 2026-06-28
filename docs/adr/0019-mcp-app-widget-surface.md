@@ -51,7 +51,7 @@ Rejected because elicitation cannot scroll, search, preview, or live-update — 
 
 **Negative**
 
-- A widget is a new kind of artifact in a codebase that had no front-end: HTML/JS served as a resource, an iframe sandbox with its CSP constraints, a browser runtime bundle inlined into the served HTML, and a dependency on the apps SDK — each maintained per widget.
+- A widget is a new kind of artifact in a codebase that had no front-end: HTML/JS served as a resource, an iframe sandbox with its CSP constraints, a browser runtime bundle served with the HTML, and a dependency on the apps SDK — each maintained per widget. (The runtime was originally **inlined** into every widget's self-contained HTML; [ADR-0025](0025-externalize-widget-vendor-runtime.md) later **externalized** it as one shared, content-hashed vendor module — served from a self-hosted, immutable-cached route over HTTP and an inline `data:` URL over stdio — so the build-time-only apps-SDK constraint stands but the runtime is no longer re-shipped per widget.)
 - Declaring an output schema makes the structured payload a contract the SDK validates on every non-error result, forcing a decision on the existing uid-or-text lookup tools' non-happy-path returns (a not-found or a multiple-match outcome) — most cleanly resolved by signaling those as errors with a remediation hint rather than as plain text.
 - The kernel's tool-definition seam carries no UI metadata today; adding the widget surface through the kernel (rather than registering on the session server outside it) requires extending that seam to thread UI metadata as data, consistent with the specs-as-data principle of [ADR-0011](0011-tool-specs-as-data.md).
 - Each widget is a small product surface to design and keep theme-aware and viewport-correct across light/dark and mobile safe-area insets — an ongoing cost the text path does not carry.
@@ -63,5 +63,6 @@ Rejected because elicitation cannot scroll, search, preview, or live-update — 
 - Related: [ADR-0008](0008-tool-surface-command-language.md) — the tool-surface command-language principle the structured channel serves.
 - Related: [ADR-0011](0011-tool-specs-as-data.md) — the specs-as-data principle the kernel's UI-metadata seam should follow.
 - Related: [ADR-0021](0021-reliable-structured-content-channel.md) — commits `structuredContent` as the model's reliable identifier channel and removes the UID text fallback, completing the R1 clean-text half of this decision.
+- Superseded in part: [ADR-0025](0025-externalize-widget-vendor-runtime.md) — externalizes the inlined ext-apps runtime as one shared, content-hashed vendor module (transport-conditional self-host + import map).
 - Follow-on feature work (not decided here): the grocery purchased-checklist widget as the first widget, and the cooking step-anchored ingredient/step view; specific widget designs are captured with their features.
 - External: the Model Context Protocol apps/UI surface (`ui://` resources and the app bridge) and the `@modelcontextprotocol/ext-apps` SDK.

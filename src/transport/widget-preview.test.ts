@@ -14,10 +14,17 @@ const FIXTURE_HTML = `<!doctype html>
   <body>
     <!-- __widget-inject__ -->
     <div id="app"></div>
-    <script type="module">globalThis.ExtApps ??= { App: class {} };</script>
+    <!-- __widget-vendor__ -->
+    <script type="module">import { App } from "@modelcontextprotocol/ext-apps"; new App();</script>
   </body>
 </html>
 `;
+
+/** Decode the shim ES module from the served import map's `data:text/javascript;base64,…` target. */
+function decodeShim(body: string): string {
+  const b64 = body.match(/"@modelcontextprotocol\/ext-apps":"data:text\/javascript;base64,([^"]+)"/)?.[1];
+  return b64 !== undefined ? Buffer.from(b64, "base64").toString("utf8") : "";
+}
 
 describe("widget-preview route", () => {
   const tmp = useTempDir("mcp-paprika-widget-preview-");
@@ -30,7 +37,7 @@ describe("widget-preview route", () => {
     await tmp.teardown();
   });
 
-  it("serves a known widget with the host shim injected ahead of the module bundle", async () => {
+  it("resolves the widget's ext-apps import to the host shim module via an import map", async () => {
     const router = buildWidgetPreviewRouter(SILENT_LOG, { dir: tmp.dir() });
     const res = await router.request("/widget-preview?widget=demo");
 
@@ -38,30 +45,30 @@ describe("widget-preview route", () => {
     expect(res.headers.get("content-type")).toContain("text/html");
     const body = await res.text();
 
-    // The fake host runtime is injected, and implements every pinned host method
-    // (so the shim can't silently drop one the widgets rely on).
-    expect(body).toContain("globalThis.ExtApps");
+    // An import map resolves the bare ext-apps specifier, and it must precede the module that imports
+    // it (an import map is only honored ahead of the first module import).
+    expect(body).toContain('<script type="importmap">');
+    expect(body.indexOf('type="importmap"')).toBeLessThan(body.indexOf('type="module"'));
+
+    // The shim module (carried as the import map's data: URL) implements every pinned host method and
+    // top-level style helper, so it can't silently drop one the widgets rely on.
+    const shim = decodeShim(body);
+    expect(shim).not.toBe("");
     for (const method of SHIMMED_HOST_METHODS) {
-      expect(body).toContain(method);
+      expect(shim).toContain(method);
     }
-
-    // The shim also provides the top-level ExtApps style helpers. The two that host-style.ts
-    // actually calls are pinned unconditionally so dropping one from SHIMMED_EXTAPPS_HELPERS
-    // doesn't silently remove the assertion; the rest are asserted via the shared list.
-    expect(body).toContain("applyHostStyleVariables");
-    expect(body).toContain("applyHostFonts");
+    // The two helpers host-style.ts actually calls are pinned unconditionally so dropping one from
+    // SHIMMED_EXTAPPS_HELPERS doesn't silently remove the assertion; the rest ride the shared list.
+    expect(shim).toContain("applyHostStyleVariables");
+    expect(shim).toContain("applyHostFonts");
     for (const helper of SHIMMED_EXTAPPS_HELPERS) {
-      expect(body).toContain(helper);
+      expect(shim).toContain(helper);
     }
 
-    // The shim is a classic <script> ahead of the deferred module bundle, so it
-    // claims globalThis.ExtApps first and the real (`??=`) runtime no-ops.
-    expect(body.indexOf("<script>")).toBeLessThan(body.indexOf('<script type="module">'));
-
-    // The App constructor sets window[SERVER_CAPS_KEY] from ?elicitation= so the
-    // grocery checklist's elicitation-aware confirm can be exercised in the preview.
-    expect(body).toContain(SERVER_CAPS_KEY);
-    expect(body).toContain("supportsElicitation");
+    // The App constructor sets window[SERVER_CAPS_KEY] from ?elicitation= so the grocery checklist's
+    // elicitation-aware confirm can be exercised in the preview.
+    expect(shim).toContain(SERVER_CAPS_KEY);
+    expect(shim).toContain("supportsElicitation");
   });
 
   it("never reflects ?payload= into the served HTML (the shim reads it client-side)", async () => {
