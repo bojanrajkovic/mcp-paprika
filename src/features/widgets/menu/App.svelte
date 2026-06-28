@@ -25,37 +25,33 @@
     type RecipeDetailData,
   } from "../shared/recipe-detail.js";
   import { relevantTime } from "../shared/recipe-time.js";
+  import type {
+    MenuItemRow,
+    MenuReadStructured,
+    RecipeRow,
+  } from "../shared/server-types.js";
   import { nameTile } from "../shared/tile.js";
 
-  // The per-recipe metadata read_menu denormalizes onto a recipe-linked row (a slice of the
-  // shared recipeRowSchema — only the fields a row renders). Null for a freeform item and for a
-  // dangling link (a recipeUid whose recipe is gone from the local store) — both stay name-only.
-  interface RecipeMeta {
-    rating: number;
-    prepTime: string | null;
-    cookTime: string | null;
-    totalTime: string | null;
-    photoResourceUri: string | null;
-  }
-  // One menu item, as read_menu's structuredContent emits it (menuItemRowSchema). A recipe-linked
-  // row with `recipe` metadata renders rich (cover thumb + rating + one time, like recipe-browse);
-  // tapping it reads the full recipe (read_recipe → shared RecipeDetail). A freeform item
-  // (recipeUid: null) has no recipe to open, so it renders muted and non-tappable; a dangling link
-  // (recipeUid set, recipe null) stays tappable but name-only.
-  interface MenuItem {
-    uid: string;
-    day: number;
-    name: string;
-    typeName: string | null;
-    recipeUid: string | null;
+  // The widget view-models are slices of the server's own read_menu output (B1), so a rename of a
+  // menu-item or recipe-row field breaks this widget at compile time. `RecipeMeta` is the per-recipe
+  // metadata read_menu denormalizes onto a recipe-linked row (only the fields a row renders); it is
+  // null for a freeform item and for a dangling link (a recipeUid whose recipe is gone from the
+  // local store) — both stay name-only. A recipe-linked row with `recipe` metadata renders rich
+  // (cover thumb + rating + one time); tapping it reads the full recipe (read_recipe → shared
+  // RecipeDetail). A freeform item (recipeUid: null) renders muted and non-tappable.
+  type RecipeMeta = Pick<
+    RecipeRow,
+    "rating" | "prepTime" | "cookTime" | "totalTime" | "photoResourceUri"
+  >;
+  type MenuItem = Pick<
+    MenuItemRow,
+    "uid" | "day" | "name" | "typeName" | "recipeUid"
+  > & {
     recipe: RecipeMeta | null;
-  }
-  interface Menu {
-    name: string;
-    days: number;
-    notes: string;
+  };
+  type Menu = Pick<MenuReadStructured, "name" | "days" | "notes"> & {
     items: MenuItem[];
-  }
+  };
 
   let { app }: { app: App } = $props();
 
@@ -198,56 +194,41 @@
     ) {
       return null;
     }
+    // Shape confirmed (a `name` + a `days` number + an items array); trust the rest as read_menu's
+    // output. `days`/`day` stay clamped to a sane integer — `typeof NaN === "number"` slips the guard
+    // and a negative/float span would corrupt the day loop.
+    const src = data as unknown as MenuReadStructured;
     return {
-      name: data["name"],
-      // Coerce to a finite, non-negative integer — `typeof NaN === "number"` slips past the guard
-      // above, and a negative/float span would corrupt the day loop. The untrusted host payload is
-      // normalized here the same way every item field is in toItem.
-      days: Number.isFinite(data["days"])
-        ? Math.max(0, Math.trunc(data["days"]))
-        : 0,
-      notes: typeof data["notes"] === "string" ? data["notes"] : "",
-      items: data["items"].map(toItem),
+      name: src.name,
+      days: Number.isFinite(src.days) ? Math.max(0, Math.trunc(src.days)) : 0,
+      notes: src.notes,
+      items: src.items.map(toItem),
     };
   }
 
-  function toItem(r: unknown): MenuItem {
-    const o = (typeof r === "object" && r !== null ? r : {}) as Record<
-      string,
-      unknown
-    >;
+  function toItem(r: MenuItemRow): MenuItem {
     return {
-      uid: typeof o["uid"] === "string" ? o["uid"] : "",
-      // A 1-indexed day, coerced finite and ≥ 1 (NaN/0/negative would mis-bucket or vanish a row).
-      day: Number.isFinite(o["day"])
-        ? Math.max(1, Math.trunc(o["day"] as number))
-        : 1,
-      name: typeof o["name"] === "string" ? o["name"] : "",
-      typeName:
-        typeof o["typeName"] === "string" && o["typeName"] !== ""
-          ? o["typeName"]
-          : null,
-      recipeUid:
-        typeof o["recipeUid"] === "string" && o["recipeUid"] !== ""
-          ? o["recipeUid"]
-          : null,
-      recipe: toRecipeMeta(o["recipe"]),
+      uid: r.uid,
+      // A 1-indexed day, clamped finite and ≥ 1 (NaN/0/negative would mis-bucket or vanish a row).
+      day: Number.isFinite(r.day) ? Math.max(1, Math.trunc(r.day)) : 1,
+      name: r.name,
+      typeName: r.typeName,
+      recipeUid: r.recipeUid,
+      recipe: toRecipeMeta(r.recipe),
     };
   }
 
-  // Parse the embedded recipe metadata defensively (the host payload is untrusted). A missing or
-  // malformed value — or any non-object — yields null, so the row falls back to name-only.
-  function toRecipeMeta(r: unknown): RecipeMeta | null {
-    if (typeof r !== "object" || r === null) return null;
-    const o = r as Record<string, unknown>;
-    const str = (v: unknown): string | null =>
-      typeof v === "string" && v !== "" ? v : null;
+  // Narrow the embedded recipe metadata to the slice the row renders. Null for a freeform/dangling
+  // item (recipe: null) — and for a host that omits the field entirely (undefined), so the deref
+  // below can't throw — both fall back to a name-only row.
+  function toRecipeMeta(r: RecipeRow | null | undefined): RecipeMeta | null {
+    if (!r) return null;
     return {
-      rating: typeof o["rating"] === "number" ? o["rating"] : 0,
-      prepTime: str(o["prepTime"]),
-      cookTime: str(o["cookTime"]),
-      totalTime: str(o["totalTime"]),
-      photoResourceUri: str(o["photoResourceUri"]),
+      rating: r.rating,
+      prepTime: r.prepTime,
+      cookTime: r.cookTime,
+      totalTime: r.totalTime,
+      photoResourceUri: r.photoResourceUri,
     };
   }
 

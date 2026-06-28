@@ -16,7 +16,7 @@ import type { RecipeUid } from "../../../domains/recipe/ids.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { callStructuredProbe } from "../../../../test/support/structured-output-probe.js";
 import { listMealTypesOutputSchema } from "../../../domains/meal-type/tools/list-meal-types.js";
-import { listPantryItemsOutputSchema } from "../../../domains/pantry/tools/list.js";
+import { listPantryItemsOutputSchema } from "../../../domains/pantry/pantry-helpers.js";
 import { recipeToRow } from "../../../domains/recipe/recipe-markdown.js";
 import { discoverRecipesOutputSchema } from "./discover-recipes.js";
 

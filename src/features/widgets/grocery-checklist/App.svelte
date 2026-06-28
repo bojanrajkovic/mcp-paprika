@@ -21,17 +21,17 @@
   } from "../shared/host-bridge.js";
   import { motion } from "../shared/motion.js";
   import { SERVER_CAPS_KEY } from "../shared/server-caps-key.js";
+  import type {
+    GroceryItemRow,
+    GroceryListReadStructured,
+  } from "../shared/server-types.js";
 
-  // A checklist row: a structured grocery item plus transient per-row UI flags.
-  interface Row {
-    uid: string;
-    ingredient: string;
-    quantity: string | null;
-    aisle: string | null;
-    purchased: boolean;
+  // A checklist row: the server's structured grocery item (B1 — a rename of its fields breaks this
+  // widget at compile time) plus transient per-row UI flags.
+  type Row = GroceryItemRow & {
     _busy: boolean;
     _error: boolean;
-  }
+  };
 
   // The ext-apps App instance, constructed in main.ts and handed in as a prop.
   let { app }: { app: App } = $props();
@@ -96,34 +96,20 @@
       }
       return;
     }
-    listMeta = {
-      uid,
-      name: typeof data["name"] === "string" ? data["name"] : "",
-    };
-    items = rawItems.map((r) => toRow(r));
+    // Shape confirmed (a `uid` + an items array); trust the rest as the server's grocery-list read.
+    const src = data as unknown as GroceryListReadStructured;
+    listMeta = { uid, name: src.name };
+    items = src.items.map(toRow);
     errorMsg = null;
     confirmingClear = false;
     confirmingMove = false;
     phase = "ready";
   }
 
-  // Map a structured grocery row into the local model (+ transient flags). Shared by the host re-read
-  // and the optimistic re-add so the row shape lives in one place; every field is coerced defensively.
-  function toRow(r: unknown): Row {
-    const row = (typeof r === "object" && r !== null ? r : {}) as Record<
-      string,
-      unknown
-    >;
-    return {
-      uid: typeof row["uid"] === "string" ? row["uid"] : "",
-      ingredient:
-        typeof row["ingredient"] === "string" ? row["ingredient"] : "",
-      quantity: typeof row["quantity"] === "string" ? row["quantity"] : null,
-      aisle: typeof row["aisle"] === "string" ? row["aisle"] : null,
-      purchased: Boolean(row["purchased"]),
-      _busy: false,
-      _error: false,
-    };
+  // Wrap a structured grocery row in the local model (+ transient flags). Shared by the host re-read
+  // and the optimistic re-add so the row shape lives in one place.
+  function toRow(r: GroceryItemRow): Row {
+    return { ...r, _busy: false, _error: false };
   }
 
   function showToast(msg: string, kind: "error" | "info" = "error") {
@@ -207,7 +193,9 @@
     const del = await callTool(app, "delete_grocery_item", { uid: item.uid });
     item._busy = false;
     const addedRows = add.structuredContent?.["items"];
-    const added = Array.isArray(addedRows) ? addedRows[0] : undefined;
+    const added = Array.isArray(addedRows)
+      ? (addedRows[0] as GroceryItemRow | undefined)
+      : undefined;
     const idx = items.indexOf(item);
     if (idx < 0) return;
     if (!del.isError) {

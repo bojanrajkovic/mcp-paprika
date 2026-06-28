@@ -9,7 +9,7 @@ import type { Recipe } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { parseDuration } from "../../../utils/duration.js";
-import { browseContextSchema, recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
+import { recipeToRow, searchRecipesOutputSchema } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 export const searchRecipesInputSchema = z
@@ -38,17 +38,6 @@ export const searchRecipesInputSchema = z
   // search_recipes as taking no arguments. The "at least one criterion" rule is
   // therefore enforced at runtime in the handler, not on the schema.
   .strict();
-
-// Structured-output payload (ADR-0019, R1): the matched recipe rows (capped at
-// `limit`) plus `total`, the full match count before the cap — so the model can
-// tell its results were truncated. `context` carries the source + the query term
-// for the recipe-browse widget's header; the widget respects search ordering (no
-// client re-sort).
-export const searchRecipesOutputSchema = z.object({
-  context: browseContextSchema,
-  items: z.array(recipeRowSchema),
-  total: z.number().int().nonnegative(),
-});
 
 /**
  * `search_recipes` — search recipes by name / ingredient / description / time. The

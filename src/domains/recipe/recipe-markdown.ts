@@ -83,6 +83,37 @@ export const browseContextSchema = z.object({
   query: z.string().optional(),
 });
 
+export type BrowseContext = z.infer<typeof browseContextSchema>;
+
+/**
+ * `search_recipes`' structured-output payload (ADR-0019, R1): the matched recipe rows (capped at
+ * `limit`) plus `total`, the full match count before the cap — so the model can tell its results
+ * were truncated. `context` carries the source + query term for the recipe-browse widget's header;
+ * the widget respects search ordering (no client re-sort).
+ */
+export const searchRecipesOutputSchema = z.object({
+  context: browseContextSchema,
+  items: z.array(recipeRowSchema),
+  total: z.number().int().nonnegative(),
+});
+
+export type RecipeSearchStructured = z.infer<typeof searchRecipesOutputSchema>;
+
+/**
+ * `list_recipes`' structured-output payload (ADR-0019, R1): the page of recipe rows plus the
+ * pagination cursor — `total` is the full library size, `offset` the page start. `context`
+ * identifies the source for the recipe-browse widget (this is the only browse tool that offers a
+ * client-side rating/alpha re-sort).
+ */
+export const listRecipesOutputSchema = z.object({
+  context: browseContextSchema,
+  items: z.array(recipeRowSchema),
+  total: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+});
+
+export type RecipeListStructured = z.infer<typeof listRecipesOutputSchema>;
+
 /**
  * The structured-output payload for `read_recipe` / `create_recipe` (ADR-0019, R1,
  * B1/#321). Unlike the lean {@link recipeRowSchema} list row, the single-recipe read
@@ -162,6 +193,58 @@ export function recipeToReadStructured(recipe: Recipe, categoryNames: Array<stri
     created: recipe.created,
   };
 }
+
+// The model's split of the prep budget, surfaced on the cooking widget's prep screen as a real,
+// schedulable step. `activeMin` is hands-on mise-en-place; `passiveWaitMin` is the unattended wait
+// (marinate/soak/chill/rest) that, when long, must be started first. Shared by `cook_recipe`'s
+// input (the model's estimate) and output (the validated echo).
+export const cookPrepSchema = z.object({
+  activeMin: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Your estimate of hands-on prep minutes before first heat — knife work, measuring, making sub-components. " +
+        "Active work only; do NOT fold marinating/resting time in here.",
+    ),
+  passiveWaitMin: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Unattended wait BEFORE first heat that the cook must start ahead of cooking — marinating, soaking, brining, " +
+        "chilling a dough. 0 when there is none. It is surfaced on the prep screen as 'start this first', so do NOT " +
+        "include post-cook rests (resting meat, cooling): those happen after cooking and stay as cook steps.",
+    ),
+});
+
+// `cook_recipe`'s validated echo: the model's parse passed straight through, plus the stored
+// recipe's identity (name/servings/totalTime/prepTime/photo) so the model never retypes what the
+// store already holds. The cooking widget renders entirely off this structured channel. `prepTime`
+// is the recipe's STATED prep (enriched from the store) — shown as a secondary to the model's own
+// `prep` estimate, which the stated value routinely under- or over-reports.
+export const cookRecipeOutputSchema = z.object({
+  recipe_uid: RecipeUidSchema,
+  name: z.string(),
+  servings: z.string().nullable(),
+  totalTime: z.string().nullable(),
+  prepTime: z.string().nullable(),
+  photoResourceUri: z.string().nullable(),
+  ingredients: z.array(z.object({ text: z.string(), group: z.string().nullable() })),
+  prep: cookPrepSchema,
+  steps: z.array(
+    z.object({
+      text: z.string(),
+      group: z.string().nullable(),
+      ingredientRefs: z.array(z.number().int()),
+      produces: z.string().nullable(),
+      usesIntermediate: z.array(z.string()),
+      phase: z.enum(["prep", "cook"]),
+    }),
+  ),
+});
+
+export type CookRecipeStructured = z.infer<typeof cookRecipeOutputSchema>;
 
 export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>, lastCookedAt?: string | null): string {
   const lines: Array<string> = [];

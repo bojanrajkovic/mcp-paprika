@@ -5,19 +5,8 @@ import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, structuredResult } from "../../../shared/tools.js";
-import { browseContextSchema, recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
+import { listRecipesOutputSchema, recipeToRow } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
-
-// Structured-output payload (ADR-0019, R1): the page of recipe rows plus the
-// pagination cursor — `total` is the full library size, `offset` the page start.
-// `context` identifies the source for the recipe-browse widget (this is the only
-// browse tool that offers a client-side rating/alpha re-sort).
-export const listRecipesOutputSchema = z.object({
-  context: browseContextSchema,
-  items: z.array(recipeRowSchema),
-  total: z.number().int().nonnegative(),
-  offset: z.number().int().nonnegative(),
-});
 
 /**
  * `list_recipes` — list recipes. The `lastCookedAt` enrichment is DROPPED — recipe is
