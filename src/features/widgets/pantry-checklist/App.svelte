@@ -22,18 +22,17 @@
   } from "../shared/host-bridge.js";
   import { motion } from "../shared/motion.js";
   import { SERVER_CAPS_KEY } from "../shared/server-caps-key.js";
+  import type {
+    PantryItemRow,
+    PantryListStructured,
+  } from "../shared/server-types.js";
 
-  // A pantry row: a structured pantry item plus transient per-row UI flags. `inStock` drives which
-  // list the row lives in (the in-stock checklist vs. the out-of-stock drawer).
-  interface Row {
-    uid: string;
-    ingredient: string;
-    quantity: string | null;
-    aisle: string | null;
-    inStock: boolean;
-    expirationDate: string | null;
+  // A pantry row: the server's structured pantry item (B1 — a rename of its fields breaks this widget
+  // at compile time) plus a transient per-row flag. `inStock` drives which list the row lives in (the
+  // in-stock checklist vs. the out-of-stock drawer).
+  type Row = PantryItemRow & {
     _busy: boolean;
-  }
+  };
 
   // The ext-apps App instance, constructed in main.ts and handed in as a prop.
   let { app }: { app: App } = $props();
@@ -112,32 +111,18 @@
       }
       return;
     }
-    items = rawItems.map((r) => toRow(r));
+    // Shape confirmed (an items array); trust the rows as list_pantry_items' output.
+    const src = data as unknown as PantryListStructured;
+    items = src.items.map(toRow);
     errorMsg = null;
     confirmingClear = false;
     phase = "ready";
   }
 
-  // Map an untrusted structured row into the local model. A missing `inStock` defaults to in-stock
-  // (show the item rather than hide it on a malformed field); only an explicit `false` hides it.
-  function toRow(r: unknown): Row {
-    const row = (typeof r === "object" && r !== null ? r : {}) as Record<
-      string,
-      unknown
-    >;
-    return {
-      uid: typeof row["uid"] === "string" ? row["uid"] : "",
-      ingredient:
-        typeof row["ingredient"] === "string" ? row["ingredient"] : "",
-      quantity: typeof row["quantity"] === "string" ? row["quantity"] : null,
-      aisle: typeof row["aisle"] === "string" ? row["aisle"] : null,
-      inStock: row["inStock"] !== false,
-      expirationDate:
-        typeof row["expirationDate"] === "string"
-          ? row["expirationDate"]
-          : null,
-      _busy: false,
-    };
+  // Wrap a structured pantry row in the local model. A missing `inStock` defaults to in-stock (show
+  // the item rather than hide it on a malformed field); only an explicit `false` hides it.
+  function toRow(r: PantryItemRow): Row {
+    return { ...r, inStock: r.inStock !== false, _busy: false };
   }
 
   function showToast(

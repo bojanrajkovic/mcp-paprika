@@ -20,23 +20,23 @@
     parseRecipeDetail,
     type RecipeDetailData,
   } from "../shared/recipe-detail.js";
+  import type {
+    MealRow,
+    MealTypeRef,
+    MealWeekStructured,
+  } from "../shared/server-types.js";
   import DayStrip from "./DayStrip.svelte";
   import SlotPane from "./SlotPane.svelte";
 
-  // One planned meal, denormalized by read_meal_plan: `typeName` is resolved at the server,
-  // so the widget never joins the meal-type catalog itself.
-  interface Meal {
-    uid: string;
-    name: string;
-    recipeUid: string | null;
-    date: string;
-    typeUid: string | null;
-    typeName: string | null;
-  }
-  interface TypeRef {
-    uid: string;
-    name: string;
-  }
+  // The widget view-models slice the server's own read_meal_plan output (B1), so a rename of a
+  // meal-row or type-ref field breaks this widget at compile time. One planned meal is denormalized
+  // by read_meal_plan — `typeName` is resolved server-side, so the widget never joins the meal-type
+  // catalog itself (it drops the row's `scale`, which the board doesn't render).
+  type Meal = Pick<
+    MealRow,
+    "uid" | "name" | "recipeUid" | "date" | "typeUid" | "typeName"
+  >;
+  type TypeRef = MealTypeRef;
   // A validated read_meal_plan week payload.
   interface Week {
     weekStart: string;
@@ -156,7 +156,9 @@
     if (!week) return [];
     const known = new Set(week.mealTypes.map((t) => t.uid));
     const out = week.mealTypes.map((t) => ({
-      key: t.uid,
+      // A plain-string DOM/each key (not a branded uid), so the trailing "__other" sentinel slot
+      // shares the field type.
+      key: t.uid as string,
       label: t.name,
       meals: focusedMeals.filter((m) => m.typeUid === t.uid),
     }));
@@ -315,38 +317,25 @@
       !Array.isArray(rawTypes)
     )
       return null;
+    // Shape confirmed (a `weekStart` + meals + mealTypes arrays); trust the rest as read_meal_plan's
+    // week. The type registry is taken as-is; meals narrow to the board's slice.
+    const src = data as unknown as MealWeekStructured;
     return {
-      weekStart,
-      meals: rawMeals.map(toMeal),
-      mealTypes: rawTypes
-        .map(toTypeRef)
-        .filter((t): t is TypeRef => t !== null),
+      weekStart: src.weekStart,
+      meals: src.meals.map(toMeal),
+      mealTypes: src.mealTypes,
     };
   }
 
-  function toMeal(r: unknown): Meal {
-    const o = (typeof r === "object" && r !== null ? r : {}) as Record<
-      string,
-      unknown
-    >;
+  function toMeal(r: MealRow): Meal {
     return {
-      uid: typeof o["uid"] === "string" ? o["uid"] : "",
-      name: typeof o["name"] === "string" ? o["name"] : "",
-      recipeUid: typeof o["recipeUid"] === "string" ? o["recipeUid"] : null,
-      date: typeof o["date"] === "string" ? o["date"] : "",
-      typeUid: typeof o["typeUid"] === "string" ? o["typeUid"] : null,
-      typeName: typeof o["typeName"] === "string" ? o["typeName"] : null,
+      uid: r.uid,
+      name: r.name,
+      recipeUid: r.recipeUid,
+      date: r.date,
+      typeUid: r.typeUid,
+      typeName: r.typeName,
     };
-  }
-
-  function toTypeRef(r: unknown): TypeRef | null {
-    const o = (typeof r === "object" && r !== null ? r : {}) as Record<
-      string,
-      unknown
-    >;
-    return typeof o["uid"] === "string" && typeof o["name"] === "string"
-      ? { uid: o["uid"], name: o["name"] }
-      : null;
   }
 </script>
 

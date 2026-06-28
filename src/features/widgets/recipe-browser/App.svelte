@@ -23,23 +23,29 @@
     parseRecipeDetail,
     type RecipeDetailData,
   } from "../shared/recipe-detail.js";
+  import type {
+    BrowseContext,
+    RecipeRow as ServerRecipeRow,
+  } from "../shared/server-types.js";
   import DetailStrip from "./DetailStrip.svelte";
   import RecipeRow from "./RecipeRow.svelte";
 
-  // One browse row, denormalized by list_recipes / search_recipes / discover_recipes — the same
-  // shared recipeRowSchema, so the widget renders identically whichever tool produced it.
-  interface BrowseRecipe {
-    uid: string;
-    name: string;
-    categories: string[];
-    rating: number;
-    prepTime: string | null;
-    cookTime: string | null;
-    totalTime: string | null;
-    servings: string | null;
-    photoResourceUri: string | null;
-  }
-  type Source = "list" | "search" | "discover";
+  // One browse row — a Pick of the server's shared recipe row (B1), denormalized identically by
+  // list_recipes / search_recipes / discover_recipes, so a row-field rename breaks this widget at
+  // compile time. `Source` is the browse context's own discriminant union.
+  type BrowseRecipe = Pick<
+    ServerRecipeRow,
+    | "uid"
+    | "name"
+    | "categories"
+    | "rating"
+    | "prepTime"
+    | "cookTime"
+    | "totalTime"
+    | "servings"
+    | "photoResourceUri"
+  >;
+  type Source = BrowseContext["source"];
   interface Browse {
     source: Source;
     query: string | null;
@@ -282,34 +288,28 @@
     const src = (ctx as Record<string, unknown>)["source"];
     if (src !== "list" && src !== "search" && src !== "discover") return null;
     const q = (ctx as Record<string, unknown>)["query"];
+    // Shape confirmed (a browse `context.source` + an items array); trust the rows as the server's
+    // shared recipe row and narrow each to the browse-card slice.
     return {
       source: src,
       query: typeof q === "string" && q !== "" ? q : null,
-      recipes: items.map(toRecipe),
+      recipes: (items as Array<ServerRecipeRow>).map(toRecipe),
     };
   }
 
-  function toRecipe(r: unknown): BrowseRecipe {
-    const o = (typeof r === "object" && r !== null ? r : {}) as Record<
-      string,
-      unknown
-    >;
-    const cats = Array.isArray(o["categories"])
-      ? o["categories"].filter((c): c is string => typeof c === "string")
-      : [];
+  function toRecipe(r: ServerRecipeRow): BrowseRecipe {
     return {
-      uid: typeof o["uid"] === "string" ? o["uid"] : "",
-      name: typeof o["name"] === "string" ? o["name"] : "",
-      categories: cats,
-      rating: typeof o["rating"] === "number" ? o["rating"] : 0,
-      prepTime: typeof o["prepTime"] === "string" ? o["prepTime"] : null,
-      cookTime: typeof o["cookTime"] === "string" ? o["cookTime"] : null,
-      totalTime: typeof o["totalTime"] === "string" ? o["totalTime"] : null,
-      servings: typeof o["servings"] === "string" ? o["servings"] : null,
-      photoResourceUri:
-        typeof o["photoResourceUri"] === "string"
-          ? o["photoResourceUri"]
-          : null,
+      uid: r.uid,
+      name: r.name,
+      // The one nested array the chip/filter $derived iterates (categories[0], .some) — spot-checked
+      // so a host that dropped it degrades to no-categories instead of throwing the whole list render.
+      categories: Array.isArray(r.categories) ? r.categories : [],
+      rating: r.rating,
+      prepTime: r.prepTime,
+      cookTime: r.cookTime,
+      totalTime: r.totalTime,
+      servings: r.servings,
+      photoResourceUri: r.photoResourceUri,
     };
   }
 

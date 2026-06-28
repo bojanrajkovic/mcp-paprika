@@ -16,22 +16,16 @@
     readResource,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
+  import type { CookRecipeStructured } from "../shared/server-types.js";
 
   // The ext-apps App instance, constructed in main.ts and handed in as a prop.
   let { app }: { app: App } = $props();
 
-  interface Ingredient {
-    text: string;
-    group: string | null;
-  }
-  interface Step {
-    text: string;
-    group: string | null;
-    ingredientRefs: number[];
-    produces: string | null;
-    usesIntermediate: string[];
-    phase: "prep" | "cook";
-  }
+  // The cook ingredient/step element shapes, derived from the server's own cook_recipe output type
+  // (B1) so a rename of one of their fields breaks this widget at compile time. `CookData` stays a
+  // local view-model: it flattens the server's nested `prep` budget and renames `recipe_uid`.
+  type Ingredient = CookRecipeStructured["ingredients"][number];
+  type Step = CookRecipeStructured["steps"][number];
   interface CookData {
     recipeUid: string;
     name: string;
@@ -174,23 +168,24 @@
       }
       return;
     }
-    const photoUri = d["photoResourceUri"];
-    const prepRaw = (
-      typeof d["prep"] === "object" && d["prep"] !== null ? d["prep"] : {}
-    ) as Record<string, unknown>;
-    const nonNegInt = (v: unknown): number =>
+    // Shape confirmed (uid + non-empty steps[] + ingredients[]); trust the rest as the server's
+    // cook_recipe output. `prep` is the one nested object we still soft-read — a buggy host omitting
+    // it would throw on the deref, where a missing scalar only renders blank. `nonNegInt` clamps the
+    // budget to a finite, non-negative integer the prep screen can lay out.
+    const src = d as unknown as CookRecipeStructured;
+    const nonNegInt = (v: number | undefined): number =>
       typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.round(v) : 0;
     data = {
       recipeUid: uid,
-      name: typeof d["name"] === "string" ? d["name"] : "Recipe",
-      servings: typeof d["servings"] === "string" ? d["servings"] : null,
-      totalTime: typeof d["totalTime"] === "string" ? d["totalTime"] : null,
-      prepTime: typeof d["prepTime"] === "string" ? d["prepTime"] : null,
-      prepActiveMin: nonNegInt(prepRaw["activeMin"]),
-      prepPassiveMin: nonNegInt(prepRaw["passiveWaitMin"]),
-      photoResourceUri: typeof photoUri === "string" ? photoUri : null,
-      ingredients: (d["ingredients"] as unknown[]).map(toIngredient),
-      steps: (d["steps"] as unknown[]).map(toStep),
+      name: src.name,
+      servings: src.servings,
+      totalTime: src.totalTime,
+      prepTime: src.prepTime,
+      prepActiveMin: nonNegInt(src.prep?.activeMin),
+      prepPassiveMin: nonNegInt(src.prep?.passiveWaitMin),
+      photoResourceUri: src.photoResourceUri,
+      ingredients: src.ingredients,
+      steps: src.steps.map(toStep),
     };
     mode = "review";
     cookPhase = "prep";
@@ -203,6 +198,19 @@
     phase = "ready";
     void loadHeroPhoto(data.photoResourceUri);
     void loadMealTypes();
+  }
+
+  // Spot-check the two NESTED arrays the stepper iterates ({#each} + .length) — past the receive()
+  // discriminant the payload is trusted as the cast type, but a host that dropped one of these arrays
+  // would throw on the render where a missing scalar only renders blank. Scalars stay trusted.
+  function toStep(s: Step): Step {
+    return {
+      ...s,
+      ingredientRefs: Array.isArray(s.ingredientRefs) ? s.ingredientRefs : [],
+      usesIntermediate: Array.isArray(s.usesIntermediate)
+        ? s.usesIntermediate
+        : [],
+    };
   }
 
   // Load the user's meal-type catalog (built-in + custom) for the log dropdown, falling
@@ -236,40 +244,6 @@
       "image/jpeg",
     );
     if (data?.photoResourceUri === uri) photoSrc = src;
-  }
-
-  function toIngredient(raw: unknown): Ingredient {
-    const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
-      string,
-      unknown
-    >;
-    return {
-      text: typeof r["text"] === "string" ? r["text"] : "",
-      group: typeof r["group"] === "string" ? r["group"] : null,
-    };
-  }
-  function toStep(raw: unknown): Step {
-    const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
-      string,
-      unknown
-    >;
-    const refs = Array.isArray(r["ingredientRefs"]) ? r["ingredientRefs"] : [];
-    const uses = Array.isArray(r["usesIntermediate"])
-      ? r["usesIntermediate"]
-      : [];
-    return {
-      text: typeof r["text"] === "string" ? r["text"] : "",
-      group: typeof r["group"] === "string" ? r["group"] : null,
-      ingredientRefs: refs.filter(
-        (n): n is number =>
-          typeof n === "number" && Number.isInteger(n) && n >= 0,
-      ),
-      produces: typeof r["produces"] === "string" ? r["produces"] : null,
-      usesIntermediate: uses.filter(
-        (n): n is string => typeof n === "string" && n !== "",
-      ),
-      phase: r["phase"] === "prep" ? "prep" : "cook",
-    };
   }
 
   function showToast(msg: string, kind: "error" | "info" = "info") {
