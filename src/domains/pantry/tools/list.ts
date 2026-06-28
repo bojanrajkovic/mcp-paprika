@@ -1,17 +1,10 @@
-import { z } from "zod";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { structuredResult } from "../../../shared/tools.js";
-import { pantryItemRowSchema, pantryItemToRow } from "../pantry-helpers.js";
+import { listPantryItemsOutputSchema, pantryItemToRow } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
-
-// Structured-output payload: one row per pantry item. Aisle resolves
-// through the live catalog so list and read always agree, even after an aisle rename.
-// The "" sentinels for absent quantity/aisle are normalized to null.
-export const listPantryItemsOutputSchema = z.object({ items: z.array(pantryItemRowSchema) });
 
 /**
  * `list_pantry_items` — list all pantry items. Pantry is a Data-class entity: no

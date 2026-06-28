@@ -21,6 +21,15 @@ export const pantryItemRowSchema = z.object({
 export type PantryItemRow = z.infer<typeof pantryItemRowSchema>;
 
 /**
+ * `list_pantry_items`' structured-output payload: one row per pantry item. Aisle resolves through
+ * the live catalog so list and read always agree, even after an aisle rename. The "" sentinels for
+ * absent quantity/aisle are normalized to null.
+ */
+export const listPantryItemsOutputSchema = z.object({ items: z.array(pantryItemRowSchema) });
+
+export type PantryListStructured = z.infer<typeof listPantryItemsOutputSchema>;
+
+/**
  * Structured-output payload for `add_pantry_items` — a row per newly-added item
  * (the new UIDs the model chains `update_pantry_item` / `mark_pantry_item_out_of_stock`
  * / `restock_pantry_item` on). Shares {@link pantryItemRowSchema} with `list_pantry_items`.

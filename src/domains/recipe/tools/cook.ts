@@ -6,7 +6,7 @@ import type { RecipeState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipePhotoResourceUri } from "../recipe-markdown.js";
+import { cookPrepSchema, cookRecipeOutputSchema, recipePhotoResourceUri } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // One parsed ingredient line: the canonical text plus its component section (a
@@ -60,29 +60,6 @@ const cookStepSchema = z.object({
     ),
 });
 
-// The model's split of the prep budget, surfaced on the prep screen as a real,
-// schedulable step. `activeMin` is hands-on mise-en-place; `passiveWaitMin` is the
-// unattended wait (marinate/soak/chill/rest) that, when long, must be started first.
-const cookPrepSchema = z.object({
-  activeMin: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe(
-      "Your estimate of hands-on prep minutes before first heat — knife work, measuring, making sub-components. " +
-        "Active work only; do NOT fold marinating/resting time in here.",
-    ),
-  passiveWaitMin: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe(
-      "Unattended wait BEFORE first heat that the cook must start ahead of cooking — marinating, soaking, brining, " +
-        "chilling a dough. 0 when there is none. It is surfaced on the prep screen as 'start this first', so do NOT " +
-        "include post-cook rests (resting meat, cooling): those happen after cooking and stay as cook steps.",
-    ),
-});
-
 export const cookRecipeInputSchema = z
   .object({
     recipe_uid: RecipeUidSchema.describe("UID of the recipe being cooked (from read_recipe / search_recipes)."),
@@ -98,32 +75,6 @@ export const cookRecipeInputSchema = z
   .strict();
 
 export type CookRecipeInput = z.infer<typeof cookRecipeInputSchema>;
-
-// The validated echo: the model's parse passed straight through, plus the stored
-// recipe's identity (name/servings/totalTime/prepTime/photo) so the model never retypes
-// what the store already holds. The widget renders entirely off this structured channel.
-// `prepTime` is the recipe's STATED prep (enriched from the store) — shown as a secondary
-// to the model's own `prep` estimate, which the stated value routinely under- or over-reports.
-export const cookRecipeOutputSchema = z.object({
-  recipe_uid: RecipeUidSchema,
-  name: z.string(),
-  servings: z.string().nullable(),
-  totalTime: z.string().nullable(),
-  prepTime: z.string().nullable(),
-  photoResourceUri: z.string().nullable(),
-  ingredients: z.array(z.object({ text: z.string(), group: z.string().nullable() })),
-  prep: cookPrepSchema,
-  steps: z.array(
-    z.object({
-      text: z.string(),
-      group: z.string().nullable(),
-      ingredientRefs: z.array(z.number().int()),
-      produces: z.string().nullable(),
-      usesIntermediate: z.array(z.string()),
-      phase: z.enum(["prep", "cook"]),
-    }),
-  ),
-});
 
 /**
  * The LLM-free internal-consistency check over the model's parse: the server

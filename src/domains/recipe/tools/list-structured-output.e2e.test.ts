@@ -15,10 +15,8 @@ import type { RecipeUid } from "../ids.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { callStructuredProbe } from "../../../../test/support/structured-output-probe.js";
-import { recipeToRow } from "../recipe-markdown.js";
+import { listRecipesOutputSchema, recipeToRow, searchRecipesOutputSchema } from "../recipe-markdown.js";
 import { listCategoriesOutputSchema } from "./list-categories.js";
-import { listRecipesOutputSchema } from "./list.js";
-import { searchRecipesOutputSchema } from "./search.js";
 
 // Rows spanning recipeRowSchema's axes: named + empty categories, set + null times.
 const recipeRows = [
