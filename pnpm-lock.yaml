@@ -12,8 +12,8 @@ importers:
         specifier: 0.3.0
         version: 0.3.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.26))(hono@4.12.26)(zod@3.25.76)
       '@hono/node-server':
-        specifier: 2.0.5
-        version: 2.0.5(hono@4.12.26)
+        specifier: 2.0.6
+        version: 2.0.6(hono@4.12.26)
       '@hono/otel':
         specifier: ^1.1.2
         version: 1.1.2(hono@4.12.26)
@@ -652,8 +652,8 @@ packages:
     peerDependencies:
       hono: ^4
 
-  '@hono/node-server@2.0.5':
-    resolution: {integrity: sha512-yQFvDmyDo3y6rEOJZDUYPJ49DIKTPpIk4kGvm40xx4Ejne0Pu9a1+exxPN+C1UppWK/WGZX9F++/Xs231tE86g==}
+  '@hono/node-server@2.0.6':
+    resolution: {integrity: sha512-7DeRlKG57JDBNZ5Qj2jwVdgwQy4b0tLubRLl3zCf91/rCf9i7p1V5FtW/yWibm1uUHE493ts9ZXH/7g/LQWl+g==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4
@@ -2052,6 +2052,7 @@ packages:
   git-raw-commits@5.0.1:
     resolution: {integrity: sha512-Y+csSm2GD/PCSh6Isd/WiMjNAydu0VBiG9J7EdQsNA5P9uXvLayqjmTsNlK5Gs9IhblFZqOU0yid5Il5JPoLiQ==}
     engines: {node: '>=18'}
+    deprecated: Deprecated and no longer maintained. Use @conventional-changelog/git-client instead.
     hasBin: true
 
   global-directory@5.0.0:
@@ -3347,7 +3348,7 @@ snapshots:
     dependencies:
       hono: 4.12.25
 
-  '@hono/node-server@2.0.5(hono@4.12.26)':
+  '@hono/node-server@2.0.6(hono@4.12.26)':
     dependencies:
       hono: 4.12.26
 
