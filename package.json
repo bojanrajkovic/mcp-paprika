@@ -68,7 +68,7 @@
     "hono": "4.12.27",
     "hono-rate-limiter": "^0.5.3",
     "ipaddr.js": "^2.4.0",
-    "jose": "^6.2.3",
+    "jose": "^6.2.4",
     "luxon": "^3.7.2",
     "neverthrow": "^8.2.0",
     "parse-duration": "^2.1.6",
