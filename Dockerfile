@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.25
+# syntax=docker/dockerfile:1.26
 
 # ─── Stage 1: builder ────────────────────────────────────────────────────────
 # Full Debian-based Node image so corepack/pnpm and TypeScript compilation
