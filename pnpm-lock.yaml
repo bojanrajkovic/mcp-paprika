@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@hono/mcp':
         specifier: 0.3.1
-        version: 0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.33))(hono@4.12.33)(zod@3.25.76)
+        version: 0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@4.5.4))(hono-rate-limiter@0.5.3(hono@4.12.33))(hono@4.12.33)(zod@4.5.4)
       '@hono/node-server':
         specifier: 2.0.12
         version: 2.0.12(hono@4.12.33)
@@ -19,7 +19,7 @@ importers:
         version: 1.1.2(hono@4.12.33)
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
-        version: 1.29.0(zod@3.25.76)
+        version: 1.29.0(zod@4.5.4)
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -105,8 +105,8 @@ importers:
         specifier: ^8.4.1
         version: 8.4.1
       zod:
-        specifier: ^3.25.76
-        version: 3.25.76
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       '@commitlint/cli':
         specifier: ^21.2.2
@@ -116,7 +116,7 @@ importers:
         version: 21.2.2
       '@modelcontextprotocol/ext-apps':
         specifier: 1.7.5
-        version: 1.7.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(zod@3.25.76)
+        version: 1.7.5(@modelcontextprotocol/sdk@1.29.0(zod@4.5.4))(zod@4.5.4)
       '@msw/source':
         specifier: ^0.6.1
         version: 0.6.1(msw@2.15.0(@types/node@24.13.3)(typescript@6.0.3))
@@ -3024,8 +3024,8 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.5.4:
+    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
 
 snapshots:
 
@@ -3360,13 +3360,13 @@ snapshots:
       protobufjs: 7.6.2
       yargs: 17.7.2
 
-  '@hono/mcp@0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.33))(hono@4.12.33)(zod@3.25.76)':
+  '@hono/mcp@0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@4.5.4))(hono-rate-limiter@0.5.3(hono@4.12.33))(hono@4.12.33)(zod@4.5.4)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.5.4)
       hono: 4.12.33
       hono-rate-limiter: 0.5.3(hono@4.12.33)
       pkce-challenge: 5.0.1
-      zod: 3.25.76
+      zod: 4.5.4
 
   '@hono/node-server@1.19.14(hono@4.12.32)':
     dependencies:
@@ -3536,13 +3536,13 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(zod@3.25.76)':
+  '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(zod@4.5.4))(zod@4.5.4)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.5.4)
       '@standard-schema/spec': 1.1.0
-      zod: 3.25.76
+      zod: 4.5.4
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.29.0(zod@4.5.4)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.32)
       ajv: 8.20.0
@@ -3559,8 +3559,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.5.4
+      zod-to-json-schema: 3.25.2(zod@4.5.4)
     transitivePeerDependencies:
       - supports-color
 
@@ -5560,8 +5560,8 @@ snapshots:
 
   zimmerframe@1.1.4: {}
 
-  zod-to-json-schema@3.25.2(zod@3.25.76):
+  zod-to-json-schema@3.25.2(zod@4.5.4):
     dependencies:
-      zod: 3.25.76
+      zod: 4.5.4
 
-  zod@3.25.76: {}
+  zod@4.5.4: {}
