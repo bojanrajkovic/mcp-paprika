@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@hono/mcp':
         specifier: 0.3.1
-        version: 0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.33))(hono@4.12.33)(zod@3.25.76)
+        version: 0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.4(hono@4.12.33))(hono@4.12.33)(zod@3.25.76)
       '@hono/node-server':
         specifier: 2.0.12
         version: 2.0.12(hono@4.12.33)
@@ -75,8 +75,8 @@ importers:
         specifier: 4.12.33
         version: 4.12.33
       hono-rate-limiter:
-        specifier: ^0.5.3
-        version: 0.5.3(hono@4.12.33)
+        specifier: ^0.5.4
+        version: 0.5.4(hono@4.12.33)
       ipaddr.js:
         specifier: ^2.4.0
         version: 2.4.0
@@ -2107,8 +2107,8 @@ packages:
   help-me@5.0.0:
     resolution: {integrity: sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==}
 
-  hono-rate-limiter@0.5.3:
-    resolution: {integrity: sha512-M0DxbVMpPELEzLi0AJg1XyBHLGJXz7GySjsPoK+gc5YeeBsdGDGe+2RvVuCAv8ydINiwlbxqYMNxUEyYfRji/A==}
+  hono-rate-limiter@0.5.4:
+    resolution: {integrity: sha512-P3/cscAmz1hA+MuM+Hn9gP/EyO2zWv2aXIFkVYuLZkPzrPa4oaWdVCS94vyDlsNBgeMnE/Hr2+LznIKQxrF0ng==}
     peerDependencies:
       hono: ^4.10.8
       unstorage: ^1.17.3
@@ -3360,11 +3360,11 @@ snapshots:
       protobufjs: 7.6.2
       yargs: 17.7.2
 
-  '@hono/mcp@0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.33))(hono@4.12.33)(zod@3.25.76)':
+  '@hono/mcp@0.3.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.4(hono@4.12.33))(hono@4.12.33)(zod@3.25.76)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
       hono: 4.12.33
-      hono-rate-limiter: 0.5.3(hono@4.12.33)
+      hono-rate-limiter: 0.5.4(hono@4.12.33)
       pkce-challenge: 5.0.1
       zod: 3.25.76
 
@@ -4685,7 +4685,7 @@ snapshots:
 
   help-me@5.0.0: {}
 
-  hono-rate-limiter@0.5.3(hono@4.12.33):
+  hono-rate-limiter@0.5.4(hono@4.12.33):
     dependencies:
       hono: 4.12.33
 
