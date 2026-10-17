@@ -82,6 +82,14 @@ function validateRedirectUriItems(uris: Array<string>, ctx: z.RefinementCtx, log
         path: ["redirect_uris", i],
         message: "must be a string",
       });
+    } else if (/\s/.test(uri)) {
+      // The URL parser strips whitespace, so such a URI would not round-trip
+      // through the stored client schema, breaking exact redirect matching.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["redirect_uris", i],
+        message: "must not contain whitespace",
+      });
     } else {
       try {
         new URL(uri);
