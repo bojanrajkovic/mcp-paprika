@@ -18,3 +18,6 @@ docs/test-plans/
 
 # Filled-in copy of k8s/20-secret.example.yaml — never commit real credentials.
 k8s/secret.yaml
+
+# Editor hook cache: per-session state with local absolute paths
+.impeccable/hook.cache.json
