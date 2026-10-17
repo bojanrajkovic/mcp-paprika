@@ -78,7 +78,7 @@ function validateRedirectUriItems(uris: Array<string>, ctx: z.RefinementCtx, log
     const uri = uris[i];
     if (typeof uri !== "string") {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["redirect_uris", i],
         message: "must be a string",
       });
@@ -86,7 +86,7 @@ function validateRedirectUriItems(uris: Array<string>, ctx: z.RefinementCtx, log
       // The URL parser strips whitespace, so such a URI would not round-trip
       // through the stored client schema, breaking exact redirect matching.
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["redirect_uris", i],
         message: "must not contain whitespace",
       });
@@ -96,7 +96,7 @@ function validateRedirectUriItems(uris: Array<string>, ctx: z.RefinementCtx, log
       } catch (err) {
         log?.debug({ err, uri, index: i }, "invalid redirect_uri item in DCR request");
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["redirect_uris", i],
           message: "must be a valid URL",
         });
@@ -105,7 +105,7 @@ function validateRedirectUriItems(uris: Array<string>, ctx: z.RefinementCtx, log
 
       if (!isValidRedirectUri(uri, log)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["redirect_uris", i],
           message: "must use https:// or http://localhost/127.0.0.1/[::1]",
         });
@@ -121,7 +121,7 @@ function validateResponseTypes(data: ClientMetadataFields, ctx: z.RefinementCtx)
     (!Array.isArray(data.response_types) || data.response_types.length !== 1 || data.response_types[0] !== "code")
   ) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       path: ["response_types"],
       message: "must be exactly ['code'] when present",
     });
@@ -133,7 +133,7 @@ function validateGrantTypes(data: ClientMetadataFields, ctx: z.RefinementCtx): v
   if (data.grant_types !== undefined) {
     if (!Array.isArray(data.grant_types) || data.grant_types.length === 0) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["grant_types"],
         message: "must be a non-empty array when present",
       });
@@ -144,12 +144,12 @@ function validateGrantTypes(data: ClientMetadataFields, ctx: z.RefinementCtx): v
 // Schema factory for validateRegistration: redirect_uris REQUIRED (must be present and non-empty).
 // Accepts an optional logger to emit debug records on URL parse failures.
 function makeRegistrationSchema(log?: Logger) {
-  return ClientMetadataFieldsSchema.passthrough() // Allow and preserve other RFC 7591 fields
+  return ClientMetadataFieldsSchema.loose() // Allow and preserve other RFC 7591 fields
     .superRefine((data, ctx) => {
       // Validate redirect_uris: must be present, non-empty, valid URLs with our scheme rules
       if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["redirect_uris"],
           message: "redirect_uris is required and must be a non-empty array of valid URLs",
         });
@@ -167,13 +167,13 @@ type RegistrationMetadataInput = z.infer<ReturnType<typeof makeRegistrationSchem
 // Schema factory for validateUpdate: redirect_uris OPTIONAL (whole block skipped when absent).
 // Accepts an optional logger to emit debug records on URL parse failures.
 function makeUpdateSchema(log?: Logger) {
-  return ClientMetadataFieldsSchema.passthrough() // Allow and preserve other RFC 7591 fields
+  return ClientMetadataFieldsSchema.loose() // Allow and preserve other RFC 7591 fields
     .superRefine((data, ctx) => {
       // Validate redirect_uris if present: must be non-empty with valid scheme
       if (data.redirect_uris !== undefined) {
         if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             path: ["redirect_uris"],
             message: "redirect_uris must be a non-empty array when present",
           });

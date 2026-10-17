@@ -131,7 +131,7 @@ const ItemSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
-// `.passthrough()` ignores extra top-level keys (notably Vectra's
+// `.loose()` ignores extra top-level keys (notably Vectra's
 // `metadata_config`), which is what makes an existing Vectra index.json load
 // unchanged.
 const IndexFileSchema = z
@@ -139,7 +139,7 @@ const IndexFileSchema = z
     version: z.number().int().optional(),
     items: z.array(ItemSchema),
   })
-  .passthrough();
+  .loose();
 
 type IndexData = { version: number; items: Array<IndexItem> };
 

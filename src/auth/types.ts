@@ -39,7 +39,7 @@ export type EmailVerifiedPolicy = z.infer<typeof EmailVerifiedPolicySchema>;
 // ============================================================================
 
 export const OIDCPresetSchema = z.object({
-  discoveryUrl: z.string().url().optional(),
+  discoveryUrl: z.url().optional(),
   scopes: z.array(z.string()).readonly(),
   emailVerifiedPolicy: EmailVerifiedPolicySchema,
   allowedAlgs: z.array(z.string()).readonly(),
@@ -52,9 +52,9 @@ export type OIDCPreset = z.infer<typeof OIDCPresetSchema>;
 // ============================================================================
 // All fields required after preset expansion and validation
 export const ResolvedOAuthConfigSchema = z.object({
-  publicUrl: z.string().url(),
+  publicUrl: z.url(),
   presetName: z.string().nullable(),
-  discoveryUrl: z.string().url(),
+  discoveryUrl: z.url(),
   scopes: z.array(z.string()).readonly(),
   emailVerifiedPolicy: EmailVerifiedPolicySchema,
   allowedAlgs: z.array(z.string()).readonly(),
@@ -71,7 +71,7 @@ export const ResolvedOAuthConfigSchema = z.object({
    */
   trustProxy: z.boolean(),
   allowlist: z.object({
-    emails: z.array(z.string().email()).readonly(),
+    emails: z.array(z.email()).readonly(),
     subs: z.array(z.string()).readonly(),
   }),
   /**
@@ -91,13 +91,13 @@ export type ResolvedOAuthConfig = z.infer<typeof ResolvedOAuthConfigSchema>;
 // ============================================================================
 // RFC 7591 / RFC 7592 client metadata (public client only)
 export const OAuthClientSchema = z.object({
-  clientId: z.string().uuid(),
+  clientId: z.uuid(),
   clientIdIssuedAt: z.number().int(),
   registrationAccessTokenHash: z.string(),
   tokenEndpointAuthMethod: z.literal("none"),
   grantTypes: z.array(z.enum(["authorization_code", "refresh_token"])).readonly(),
   responseTypes: z.array(z.literal("code")).readonly(),
-  redirectUris: z.array(z.string().url()).readonly(),
+  redirectUris: z.array(z.url()).readonly(),
   scope: z.string(),
   clientName: z.string().optional(),
   createdAt: z.number().int(),
@@ -116,7 +116,7 @@ export const OAuthClientWireRegisterSchema = z
     client_name: z.string().optional(),
     grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).optional(),
     response_types: z.array(z.literal("code")).optional(),
-    redirect_uris: z.array(z.string().url()),
+    redirect_uris: z.array(z.url()),
     scope: z.string().optional(),
     token_endpoint_auth_method: z.literal("none").optional(),
   })
@@ -144,17 +144,17 @@ export type OAuthClientWireRegister = z.infer<typeof OAuthClientWireRegisterSche
 // ============================================================================
 // Response includes all fields + the plaintext registration access token
 export const OAuthClientWireResponseSchema = z.object({
-  client_id: z.string().uuid(),
+  client_id: z.uuid(),
   client_id_issued_at: z.number().int(),
   client_secret_expires_at: z.literal(0), // public client, never expires
   client_name: z.string().optional(),
   grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).readonly(),
   response_types: z.array(z.literal("code")).readonly(),
-  redirect_uris: z.array(z.string().url()).readonly(),
+  redirect_uris: z.array(z.url()).readonly(),
   scope: z.string(),
   token_endpoint_auth_method: z.literal("none"),
   registration_access_token: z.string(), // plaintext RAT for management
-  registration_client_uri: z.string().url(),
+  registration_client_uri: z.url(),
 });
 
 export type OAuthClientWireResponse = z.infer<typeof OAuthClientWireResponseSchema>;
@@ -169,7 +169,7 @@ export type OAuthClientWireResponse = z.infer<typeof OAuthClientWireResponseSche
  * or a sub-allowlist hit (email-precedence semantics in `allowlist.ts`).
  */
 export const IdentitySchema = z.object({
-  email: z.string().email().nullable(),
+  email: z.email().nullable(),
   sub: z.string(),
   source: z.enum(["email", "sub"]),
 });
@@ -179,7 +179,7 @@ export const IdentitySchema = z.object({
  * string (the latter encodes "no resource binding requested"). Used by OAuthToken,
  * AuthRequestState, and AuthCodeState to enforce the same shape consistently.
  */
-export const ResourceUriSchema = z.string().url().or(z.literal(""));
+export const ResourceUriSchema = z.url().or(z.literal(""));
 
 /**
  * Fields shared by AuthRequestState (pre-callback) and AuthCodeState (post-callback).
@@ -187,10 +187,10 @@ export const ResourceUriSchema = z.string().url().or(z.literal(""));
  * only on the trailing fields (request adds claudeState+ourNonce; code adds identity).
  */
 const AuthFlowStateBaseSchema = z.object({
-  clientId: z.string().uuid(),
+  clientId: z.uuid(),
   codeChallenge: z.string(),
   codeChallengeMethod: z.literal("S256"),
-  redirectUri: z.string().url(),
+  redirectUri: z.url(),
   resource: ResourceUriSchema,
   scope: z.string(),
   createdAt: z.number().int(),
@@ -202,7 +202,7 @@ const AuthFlowStateBaseSchema = z.object({
 export const OAuthTokenSchema = z.object({
   tokenHash: z.string().regex(/^[0-9a-f]{64}$/, "tokenHash must be 64-character lowercase hex"),
   kind: z.enum(["access", "refresh"]),
-  clientId: z.string().uuid(),
+  clientId: z.uuid(),
   scope: z.string(),
   identity: IdentitySchema,
   resource: ResourceUriSchema,
@@ -256,10 +256,10 @@ export type AuthCodeState = z.infer<typeof AuthCodeStateSchema>;
 // id_token from upstream OIDC provider (e.g., Google, Azure, Keycloak)
 // email and email_verified optional because some upstreams omit them
 export const IdTokenPayloadSchema = z.object({
-  iss: z.string().url(),
+  iss: z.url(),
   sub: z.string(),
   aud: z.union([z.string(), z.array(z.string()).min(1)]),
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   email_verified: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().optional()),
   nonce: z.string(),
   exp: z.number().int(),
@@ -273,7 +273,7 @@ export type IdTokenPayload = z.infer<typeof IdTokenPayloadSchema>;
 // ============================================================================
 // Identity information extracted from upstream id_token or user info
 export const AuthInfoExtraSchema = z.object({
-  email: z.string().email().nullable(),
+  email: z.email().nullable(),
   sub: z.string(),
   source: z.enum(["email", "sub"]),
 });

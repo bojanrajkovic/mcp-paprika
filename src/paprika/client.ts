@@ -144,10 +144,10 @@ const NOT_FOUND_MESSAGE = /not found/i;
 /**
  * The per-photo read response carries a presigned `photo_url` (short-lived S3 URL)
  * for the full-resolution bytes — distinct from the catalog GET (`/photos/`), whose
- * 6-field rows carry no URL. Only `photo_url` is consumed; `.passthrough()` ignores
+ * 6-field rows carry no URL. Only `photo_url` is consumed; `.loose()` ignores
  * the rest of the echoed metadata.
  */
-const PHOTO_DOWNLOAD_SCHEMA = z.object({ photo_url: z.string().min(1) }).passthrough();
+const PHOTO_DOWNLOAD_SCHEMA = z.object({ photo_url: z.string().min(1) }).loose();
 
 function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
   return {

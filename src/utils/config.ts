@@ -70,7 +70,7 @@ export class ConfigError extends Error {
     return new ConfigError(`Cannot read ${path}: ${detail}`, "file_read_error");
   }
 
-  static validation(issues: ReadonlyArray<z.ZodIssue>): ConfigError {
+  static validation(issues: ReadonlyArray<z.core.$ZodIssue>): ConfigError {
     const lines = issues.map((issue) => {
       const path = issue.path.join(".");
       const hint = ENV_VAR_HINTS[path];
@@ -87,7 +87,7 @@ const durationField = z.union([z.string(), z.number()]).transform((val, ctx) => 
     (duration) => duration.as("milliseconds"),
     (parseErr) => {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: parseErr.reason,
       });
       return z.NEVER;
@@ -109,7 +109,7 @@ const booleanField = z.union([z.boolean(), z.string()]).transform((val, ctx) => 
   const mapped = BOOLEAN_STRINGS[val];
   if (mapped === undefined) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: `expected "true", "false", "1", or "0", got ${JSON.stringify(val)}`,
     });
     return z.NEVER;
@@ -240,7 +240,7 @@ export const paprikaConfigSchema = z
           .transform((v) => v.replace(/\/+$/, ""))
           .optional(),
         preset: z.enum(["google", "entra", "okta", "auth0", "keycloak"]).optional(),
-        discoveryUrl: z.string().url().optional(),
+        discoveryUrl: z.url().optional(),
         scopes: listField.optional(),
         emailVerifiedPolicy: z.enum(["strict", "skip", "if-present"]).optional(),
         allowedAlgs: listField.optional(),
@@ -275,7 +275,7 @@ export const paprikaConfigSchema = z
     // Check publicUrl (required when transport=http)
     if (!oauth?.publicUrl) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["oauth", "publicUrl"],
         message: "MCP_PUBLIC_URL is required when MCP_TRANSPORT=http",
       });
@@ -285,14 +285,14 @@ export const paprikaConfigSchema = z
         const url = new URL(oauth.publicUrl);
         if (url.protocol !== "https:") {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             path: ["oauth", "publicUrl"],
             message: "must be a valid https:// URL",
           });
         }
       } catch {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["oauth", "publicUrl"],
           message: "must be a valid https:// URL",
         });
@@ -304,7 +304,7 @@ export const paprikaConfigSchema = z
     const subs = oauth?.allowlist?.subs ?? [];
     if (emails.length === 0 && subs.length === 0) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["oauth", "allowlist"],
         message: "at least one of MCP_ALLOWED_EMAILS or MCP_ALLOWED_SUBS must be non-empty when MCP_TRANSPORT=http",
       });
@@ -312,7 +312,7 @@ export const paprikaConfigSchema = z
 
     if (!oauth?.preset && !oauth?.discoveryUrl) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["oauth", "preset"],
         message: "one of MCP_OIDC_PRESET or MCP_OIDC_DISCOVERY_URL must be set",
       });
@@ -320,7 +320,7 @@ export const paprikaConfigSchema = z
 
     if (!oauth?.clientId || !oauth?.clientSecret) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["oauth", oauth?.clientId ? "clientSecret" : "clientId"],
         message: "MCP_OIDC_CLIENT_ID and MCP_OIDC_CLIENT_SECRET are required when MCP_TRANSPORT=http",
       });
@@ -337,28 +337,28 @@ export const paprikaConfigSchema = z
 
     if (hasKey && reuse) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["features", "imageGen", "apiKey"],
         message: "set either IMAGE_GEN_API_KEY or IMAGE_GEN_REUSE_EMBEDDINGS_CREDS, not both",
       });
     }
     if (!hasKey && !reuse) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["features", "imageGen", "apiKey"],
         message: "image generation requires either an API key or reuseEmbeddingsCreds=true",
       });
     }
     if (reuse && !cfg.features?.embeddings) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["features", "imageGen", "reuseEmbeddingsCreds"],
         message: "reuseEmbeddingsCreds=true requires features.embeddings to be configured",
       });
     }
     if (reuse && imageGen.baseUrl !== undefined) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["features", "imageGen", "baseUrl"],
         message:
           "IMAGE_GEN_BASE_URL is ignored when reuseEmbeddingsCreds=true (the embeddings base URL is used); unset one of them",

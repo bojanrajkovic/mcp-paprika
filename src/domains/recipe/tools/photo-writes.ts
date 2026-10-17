@@ -25,7 +25,6 @@ export const uploadPhotoSourceSchema = z
     z
       .object({
         url: z
-          .string()
           .url()
           .describe(
             "HTTP(S) URL of an image. PREFERRED for web images — the server downloads and re-encodes it. " +

@@ -49,7 +49,7 @@ describe("Configuration loading", () => {
     });
 
     it("ConfigError.validation() creates error with kind 'validation'", () => {
-      const issues: z.ZodIssue[] = [];
+      const issues: z.core.$ZodIssue[] = [];
       const error = ConfigError.validation(issues);
       expect(error.kind).toBe("validation");
     });
@@ -57,9 +57,9 @@ describe("Configuration loading", () => {
 
   describe("Validation error formatting", () => {
     it("ConfigError.validation() produces human-readable formatted output", () => {
-      const mockIssues: z.ZodIssue[] = [
+      const mockIssues: z.core.$ZodIssue[] = [
         {
-          code: z.ZodIssueCode.invalid_type,
+          code: "invalid_type",
           expected: "string",
           path: ["paprika", "email"],
           message: "Invalid input: expected string, received undefined",
@@ -75,15 +75,15 @@ describe("Configuration loading", () => {
     });
 
     it("ConfigError.validation() formats multiple issues", () => {
-      const mockIssues: z.ZodIssue[] = [
+      const mockIssues: z.core.$ZodIssue[] = [
         {
-          code: z.ZodIssueCode.invalid_type,
+          code: "invalid_type",
           expected: "string",
           path: ["paprika", "email"],
           message: "Invalid input: expected string, received undefined",
         },
         {
-          code: z.ZodIssueCode.invalid_type,
+          code: "invalid_type",
           expected: "string",
           path: ["paprika", "password"],
           message: "Invalid input: expected string, received undefined",
@@ -98,9 +98,9 @@ describe("Configuration loading", () => {
     });
 
     it("ConfigError.validation() handles unknown paths without env var hints", () => {
-      const mockIssues: z.ZodIssue[] = [
+      const mockIssues: z.core.$ZodIssue[] = [
         {
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["unknown", "field"],
           message: "Invalid value",
         },
