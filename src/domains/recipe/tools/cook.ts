@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, structuredResult } from "../../../shared/tools.js";
+import { errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { cookPrepSchema, cookRecipeOutputSchema, recipePhotoResourceUri } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -31,7 +31,7 @@ const cookStepSchema = z.object({
     .nullable()
     .describe("The component this step builds (matches an ingredient group), or null when the recipe is flat."),
   ingredientRefs: z
-    .array(z.number().int().nonnegative())
+    .array(integer({ min: 0 }))
     .describe(
       "Indices into `ingredients` for the RAW ingredients this step adds fresh — not items carried in via an " +
         'intermediate. Empty when the step adds nothing new (e.g. "bake 10 minutes").',

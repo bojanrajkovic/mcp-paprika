@@ -4,6 +4,7 @@ import type { Category } from "./category/types.js";
 import type { CategoryUid } from "./ids.js";
 import type { Recipe } from "./types.js";
 
+import { integer } from "../../shared/tools.js";
 import { CategoryUidSchema, RecipeUidSchema } from "./ids.js";
 
 /**
@@ -36,7 +37,7 @@ export const recipeRowSchema = z.object({
   uid: RecipeUidSchema,
   name: z.string(),
   categories: z.array(z.string()).describe("Category names this recipe belongs to."),
-  rating: z.number().int().describe("0–5; 0 means unrated."),
+  rating: integer().describe("0–5; 0 means unrated."),
   prepTime: z.string().nullable(),
   cookTime: z.string().nullable(),
   totalTime: z.string().nullable(),
@@ -94,7 +95,7 @@ export type BrowseContext = z.infer<typeof browseContextSchema>;
 export const searchRecipesOutputSchema = z.object({
   context: browseContextSchema,
   items: z.array(recipeRowSchema),
-  total: z.number().int().nonnegative(),
+  total: integer({ min: 0 }),
 });
 
 export type RecipeSearchStructured = z.infer<typeof searchRecipesOutputSchema>;
@@ -108,8 +109,8 @@ export type RecipeSearchStructured = z.infer<typeof searchRecipesOutputSchema>;
 export const listRecipesOutputSchema = z.object({
   context: browseContextSchema,
   items: z.array(recipeRowSchema),
-  total: z.number().int().nonnegative(),
-  offset: z.number().int().nonnegative(),
+  total: integer({ min: 0 }),
+  offset: integer({ min: 0 }),
 });
 
 export type RecipeListStructured = z.infer<typeof listRecipesOutputSchema>;
@@ -129,7 +130,7 @@ export const recipeReadOutputSchema = z.object({
   name: z.string(),
   categoryUids: z.array(CategoryUidSchema).describe("Category UIDs this recipe belongs to (drives categorize_recipe)."),
   categories: z.array(z.string()).describe("Resolved category names."),
-  rating: z.number().int().describe("0–5; 0 means unrated."),
+  rating: integer().describe("0–5; 0 means unrated."),
   prepTime: z.string().nullable(),
   cookTime: z.string().nullable(),
   totalTime: z.string().nullable(),
@@ -199,23 +200,15 @@ export function recipeToReadStructured(recipe: Recipe, categoryNames: Array<stri
 // (marinate/soak/chill/rest) that, when long, must be started first. Shared by `cook_recipe`'s
 // input (the model's estimate) and output (the validated echo).
 export const cookPrepSchema = z.object({
-  activeMin: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe(
-      "Your estimate of hands-on prep minutes before first heat — knife work, measuring, making sub-components. " +
-        "Active work only; do NOT fold marinating/resting time in here.",
-    ),
-  passiveWaitMin: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe(
-      "Unattended wait BEFORE first heat that the cook must start ahead of cooking — marinating, soaking, brining, " +
-        "chilling a dough. 0 when there is none. It is surfaced on the prep screen as 'start this first', so do NOT " +
-        "include post-cook rests (resting meat, cooling): those happen after cooking and stay as cook steps.",
-    ),
+  activeMin: integer({ min: 0 }).describe(
+    "Your estimate of hands-on prep minutes before first heat — knife work, measuring, making sub-components. " +
+      "Active work only; do NOT fold marinating/resting time in here.",
+  ),
+  passiveWaitMin: integer({ min: 0 }).describe(
+    "Unattended wait BEFORE first heat that the cook must start ahead of cooking — marinating, soaking, brining, " +
+      "chilling a dough. 0 when there is none. It is surfaced on the prep screen as 'start this first', so do NOT " +
+      "include post-cook rests (resting meat, cooling): those happen after cooking and stay as cook steps.",
+  ),
 });
 
 // `cook_recipe`'s validated echo: the model's parse passed straight through, plus the stored
@@ -236,7 +229,7 @@ export const cookRecipeOutputSchema = z.object({
     z.object({
       text: z.string(),
       group: z.string().nullable(),
-      ingredientRefs: z.array(z.number().int()),
+      ingredientRefs: z.array(integer({ min: 0 })),
       produces: z.string().nullable(),
       usesIntermediate: z.array(z.string()),
       phase: z.enum(["prep", "cook"]),

@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { structuredResult } from "../../../shared/tools.js";
+import { integer, structuredResult } from "../../../shared/tools.js";
 import { CategoryUidSchema } from "../ids.js";
 import { categoryStartGuard } from "./guards.js";
 
@@ -16,7 +16,7 @@ export const listCategoriesOutputSchema = z.object({
     z.object({
       uid: CategoryUidSchema,
       name: z.string(),
-      recipeCount: z.number().int().nonnegative(),
+      recipeCount: integer({ min: 0 }),
       parentUid: CategoryUidSchema.nullable().describe("Parent category UID, or null for a top-level category."),
     }),
   ),

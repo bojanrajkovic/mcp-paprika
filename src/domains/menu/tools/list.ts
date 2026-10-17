@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { structuredResult } from "../../../shared/tools.js";
+import { integer, structuredResult } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -15,8 +15,8 @@ export const listMenusOutputSchema = z.object({
     z.object({
       uid: MenuUidSchema,
       name: z.string(),
-      itemCount: z.number().int().nonnegative(),
-      days: z.number().int().nonnegative(),
+      itemCount: integer({ min: 0 }),
+      days: integer({ min: 0 }),
     }),
   ),
 });
