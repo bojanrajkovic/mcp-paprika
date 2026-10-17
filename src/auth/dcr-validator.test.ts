@@ -250,6 +250,28 @@ describe("auth/dcr-validator: RFC 7591/7592 metadata validation", () => {
       );
     });
 
+    // The URL parser strips this whitespace, so the stored URI would not round-trip
+    // through the stored client schema's `.url()` and exact matching would diverge.
+    it.each([" https://app.com/cb", "https://app.com/cb\n", "https://app.com/c\tb"])(
+      "registration: redirect_uri=%j with whitespace rejected",
+      (uri) => {
+        const result = validateRegistration({
+          token_endpoint_auth_method: "none",
+          redirect_uris: [uri],
+          response_types: ["code"],
+          grant_types: ["authorization_code"],
+          scope: "openid",
+        });
+
+        result.match(
+          () => expect.fail("Expected Err but got Ok"),
+          (error) => {
+            expect(error.name).toBe("OAuthMetadataValidationError");
+          },
+        );
+      },
+    );
+
     it("registration: redirect_uris empty array rejected", () => {
       const result = validateRegistration({
         token_endpoint_auth_method: "none",

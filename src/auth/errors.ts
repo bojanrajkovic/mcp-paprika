@@ -100,7 +100,7 @@ export class OAuthMetadataValidationError extends Error {
   }
 
   static invalidDiscoveryDoc(
-    issues: Array<{ path: Array<string | number>; message: string }>,
+    issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>,
   ): OAuthMetadataValidationError {
     const firstIssue = issues[0];
     const path = firstIssue?.path.join(".") || "unknown";

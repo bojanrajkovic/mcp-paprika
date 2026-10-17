@@ -413,8 +413,7 @@ describe("search_recipes tool", () => {
   // ---------------------------------------------------------------------------
 
   describe("at-least-one-criterion rule", () => {
-    // The rule is enforced in the handler (not on the schema): a refined schema
-    // would be a ZodEffects, which the MCP SDK publishes with zero properties.
+    // The rule is enforced in the handler, not on the schema.
     it("an all-empty call is rejected by the handler", async () => {
       kh.seed({ recipes: [makeRecipe({ name: "X" })] });
       const text = await kh.callToolText("search_recipes", {});
@@ -440,8 +439,7 @@ describe("search_recipes tool", () => {
     });
 
     it("schema is a plain object so the SDK can publish its params", () => {
-      // Regression guard for the ZodEffects empty-published-schema bug: a refined
-      // schema has no .shape and the SDK serializes zero properties.
+      // The SDK publishes the input schema from the object's shape.
       expect(searchRecipesInputSchema.shape).toBeDefined();
       expect(Object.keys(searchRecipesInputSchema.shape)).toContain("query");
     });

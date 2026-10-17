@@ -159,7 +159,7 @@ const loggingSchema = z
     pretty: z.union([z.boolean(), z.literal("auto")]).default("auto"),
     file: z.string().optional(),
   })
-  .default({});
+  .prefault({});
 
 export const paprikaConfigSchema = z
   .object({
@@ -173,19 +173,19 @@ export const paprikaConfigSchema = z
     sync: z
       .object({
         enabled: booleanField.default(true),
-        interval: durationField.default("15m"),
+        interval: durationField.prefault("15m"),
         // Window during which a local write is shielded from sync reconciliation
         // (sync would otherwise see a stale canonical list and either delete the
         // just-written item or resurrect the just-deleted one). Cleared on
         // observation for upserts; TTL-only for deletes. See issue #57.
-        pendingWriteTtl: durationField.default("60s"),
+        pendingWriteTtl: durationField.prefault("60s"),
         // Concurrency for the N+1 recipe fetch during sync (`getRecipe` per changed
         // recipe). Default 5. Raise it to speed up a large-library cold start;
         // reliability is the primary constraint, so PaprikaClient warns above its
         // recommended max (high concurrency against one origin risks 429s). See #174.
         recipeFetchConcurrency: z.coerce.number().int().positive().default(5),
       })
-      .default({}),
+      .prefault({}),
     // Transport selection. `stdio` (default) keeps the current behavior for all
     // existing CLI clients (Claude Code, Claude Desktop, Cursor, mcp-cli). `http`
     // exposes Streamable HTTP for Claude Mobile and other HTTP-based MCP
@@ -210,7 +210,7 @@ export const paprikaConfigSchema = z
         // request routed just before deletion isn't dropped. Keep it well under
         // terminationGracePeriodSeconds (the shutdown also reserves up to
         // SHUTDOWN_TIMEOUT_MS to drain). Set 0 to disable (tests, stdio).
-        shutdownDrainMs: durationField.default("5s"),
+        shutdownDrainMs: durationField.prefault("5s"),
         // Dev-only widget preview. When true, GET /widget-preview renders a built
         // widget in a plain browser with a fake host shim driven by ?payload=, so
         // widget UI can be iterated without a real MCP host (ADR-0019). Default
@@ -219,7 +219,7 @@ export const paprikaConfigSchema = z
         // server). HTTP transport only. See docs/configuration.md.
         widgetPreview: booleanField.default(false),
       })
-      .default({}),
+      .prefault({}),
     features: z
       .object({
         replicateApiToken: z.string().min(1).optional(),
@@ -256,7 +256,7 @@ export const paprikaConfigSchema = z
             emails: listField.default([]),
             subs: listField.default([]),
           })
-          .default({}),
+          .prefault({}),
         // Redirect-origin allowlist for the confused-deputy consent gate (#147).
         // Raw operator-supplied strings (origins or full redirect URLs); they are
         // normalized to canonical origins and fail-fast-validated in

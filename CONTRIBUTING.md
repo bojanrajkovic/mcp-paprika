@@ -53,7 +53,6 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 - **Hooks (lefthook):** pre-commit runs oxlint `--fix` then oxfmt over staged files — sequentially (both rewrite files, so they can't race) and both auto-restaging; commit-msg runs commitlint; pre-push runs `pnpm typecheck` and `pnpm test`. Do not bypass them.
 - **Squash-merge** — the PR body becomes the commit body, so write it as "what shipped": a one- or two-sentence lead (no `## Summary`) then detail. Transient verification (test plans, screenshots) goes in a PR comment, not the body.
 - **Dependencies** — add with `pnpm add` (latest stable); do not hand-pin. Renovate keeps existing pins current.
-- **Held upgrade:** the Zod 4 major (`renovate/zod-4.x`) is intentionally **not** merged until `@modelcontextprotocol/sdk` 2.0 ships — the SDK peer-depends on Zod 3 internals, so upgrading first would break the dependency chain. Renovate keeps rebasing that branch; the churn is expected, not a signal to land it.
 
 ## CI
 

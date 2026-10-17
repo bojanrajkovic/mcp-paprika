@@ -73,8 +73,8 @@ function wireKeys(entry: { requestBody: unknown; responseBody: unknown }, source
   return [...keySet].sort();
 }
 
-function schemaInputKeys(schema: { innerType: () => { shape: Record<string, unknown> } }): string[] {
-  return Object.keys(schema.innerType().shape).sort();
+function schemaInputKeys(schema: { in: { shape: Record<string, unknown> } }): string[] {
+  return Object.keys(schema.in.shape).sort();
 }
 
 async function capturePostBody(

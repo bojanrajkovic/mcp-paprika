@@ -18,7 +18,7 @@ import {
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType } from "zod";
 
 import type { Aisle } from "../domains/aisle/types.js";
 import type { GroceryIngredient } from "../domains/grocery/grocery-ingredient/types.js";
@@ -740,7 +740,7 @@ export class PaprikaClient {
   private request<T>(
     method: "GET" | "POST",
     url: string,
-    schema: ZodType<T, ZodTypeDef, unknown>,
+    schema: ZodType<T, unknown>,
     body?: FormData | URLSearchParams,
   ): ResultAsync<T, PaprikaClientError> {
     const execute = async (ctx: IRetryContext): Promise<T> => {

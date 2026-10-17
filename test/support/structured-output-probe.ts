@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ZodTypeAny } from "zod";
+import type { ZodType } from "zod";
 
 import type { DomainCtx, Infra } from "../../src/kernel/registry.js";
 
@@ -20,7 +20,10 @@ import { connectInMemoryMcp } from "./in-memory-mcp.js";
  * config and never runs `validateToolOutput`). A non-error result means the SDK
  * accepted the schema and the payload; an `isError` result is the SDK's rejection.
  */
-export async function callStructuredProbe(outputSchema: ZodTypeAny, structured: Record<string, unknown>) {
+export async function callStructuredProbe(
+  outputSchema: ZodType<Record<string, unknown>>,
+  structured: Record<string, unknown>,
+) {
   const server = buildBrandedServer();
   const tool = defineTool(
     {

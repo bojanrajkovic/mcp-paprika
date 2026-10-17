@@ -44,11 +44,11 @@ describe("sweepOnce", () => {
   it("sweepOnce removes a client with lastTokenActivityAt older than 90 days", async () => {
     const clock = { v: 1_700_000_000 };
     const staleClient = makeOAuthClient({
-      clientId: "00000000-0000-0000-0000-000000000001",
+      clientId: "00000000-0000-4000-8000-000000000001",
       lastTokenActivityAt: clock.v - 91 * 86400,
     });
     const freshClient = makeOAuthClient({
-      clientId: "00000000-0000-0000-0000-000000000002",
+      clientId: "00000000-0000-4000-8000-000000000002",
       lastTokenActivityAt: clock.v - 10 * 86400,
     });
     await cache.oauthClients.put(staleClient);
@@ -70,14 +70,14 @@ describe("sweepOnce", () => {
     const result = (await cleanup.sweepOnce())._unsafeUnwrap();
 
     expect(result.clientsRemoved).toBe(1);
-    expect((await cache.oauthClients.get("00000000-0000-0000-0000-000000000001"))._unsafeUnwrap()).toBeNull();
-    expect((await cache.oauthClients.get("00000000-0000-0000-0000-000000000002"))._unsafeUnwrap()).not.toBeNull();
+    expect((await cache.oauthClients.get("00000000-0000-4000-8000-000000000001"))._unsafeUnwrap()).toBeNull();
+    expect((await cache.oauthClients.get("00000000-0000-4000-8000-000000000002"))._unsafeUnwrap()).not.toBeNull();
   });
 
   it("stale-client deletion cascades — all tokens with matching clientId removed", async () => {
     const clock = { v: 1_700_000_000 };
-    const staleClientId = "00000000-0000-0000-0000-000000000010";
-    const freshClientId = "00000000-0000-0000-0000-000000000011";
+    const staleClientId = "00000000-0000-4000-8000-000000000010";
+    const freshClientId = "00000000-0000-4000-8000-000000000011";
 
     const staleClient = makeOAuthClient({ clientId: staleClientId, lastTokenActivityAt: clock.v - 91 * 86400 });
     const freshClient = makeOAuthClient({ clientId: freshClientId, lastTokenActivityAt: clock.v - 5 * 86400 });
@@ -124,7 +124,7 @@ describe("sweepOnce", () => {
   it("sweepOnce is idempotent — second run on the same state is a no-op", async () => {
     const clock = { v: 1_700_000_000 };
     const staleClient = makeOAuthClient({
-      clientId: "00000000-0000-0000-0000-000000000020",
+      clientId: "00000000-0000-4000-8000-000000000020",
       lastTokenActivityAt: clock.v - 91 * 86400,
     });
     await cache.oauthClients.put(staleClient);
@@ -214,7 +214,7 @@ describe("sweepOnce", () => {
     // tokens indefinitely between cascade ticks. This sweep is the bounding
     // mechanism.
     const clock = { v: 1_700_000_000 };
-    const activeClientId = "00000000-0000-0000-0000-000000000030";
+    const activeClientId = "00000000-0000-4000-8000-000000000030";
     await cache.oauthClients.put(makeOAuthClient({ clientId: activeClientId, lastTokenActivityAt: clock.v - 86400 }));
 
     // Expired access token belonging to the active client — should be removed.
@@ -268,7 +268,7 @@ describe("sweepOnce", () => {
     // 10-min TTL store on the same injected clock.
     const pending = new PendingAuthorizationStore({ ttlMs: 600_000, now: () => clock.v * 1000 });
     pending.put("stale-ticket", {
-      clientId: "00000000-0000-0000-0000-000000000050",
+      clientId: "00000000-0000-4000-8000-000000000050",
       codeChallenge: "c",
       codeChallengeMethod: "S256",
       redirectUri: "https://paprika-sync.app/cb",
@@ -301,7 +301,7 @@ describe("sweepOnce", () => {
     // duplicate the disk op. Assert tokensRemoved (cascade) covers it and
     // expiredTokensRemoved (orphan sweep) does not.
     const clock = { v: 1_700_000_000 };
-    const staleClientId = "00000000-0000-0000-0000-000000000040";
+    const staleClientId = "00000000-0000-4000-8000-000000000040";
     await cache.oauthClients.put(
       makeOAuthClient({ clientId: staleClientId, lastTokenActivityAt: clock.v - 91 * 86400 }),
     );
@@ -337,7 +337,7 @@ describe("sweepOnce", () => {
     // bounded /authorize-path stores unswept for another interval.
     const clock = { v: 1_700_000_000 };
     await cache.oauthClients.put(
-      makeOAuthClient({ clientId: "00000000-0000-0000-0000-000000000050", lastTokenActivityAt: clock.v - 91 * 86400 }),
+      makeOAuthClient({ clientId: "00000000-0000-4000-8000-000000000050", lastTokenActivityAt: clock.v - 91 * 86400 }),
     );
     await cache.flush();
 
