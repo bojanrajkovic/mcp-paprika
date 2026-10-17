@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.6.2...v1.6.3) (2026-10-17)
+
+
+### Bug Fixes
+
+* **deps:** update dependencies for published security advisories, including a Critical in `proxy-addr`; this also unblocks the container image the 1.6.2 release couldn't publish
+
 ## [1.6.2](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.6.1...v1.6.2) (2026-10-17)
 
 
