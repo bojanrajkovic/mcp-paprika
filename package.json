@@ -44,7 +44,7 @@
     "typecheck:widgets": "svelte-check --tsconfig ./tsconfig.widgets.json --fail-on-warnings"
   },
   "dependencies": {
-    "@hono/mcp": "0.3.1",
+    "@hono/mcp": "0.3.2",
     "@hono/node-server": "2.0.12",
     "@hono/otel": "^1.1.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
