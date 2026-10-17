@@ -33,7 +33,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage, nowSeconds, REFRESH_TOKE
 
 function makeTokenStoreInput(overrides?: Partial<Parameters<TokenStore["issueAccessRefreshPair"]>[0]>) {
   return {
-    clientId: "00000000-0000-0000-0000-000000000001",
+    clientId: "00000000-0000-4000-8000-000000000001",
     identity: makeVerifiedIdentity(),
     scope: "read write",
     resource: "https://m.example.com",
@@ -328,7 +328,7 @@ describe("TokenStore", () => {
     });
 
     it("returns invalid_grant when refresh token is missing/invalid", async () => {
-      const result = await store.rotateRefresh("mcp_rt_doesnotexist", "00000000-0000-0000-0000-000000000001");
+      const result = await store.rotateRefresh("mcp_rt_doesnotexist", "00000000-0000-4000-8000-000000000001");
 
       const errorCode = result.match(
         () => null,
@@ -340,10 +340,10 @@ describe("TokenStore", () => {
     it("cross-client refresh: requesting client ≠ stored clientId → invalid_grant (no rotation)", async () => {
       // A registered client must not be able to rotate another client's refresh
       // token — the stored token's clientId must match the requesting client.
-      const ownerInput = makeTokenStoreInput({ clientId: "00000000-0000-0000-0000-000000000001" });
+      const ownerInput = makeTokenStoreInput({ clientId: "00000000-0000-4000-8000-000000000001" });
       const { refresh } = (await store.issueAccessRefreshPair(ownerInput))._unsafeUnwrap();
 
-      const result = await store.rotateRefresh(refresh.plaintext, "00000000-0000-0000-0000-000000000002");
+      const result = await store.rotateRefresh(refresh.plaintext, "00000000-0000-4000-8000-000000000002");
 
       const errorCode = result.match(
         () => null,
@@ -449,8 +449,8 @@ describe("TokenStore", () => {
 
   describe("removeAllForClient", () => {
     it("removes all tokens with matching clientId; leaves other clients' tokens intact", async () => {
-      const client1 = "00000000-0000-0000-0000-000000000001";
-      const client2 = "00000000-0000-0000-0000-000000000002";
+      const client1 = "00000000-0000-4000-8000-000000000001";
+      const client2 = "00000000-0000-4000-8000-000000000002";
 
       const input1 = makeTokenStoreInput({ clientId: client1 });
       const input2 = makeTokenStoreInput({ clientId: client2 });
@@ -536,7 +536,7 @@ describe("TokenStore", () => {
     it("auth-request-store entries do NOT persist (new instance is empty)", () => {
       const store1 = new AuthRequestStore();
       store1.put("state-1", {
-        clientId: "00000000-0000-0000-0000-000000000001",
+        clientId: "00000000-0000-4000-8000-000000000001",
         codeChallenge: "challenge-1",
         codeChallengeMethod: "S256" as const,
         redirectUri: "https://example.com/callback",
@@ -555,7 +555,7 @@ describe("TokenStore", () => {
     it("auth-code-store entries do NOT persist", () => {
       const store1 = new AuthCodeStore();
       store1.put("code-1", {
-        clientId: "00000000-0000-0000-0000-000000000001",
+        clientId: "00000000-0000-4000-8000-000000000001",
         codeChallenge: "challenge-1",
         codeChallengeMethod: "S256" as const,
         redirectUri: "https://example.com/callback",

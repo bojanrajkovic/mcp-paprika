@@ -24,7 +24,7 @@ export function makeVerifiedIdentity(overrides?: Partial<VerifiedIdentity>): Ver
  * functions below add their schema-specific fields and merge caller overrides.
  */
 const SHARED_STATE_DEFAULTS = {
-  clientId: "00000000-0000-0000-0000-000000000001",
+  clientId: "00000000-0000-4000-8000-000000000001",
   codeChallenge: "dGVzdC1jb2RlLWNoYWxsZW5nZS10ZXN0LWNvZGUtY2hhbGxlbmdl",
   codeChallengeMethod: "S256",
   redirectUri: "http://localhost:3000/callback",

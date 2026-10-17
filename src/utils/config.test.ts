@@ -61,16 +61,15 @@ describe("Configuration loading", () => {
         {
           code: z.ZodIssueCode.invalid_type,
           expected: "string",
-          received: "undefined",
           path: ["paprika", "email"],
-          message: "Required",
+          message: "Invalid input: expected string, received undefined",
         },
       ];
 
       const error = ConfigError.validation(mockIssues);
       expect(error.reason).toContain("Configuration validation failed:");
       expect(error.reason).toContain("paprika.email");
-      expect(error.reason).toContain("Required");
+      expect(error.reason).toContain("Invalid input: expected string, received undefined");
       expect(error.reason).toContain("(set via PAPRIKA_EMAIL)");
       expect(error.reason).toMatch(/^\s*-\s+paprika\.email/m);
     });
@@ -80,16 +79,14 @@ describe("Configuration loading", () => {
         {
           code: z.ZodIssueCode.invalid_type,
           expected: "string",
-          received: "undefined",
           path: ["paprika", "email"],
-          message: "Required",
+          message: "Invalid input: expected string, received undefined",
         },
         {
           code: z.ZodIssueCode.invalid_type,
           expected: "string",
-          received: "undefined",
           path: ["paprika", "password"],
-          message: "Required",
+          message: "Invalid input: expected string, received undefined",
         },
       ];
 

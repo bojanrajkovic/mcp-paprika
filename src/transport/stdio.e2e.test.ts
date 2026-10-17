@@ -108,10 +108,9 @@ describe("MCP Server end-to-end round-trip", () => {
       expect(typeof tool.description).toBe("string");
     });
 
-    // Every tool must publish a non-empty parameter schema. Regression guard for the
-    // ZodEffects bug: a `.refine()`/`.superRefine()` inputSchema serializes to zero
-    // properties, so the model would see the tool as taking no arguments. search_recipes
-    // (which takes query/ingredients/match/maxPrep/maxCook/maxTotal/limit) is the canary.
+    // Tools must publish their parameters, or the model sees a tool that takes no
+    // arguments. search_recipes (query/ingredients/match/maxPrep/maxCook/maxTotal/limit)
+    // is the canary.
     const search = result.tools.find((t) => t.name === "search_recipes");
     expect(search).toBeDefined();
     const searchSchema = search!.inputSchema as { properties?: Record<string, unknown> };

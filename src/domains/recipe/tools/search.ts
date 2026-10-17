@@ -32,11 +32,8 @@ export const searchRecipesInputSchema = z
       .default(20)
       .describe("Maximum number of results to return (default: 20, max: 50)"),
   })
-  // Plain `.strict()` — NOT `.superRefine`/`.refine`. A refined schema is a
-  // ZodEffects, which the MCP SDK serializes to an EMPTY published inputSchema
-  // (it reads `.shape`, which only a plain object has), so the model would see
-  // search_recipes as taking no arguments. The "at least one criterion" rule is
-  // therefore enforced at runtime in the handler, not on the schema.
+  // The "at least one criterion" rule is enforced at runtime in the handler,
+  // not on the schema, so the rejection carries the handler's remediation hint.
   .strict();
 
 /**

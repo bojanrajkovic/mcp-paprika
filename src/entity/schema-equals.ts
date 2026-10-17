@@ -28,8 +28,7 @@ import type { z } from "zod";
 export function makeSchemaEquals<Shape extends z.ZodRawShape>(
   schema: z.ZodObject<Shape>,
 ): (a: z.infer<z.ZodObject<Shape>>, b: z.infer<z.ZodObject<Shape>>) => boolean {
-  const keys = Object.keys(schema.shape).filter((key) => key !== "deleted") as ReadonlyArray<
-    keyof z.infer<z.ZodObject<Shape>>
-  >;
-  return (a, b) => keys.every((key) => isDeepStrictEqual(a[key], b[key]));
+  const keys = Object.keys(schema.shape).filter((key) => key !== "deleted");
+  return (a: Readonly<Record<string, unknown>>, b: Readonly<Record<string, unknown>>) =>
+    keys.every((key) => isDeepStrictEqual(a[key], b[key]));
 }
