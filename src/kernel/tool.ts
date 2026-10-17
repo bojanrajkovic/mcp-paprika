@@ -2,7 +2,7 @@ import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { context, trace } from "@opentelemetry/api";
 import type { Result } from "neverthrow";
-import type { ZodRawShape, ZodType, ZodTypeAny } from "zod";
+import type { ZodRawShape, ZodType } from "zod";
 
 import type { TypedCallToolResult } from "../shared/tools.js";
 import type { DomainCtx, DomainId } from "./registry.js";
@@ -20,7 +20,7 @@ import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
  * tool surface by importing the tool modules and reading `spec`, with no kernel
  * boot and no `McpServer` introspection.
  *
- * `inputSchema` is `ZodRawShape | ZodTypeAny`, exactly the two forms the SDK's
+ * `inputSchema` is `ZodRawShape | ZodType`, exactly the two forms the SDK's
  * `registerTool` accepts: a raw shape (`{ field: z.string(), … }` — most tools)
  * OR a whole Zod object (the `.strict()` write schemas, where `.strict()` is
  * load-bearing and `.shape` would discard it). The generic `I` threads that form
@@ -55,7 +55,7 @@ import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
  * the widget surface is additive.
  */
 export interface ToolSpec<
-  I extends ZodRawShape | ZodTypeAny = ZodRawShape | ZodTypeAny,
+  I extends ZodRawShape | ZodType = ZodRawShape | ZodType,
   O extends Record<string, unknown> | void = void,
 > {
   readonly name: string;
@@ -88,7 +88,7 @@ export interface ToolSpec<
  * tool annotates the third generic to reach its module's commit chokepoints.
  */
 export interface ToolDef<State, Deps extends DomainId, Writes = Record<never, never>> {
-  readonly spec: ToolSpec<ZodRawShape | ZodTypeAny, Record<string, unknown> | void>;
+  readonly spec: ToolSpec<ZodRawShape | ZodType, Record<string, unknown> | void>;
   register(ctx: DomainCtx<State, Deps, Writes>): void;
 }
 
@@ -134,14 +134,14 @@ type ErasedToolCallback = (args: unknown, extra: unknown) => CallToolResult | Pr
  * `NoInfer<O>` on the return is load-bearing: `O` must infer from `spec.outputSchema`
  * (the `ToolSpec<I, O>` argument) BEFORE the body is checked, never FROM the body. With
  * a still-inferrable `O`, TypeScript checks the handler in function-position, where the
- * RETURN type is compared bivariantly — and a broad `CallToolResult` (its `.passthrough()`
+ * RETURN type is compared bivariantly — and a broad `CallToolResult` (its `.loose()`
  * index signature `[k: string]: unknown` weakly "satisfies" `structuredContent: O`) slips
  * through, so a handler returning `commitFailure(...)` without `structuredContent`, or any
  * bare `CallToolResult`, would wrongly compile. Pinning `O` first makes each `return` a
  * strict direct-assignment check against the concrete `TypedCallToolResult<O>`, closing
  * that hole. The compile-time negatives are pinned in `tool.type.test.ts`.
  */
-type TypedToolBody<I extends ZodRawShape | ZodTypeAny, O extends Record<string, unknown> | void> =
+type TypedToolBody<I extends ZodRawShape | ZodType, O extends Record<string, unknown> | void> =
   ToolCallback<I> extends (args: infer A, extra: infer E) => unknown
     ? (args: A, extra: E) => TypedCallToolResult<NoInfer<O>> | Promise<TypedCallToolResult<NoInfer<O>>>
     : never;
@@ -245,7 +245,7 @@ function loggableString(value: string): string {
  * `outputSchema` and the `ui` → `_meta` UI-resource mapping.
  */
 export function defineTool<
-  I extends ZodRawShape | ZodTypeAny,
+  I extends ZodRawShape | ZodType,
   O extends Record<string, unknown> | void,
   State,
   Deps extends DomainId,
@@ -255,7 +255,7 @@ export function defineTool<
   handler: (ctx: DomainCtx<State, Deps, Writes>) => TypedToolBody<I, O>,
 ): ToolDef<State, Deps, Writes>;
 export function defineTool<
-  I extends ZodRawShape | ZodTypeAny,
+  I extends ZodRawShape | ZodType,
   O extends Record<string, unknown> | void,
   State,
   Deps extends DomainId,
@@ -266,7 +266,7 @@ export function defineTool<
   handler: (ctx: DomainCtx<State, Deps, Writes>) => TypedToolBody<I, O>,
 ): ToolDef<State, Deps, Writes>;
 export function defineTool<
-  I extends ZodRawShape | ZodTypeAny,
+  I extends ZodRawShape | ZodType,
   O extends Record<string, unknown> | void,
   State,
   Deps extends DomainId,

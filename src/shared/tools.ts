@@ -257,7 +257,7 @@ export function commitFailure(
  * natural phrasing is "Ingredient name fuzzy match", not "Pantry item ingredient
  * fuzzy match").
  */
-export function uidOrTextLookupSchema<UidSchema extends z.ZodTypeAny, TextKey extends string>(config: {
+export function uidOrTextLookupSchema<UidSchema extends z.ZodType, TextKey extends string>(config: {
   readonly uidSchema: UidSchema;
   readonly textKey: TextKey;
   readonly entityLabel: string;

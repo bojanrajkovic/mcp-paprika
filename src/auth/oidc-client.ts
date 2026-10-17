@@ -24,11 +24,11 @@ import { type IdTokenPayload, IdTokenPayloadSchema } from "./types.js";
 // ============================================================================
 
 const DiscoveryDocSchema = z.object({
-  issuer: z.string().url(),
-  authorization_endpoint: z.string().url(),
-  token_endpoint: z.string().url(),
-  jwks_uri: z.string().url(),
-  userinfo_endpoint: z.string().url().optional(),
+  issuer: z.url(),
+  authorization_endpoint: z.url(),
+  token_endpoint: z.url(),
+  jwks_uri: z.url(),
+  userinfo_endpoint: z.url().optional(),
   id_token_signing_alg_values_supported: z.array(z.string()).min(1),
   response_types_supported: z.array(z.string()).optional(),
   scopes_supported: z.array(z.string()).optional(),
