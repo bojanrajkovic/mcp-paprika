@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.6.1...v1.6.2) (2026-10-17)
+
+
+### Bug Fixes
+
+* **paprika:** compute recipe content hashes locally so edits reach already-synced Paprika clients ([#446](https://github.com/bojanrajkovic/mcp-paprika/issues/446))
+
 ## [1.6.1](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.6.0...v1.6.1) (2026-06-07)
 
 
