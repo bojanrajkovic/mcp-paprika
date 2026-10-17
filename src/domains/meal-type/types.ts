@@ -47,12 +47,10 @@ export const MealTypeSchema = z
     export_time: z.number().int().nonnegative(),
     deleted: z.boolean().optional().default(false),
   })
-  .transform(
-    ({ order_flag, original_type, export_all_day, export_time, ...rest }): MealType => ({
-      ...rest,
-      orderFlag: order_flag,
-      originalType: original_type,
-      exportAllDay: export_all_day,
-      exportTime: export_time,
-    }),
-  );
+  .transform(({ order_flag, original_type, export_all_day, export_time, ...rest }): MealType => ({
+    ...rest,
+    orderFlag: order_flag,
+    originalType: original_type,
+    exportAllDay: export_all_day,
+    exportTime: export_time,
+  }));

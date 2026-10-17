@@ -37,11 +37,9 @@ export const GroceryListSchema = z
     reminders_list: z.string(),
     deleted: z.boolean().optional().default(false),
   })
-  .transform(
-    ({ order_flag, is_default, reminders_list, ...rest }): GroceryList => ({
-      ...rest,
-      orderFlag: order_flag,
-      isDefault: is_default,
-      remindersList: reminders_list,
-    }),
-  );
+  .transform(({ order_flag, is_default, reminders_list, ...rest }): GroceryList => ({
+    ...rest,
+    orderFlag: order_flag,
+    isDefault: is_default,
+    remindersList: reminders_list,
+  }));

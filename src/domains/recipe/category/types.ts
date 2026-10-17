@@ -34,10 +34,8 @@ export const CategorySchema = z
     order_flag: z.number().int(),
     parent_uid: CategoryUidSchema.nullable(),
   })
-  .transform(
-    ({ order_flag, parent_uid, ...rest }): Category => ({
-      ...rest,
-      orderFlag: order_flag,
-      parentUid: parent_uid,
-    }),
-  );
+  .transform(({ order_flag, parent_uid, ...rest }): Category => ({
+    ...rest,
+    orderFlag: order_flag,
+    parentUid: parent_uid,
+  }));

@@ -52,11 +52,9 @@ export const GroceryItemSchema = z
     recipe: z.string().nullable(),
     separate: z.boolean(),
   })
-  .transform(
-    ({ aisle_uid, list_uid, order_flag, ...rest }): GroceryItem => ({
-      ...rest,
-      aisleUid: aisle_uid ?? NO_AISLE_UID,
-      listUid: list_uid,
-      orderFlag: order_flag,
-    }),
-  );
+  .transform(({ aisle_uid, list_uid, order_flag, ...rest }): GroceryItem => ({
+    ...rest,
+    aisleUid: aisle_uid ?? NO_AISLE_UID,
+    listUid: list_uid,
+    orderFlag: order_flag,
+  }));

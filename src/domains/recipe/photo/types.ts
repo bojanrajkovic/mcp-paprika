@@ -48,13 +48,11 @@ export const PhotoSchema = z
     hash: z.string(),
     deleted: z.boolean().optional().default(false),
   })
-  .transform(
-    ({ recipe_uid, order_flag, ...rest }): Photo => ({
-      ...rest,
-      recipeUid: recipe_uid,
-      orderFlag: order_flag,
-    }),
-  );
+  .transform(({ recipe_uid, order_flag, ...rest }): Photo => ({
+    ...rest,
+    recipeUid: recipe_uid,
+    orderFlag: order_flag,
+  }));
 
 // photoToApiPayload — inverse of PhotoSchema's read transform. Emits the seven
 // snake_case fields the Paprika Cloud Sync API expects on a photo POST. Exported
