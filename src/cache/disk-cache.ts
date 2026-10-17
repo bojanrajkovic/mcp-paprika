@@ -318,8 +318,8 @@ export class DiskCache<T> {
    */
   protected _locked<R>(method: string, body: () => ResultAsync<R, CacheError>): ResultAsync<R, CacheError> {
     return ResultAsync.fromPromise(
-      this._mutex.runExclusive(
-        async (): Promise<Result<R, CacheError>> => this._requireInit(method).asyncAndThen(body),
+      this._mutex.runExclusive(async (): Promise<Result<R, CacheError>> =>
+        this._requireInit(method).asyncAndThen(body),
       ),
       cacheError(method),
     ).andThen((r) => r);

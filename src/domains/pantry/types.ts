@@ -51,13 +51,11 @@ export const PantryItemSchema = z
     notes: z.string().nullable(),
     deleted: z.boolean().optional().default(false),
   })
-  .transform(
-    ({ aisle_uid, expiration_date, has_expiration, in_stock, purchase_date, ...rest }): PantryItem => ({
-      ...rest,
-      aisleUid: aisle_uid ?? NO_AISLE_UID,
-      expirationDate: expiration_date,
-      hasExpiration: has_expiration,
-      inStock: in_stock,
-      purchaseDate: purchase_date,
-    }),
-  );
+  .transform(({ aisle_uid, expiration_date, has_expiration, in_stock, purchase_date, ...rest }): PantryItem => ({
+    ...rest,
+    aisleUid: aisle_uid ?? NO_AISLE_UID,
+    expirationDate: expiration_date,
+    hasExpiration: has_expiration,
+    inStock: in_stock,
+    purchaseDate: purchase_date,
+  }));

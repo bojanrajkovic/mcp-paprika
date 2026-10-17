@@ -47,15 +47,13 @@ export const MenuItemSchema = z
     order_flag: z.number().int(),
     deleted: z.boolean().optional().default(false),
   })
-  .transform(
-    ({ menu_uid, recipe_uid, type_uid, order_flag, ...rest }): MenuItem => ({
-      ...rest,
-      menuUid: menu_uid,
-      recipeUid: recipe_uid,
-      typeUid: type_uid,
-      orderFlag: order_flag,
-    }),
-  );
+  .transform(({ menu_uid, recipe_uid, type_uid, order_flag, ...rest }): MenuItem => ({
+    ...rest,
+    menuUid: menu_uid,
+    recipeUid: recipe_uid,
+    typeUid: type_uid,
+    orderFlag: order_flag,
+  }));
 
 // menuItemToApiPayload — inverse of MenuItemSchema's read transform. Accepts the
 // camelCase MenuItem shape and emits the snake_case wire payload.

@@ -30,9 +30,7 @@ export const GroceryIngredientSchema = z
     aisle_uid: AisleUidRef.nullable(),
     deleted: z.boolean().optional().default(false),
   })
-  .transform(
-    ({ aisle_uid, ...rest }): GroceryIngredient => ({
-      ...rest,
-      aisleUid: aisle_uid ?? NO_AISLE_UID,
-    }),
-  );
+  .transform(({ aisle_uid, ...rest }): GroceryIngredient => ({
+    ...rest,
+    aisleUid: aisle_uid ?? NO_AISLE_UID,
+  }));

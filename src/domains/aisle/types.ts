@@ -30,9 +30,7 @@ export const AisleSchema = z
     order_flag: z.number().int(),
     deleted: z.boolean().optional().default(false),
   })
-  .transform(
-    ({ order_flag, ...rest }): Aisle => ({
-      ...rest,
-      orderFlag: order_flag,
-    }),
-  );
+  .transform(({ order_flag, ...rest }): Aisle => ({
+    ...rest,
+    orderFlag: order_flag,
+  }));

@@ -113,15 +113,13 @@ export const MealSchema = z
       .nullish()
       .transform((v) => v ?? false),
   })
-  .transform(
-    ({ recipe_uid, type_uid, order_flag, is_ingredient, ...rest }): Meal => ({
-      ...rest,
-      recipeUid: recipe_uid,
-      typeUid: type_uid,
-      orderFlag: order_flag,
-      isIngredient: is_ingredient,
-    }),
-  );
+  .transform(({ recipe_uid, type_uid, order_flag, is_ingredient, ...rest }): Meal => ({
+    ...rest,
+    recipeUid: recipe_uid,
+    typeUid: type_uid,
+    orderFlag: order_flag,
+    isIngredient: is_ingredient,
+  }));
 
 // mealToApiPayload — inverse of MealSchema's read transform. Accepts the camelCase
 // Meal shape and emits the snake_case wire payload expected by the Paprika Cloud Sync API.
