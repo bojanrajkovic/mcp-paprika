@@ -55,7 +55,8 @@ function setup(opts?: {
     ...opts?.generated,
   };
   const generate = opts?.generate ?? vi.fn().mockResolvedValue(generated);
-  const uploadPhoto = vi.fn().mockResolvedValue(undefined);
+  // Mirrors the real client: uploadPhoto returns the hash-stamped recipe (see client.test.ts).
+  const uploadPhoto = vi.fn(async (recipe: Recipe): Promise<Recipe> => recipe);
   // restyle re-fetches authoritative recipe state for the freshest photoUrl.
   const getRecipe = vi.fn().mockResolvedValue(recipe);
 
@@ -195,7 +196,7 @@ describe("generate_photo", () => {
     const ctx = makeCtx(store, server, {
       photoStore,
       client: fromAny({
-        uploadPhoto: vi.fn().mockResolvedValue(undefined),
+        uploadPhoto: vi.fn(async (recipe: Recipe): Promise<Recipe> => recipe),
         getRecipe: vi.fn().mockResolvedValue(fresh),
         notifySync: vi.fn().mockResolvedValue(undefined),
       }),

@@ -54,9 +54,10 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
           const warnings = unknownCategories.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
 
           // Build the full Recipe object — all 28 fields required by the type.
-          // hash: "" — Paprika stores the client-supplied hash verbatim (it does
-          // not derive one), and the save response is just `{result: true}`, so we
-          // have nothing better to send on create. The next sync reconciles it.
+          // hash: "" is a placeholder — `ctx.client.saveRecipe` stamps the real
+          // content hash at the network boundary (stampContentHash, #167) and returns
+          // the hashed recipe, so the POST and the local commit are hash-consistent
+          // and the next sync won't re-fetch this recipe.
           const uid = RecipeUidSchema.parse(crypto.randomUUID());
           const newRecipe: Recipe = {
             uid,
