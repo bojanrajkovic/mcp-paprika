@@ -7,7 +7,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { MenuItemUidSchema } from "../ids.js";
 import { menuReadOutputSchema, menuToReadStructured, resolveRecipeRows } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -18,11 +18,9 @@ import { menuStartGuard } from "./guards.js";
 export const moveMenuItemInputSchema = z
   .object({
     uid: MenuItemUidSchema.describe("UID of the menuitem to move"),
-    day: z
-      .number()
-      .int()
-      .positive()
-      .describe("Destination 1-indexed day. Days beyond the menu's current span auto-extend the menu."),
+    day: integer({ min: 1 }).describe(
+      "Destination 1-indexed day. Days beyond the menu's current span auto-extend the menu.",
+    ),
   })
   .strict();
 

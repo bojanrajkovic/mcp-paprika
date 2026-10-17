@@ -9,6 +9,7 @@ import {
   commitFailure,
   confirmOrCancel,
   errorResult,
+  integer,
   resolveLookup,
   resolveOrPick,
   structuredResult,
@@ -30,7 +31,7 @@ export const listGroceryListsOutputSchema = z.object({
     z.object({
       uid: GroceryListUidSchema,
       name: z.string(),
-      itemCount: z.number().int().nonnegative(),
+      itemCount: integer({ min: 0 }),
     }),
   ),
 });

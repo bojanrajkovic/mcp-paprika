@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, structuredResult } from "../../../shared/tools.js";
+import { errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { listRecipesOutputSchema, recipeToRow } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -21,7 +21,7 @@ export const listRecipesTool = defineTool(
     description:
       "List all recipes with pagination. Returns recipe summaries sorted alphabetically. Use offset/limit to paginate through the full library. Response includes total recipe count.",
     inputSchema: {
-      offset: z.number().int().nonnegative().optional().default(0).describe("Number of recipes to skip (default: 0)"),
+      offset: integer({ min: 0 }).optional().default(0).describe("Number of recipes to skip (default: 0)"),
       limit: z
         .number()
         .int()

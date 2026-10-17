@@ -7,7 +7,7 @@ import type { RecipeUid } from "../../recipe/ids.js";
 import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, structuredResult } from "../../../shared/tools.js";
+import { errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
 import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
@@ -37,7 +37,7 @@ export const searchMealHistoryInputSchema = z
       .describe(
         "End of the window, inclusive (ISO 8601 or yyyy-MM-dd). Defaults to today; future planner entries are excluded.",
       ),
-    offset: z.number().int().nonnegative().optional().describe("Pagination offset (default 0)."),
+    offset: integer({ min: 0 }).optional().describe("Pagination offset (default 0)."),
     limit: z.number().int().positive().max(200).optional().describe("Maximum meals to return (default 50, max 200)."),
   })
   .strict();
@@ -48,8 +48,8 @@ export const searchMealHistoryInputSchema = z
 // `{ items: [], total: 0, offset }` (a valid empty success); a bad filter or an
 // over-paged offset is an `errorResult` instead (it is not a successful answer).
 export const searchMealHistoryOutputSchema = mealListOutputSchema.extend({
-  total: z.number().int().nonnegative(),
-  offset: z.number().int().nonnegative(),
+  total: integer({ min: 0 }),
+  offset: integer({ min: 0 }),
 });
 
 /**

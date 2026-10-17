@@ -7,6 +7,7 @@ import type { Recipe } from "../recipe/types.js";
 import type { MenuItem } from "./menu-item/types.js";
 import type { Menu } from "./types.js";
 
+import { integer } from "../../shared/tools.js";
 import { MealTypeUidSchema } from "../meal-type/ids.js";
 import { RecipeUidSchema } from "../recipe/ids.js";
 import { recipeRowSchema } from "../recipe/recipe-markdown.js";
@@ -27,7 +28,7 @@ import { MenuItemUidSchema, MenuUidSchema } from "./ids.js";
  */
 export const menuItemRowSchema = z.object({
   uid: MenuItemUidSchema,
-  day: z.number().int(),
+  day: integer({ min: 0 }),
   name: z.string(),
   typeUid: MealTypeUidSchema,
   typeName: z.string().nullable().describe("Resolved meal-type name, or null when the type is dangling/unknown."),
@@ -66,7 +67,7 @@ export function resolveRecipeRows(
 export const menuReadOutputSchema = z.object({
   uid: MenuUidSchema,
   name: z.string(),
-  days: z.number().int(),
+  days: integer({ min: 0 }),
   notes: z.string(),
   items: z.array(menuItemRowSchema),
 });

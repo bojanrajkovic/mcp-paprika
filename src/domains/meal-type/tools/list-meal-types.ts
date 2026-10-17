@@ -5,7 +5,7 @@ import type { MealTypeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { sortCatalog } from "../../../shared/catalog.js";
-import { structuredResult } from "../../../shared/tools.js";
+import { integer, structuredResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../ids.js";
 import { mealTypeStartGuard } from "./guards.js";
 
@@ -18,9 +18,7 @@ export const listMealTypesOutputSchema = z.object({
     z.object({
       uid: MealTypeUidSchema,
       name: z.string(),
-      originalType: z
-        .number()
-        .int()
+      originalType: integer()
         .nullable()
         .describe("Built-in index (0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks), or null for a custom type."),
     }),
