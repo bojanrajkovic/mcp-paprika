@@ -5,7 +5,8 @@
     "helpers:pinGitHubActionDigests",
     ":automergeMinor",
     ":automergeDigest",
-    "schedule:weekly"
+    "schedule:weekly",
+    "security:minimumReleaseAgeNpm"
   ],
   "labels": ["dependencies"],
   "rangeStrategy": "bump",
