@@ -93,9 +93,9 @@ register(
         // is short relative to the store to force a full rebuild. Used at startup and as
         // the retry below.
         const reconcile = (): ResultAsync<unknown, VectorStoreFailure> => {
-          if (ctx.deps.recipe.size() === 0) return okAsync(undefined);
-          if (vectorStore.size < ctx.deps.recipe.size() * 0.9) vectorStore.clearHashes();
-          return vectorStore.indexRecipes(ctx.deps.recipe.getAll(), resolveNames);
+          if (ctx.deps.recipe.activeSize() === 0) return okAsync(undefined);
+          if (vectorStore.size < ctx.deps.recipe.activeSize() * 0.9) vectorStore.clearHashes();
+          return vectorStore.indexRecipes(ctx.deps.recipe.getActive(), resolveNames);
         };
 
         // Startup reconciliation. The initial `syncOnce()` fired its re-index events
@@ -159,7 +159,7 @@ register(
               // recipe hash changed, so the recipe diff never re-fetched them. Read
               // recipes through the contract.
               const changed = new Set<string>(event.uids);
-              const affected = ctx.deps.recipe.getAll().filter((r) => r.categories.some((uid) => changed.has(uid)));
+              const affected = ctx.deps.recipe.getActive().filter((r) => r.categories.some((uid) => changed.has(uid)));
               if (affected.length > 0) {
                 (await vectorStore.indexRecipes(affected, resolveNames)).match(() => undefined, logReindexErr);
               }

@@ -39,11 +39,11 @@ function makeMockVectorStore(size = 0) {
 }
 type MockVectorStore = ReturnType<typeof makeMockVectorStore>;
 
-/** The slice of the recipe contract the hook consumes: `size`, `getAll`, `resolveCategoryNames`. */
+/** The slice of the recipe contract the hook consumes: `activeSize`, `getActive`, `resolveCategoryNames`. */
 function makeRecipeDeps(recipes: ReadonlyArray<Recipe>) {
   return {
-    size: () => recipes.length,
-    getAll: () => recipes,
+    activeSize: () => recipes.length,
+    getActive: () => recipes,
     // Passed through to indexRecipes as the resolver; the mock never invokes it.
     resolveCategoryNames: (uids: ReadonlyArray<CategoryUid>) => uids.map((u) => String(u)),
   };

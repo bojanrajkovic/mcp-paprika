@@ -151,7 +151,7 @@ describe("create_recipe tool", () => {
   it("returns an error and leaves the store untouched when saveRecipe errs", async () => {
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [makeRecipe()] });
-    const before = kh.state().recipe.store.size;
+    const before = kh.state().recipe.store.activeSize;
 
     const text = await kh.callToolText("create_recipe", {
       name: "Recipe",
@@ -162,7 +162,7 @@ describe("create_recipe tool", () => {
     expect(text).toContain("Failed to create");
     expect(text).toContain("Network error");
     // No commit happened — store size unchanged.
-    expect(kh.state().recipe.store.size).toBe(before);
+    expect(kh.state().recipe.store.activeSize).toBe(before);
   });
 
   it("fires the cold-start guard before any API call", async () => {
