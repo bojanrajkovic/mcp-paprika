@@ -149,48 +149,17 @@ describe("MCP Server end-to-end round-trip", () => {
     expect(typeof (firstContent as { type: string; text: string }).text).toBe("string");
   });
 
-  it("lists all registered resources", async () => {
+  it("registers no paprika:// content resources (tools + widgets surface, ADR-0026)", async () => {
     const result = (await client.listResources()) as ListResourcesResult;
 
     expect(result.resources).toBeDefined();
     expect(Array.isArray(result.resources)).toBe(true);
 
-    // Verify recipe resource is registered
-    const recipeResource = result.resources.find((r) => r.uri.startsWith("paprika://recipe/"));
-    expect(recipeResource).toBeDefined();
-    expect(recipeResource?.name).toBeDefined();
-
-    // Verify pantry resource is NOT registered — pantry items are Data-class, tools-only
-    const pantryResource = result.resources.find((r) => r.uri.startsWith("paprika://pantry/"));
-    expect(pantryResource).toBeUndefined();
-  });
-
-  it("lists resources and reads a valid recipe", async () => {
-    // First list resources to get a valid recipe UID
-    const listResult = (await client.listResources()) as ListResourcesResult;
-    expect(listResult.resources).toBeDefined();
-    expect(listResult.resources.length).toBeGreaterThan(0);
-
-    // Extract a recipe UID from the resources
-    const recipeResource = listResult.resources.find((r) => r.uri.includes("paprika://recipe/"));
-    expect(recipeResource).toBeDefined();
-    expect(recipeResource?.uri).toBeDefined();
-
-    // Now read that specific resource
-    if (recipeResource?.uri) {
-      const result = await client.readResource({
-        uri: recipeResource.uri,
-      });
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result.contents)).toBe(true);
-      expect(result.contents.length).toBeGreaterThan(0);
-
-      // Verify content is a resource type
-      const firstContent = result.contents[0];
-      expect(firstContent).toBeDefined();
-      expect(firstContent?.uri).toBeDefined();
-    }
+    // The paprika:// content-resource scheme was removed (ADR-0026): the surface is
+    // tools (for the model) plus ui:// widgets, with no user-attached resource. No
+    // registered resource carries the paprika:// scheme.
+    const paprikaResource = result.resources.find((r) => r.uri.startsWith("paprika://"));
+    expect(paprikaResource).toBeUndefined();
   });
 
   it("handles tool errors gracefully", async () => {

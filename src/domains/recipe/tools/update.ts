@@ -7,7 +7,7 @@ import type { Recipe } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // Strict schema (exported for direct Zod-validation tests). `.strict()` is

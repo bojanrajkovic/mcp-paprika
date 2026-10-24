@@ -58,7 +58,6 @@ describe("purge_recipe tool", () => {
 
       // Real store assertion — recipe hard-deleted from the kernel store.
       expect(kh.state().recipe.store.get(trashed.uid)).toBeUndefined();
-      expect(kh.resourceListChanged()).toHaveBeenCalled();
     });
 
     it("deletes a recipe trashed app-side that the local store would miss", async () => {
@@ -192,7 +191,6 @@ describe("purge_recipe tool", () => {
       expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
       // Local store healed to authoritative truth.
       expect(kh.state().recipe.store.get(uid)?.inTrash).toBe(false);
-      expect(kh.resourceListChanged()).toHaveBeenCalled();
     });
 
     it("404 drops a stale local phantom the store still held", async () => {
@@ -208,7 +206,6 @@ describe("purge_recipe tool", () => {
 
       expect(text.toLowerCase()).toContain("no recipe found");
       expect(kh.state().recipe.store.get(uid)).toBeUndefined(); // phantom dropped locally
-      expect(kh.resourceListChanged()).toHaveBeenCalled();
       expect(kh.client().saveRecipe).not.toHaveBeenCalled();
     });
   });

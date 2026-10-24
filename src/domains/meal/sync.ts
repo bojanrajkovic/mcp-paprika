@@ -11,8 +11,8 @@ import { mealsEqual } from "./types.js";
  * `additive` tier — the meal-history read surface is strictly additive; degrading
  * meals to stale data for one sync cycle is preferable to regressing core sync.
  * The kernel driver treats each additive reconcile's `err` as best-effort, so a
- * meal fetch failure does not abort the rest of the additive phase. Meals have no
- * MCP resource surface, so this emits NO `sync:complete` (returns `void`).
+ * meal fetch failure does not abort the rest of the additive phase. Returns `void`:
+ * meal changes aren't counted in the sync change metrics.
  */
 export function mealSync(state: MealState): SyncContribution<MealState, never> {
   return {

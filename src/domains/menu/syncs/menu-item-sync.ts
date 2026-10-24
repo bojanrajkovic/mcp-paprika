@@ -7,12 +7,9 @@ import { menuItemsEqual } from "../menu-item/types.js";
 
 /**
  * Menu-item sync — replace-all with pending-write filtering via `syncReplaceAllEntity`.
- * No `afterLoad` (unlike menus): only the parent menu store carries `lastSyncedAt`.
  *
- * `additive` tier — runs after menus (children reference parent). Menuitems are
- * inlined in the `paprika://menu/{uid}` resource, so this returns a
- * `MenuItemSyncResult` to be emitted as `sync:complete` (a child-item change
- * invalidates the parent resource).
+ * `additive` tier — runs after menus (children reference parent). Returns a
+ * `MenuItemSyncResult` so its changes are counted in the cycle's change-count metrics.
  */
 export function menuItemsSync(state: MenuState): SyncContribution<MenuState, "recipe" | "meal-type"> {
   return {

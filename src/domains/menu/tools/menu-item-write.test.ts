@@ -79,7 +79,6 @@ describe("add_menu_items tool", () => {
     expect(saved[1]!.typeUid).toBe("breakfast-uid");
     expect(saved.every((i) => !i.deleted)).toBe(true);
     expect((JSON.parse(text) as { items: Array<unknown> }).items).toHaveLength(2);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
     expect(kh.state().items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
   });
 
@@ -492,7 +491,6 @@ describe("delete_menu_item tool", () => {
     const saved = (vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[])[0]!;
     expect(saved.deleted).toBe(true);
     expect(kh.state().items.store.get("mi-1" as MenuItemUid)).toBeUndefined();
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("is idempotent: a second delete returns 'already deleted' without re-POSTing", async () => {

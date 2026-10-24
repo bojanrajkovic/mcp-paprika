@@ -107,28 +107,4 @@ describe("MenuStore", () => {
       expect(result).toBeUndefined();
     });
   });
-
-  describe("lastSyncedAt", () => {
-    it("returns null before setLastSyncedAt()", () => {
-      expect(store.lastSyncedAt).toBeNull();
-    });
-
-    it("returns the provided Date after setLastSyncedAt()", () => {
-      const now = new Date();
-      store.setLastSyncedAt(now);
-
-      expect(store.lastSyncedAt).toBe(now);
-    });
-
-    it("defaults to current date when called without argument", () => {
-      const before = new Date();
-      store.setLastSyncedAt();
-      const after = new Date();
-
-      const at = store.lastSyncedAt;
-      expect(at).not.toBeNull();
-      expect(at!.getTime()).toBeGreaterThanOrEqual(before.getTime());
-      expect(at!.getTime()).toBeLessThanOrEqual(after.getTime());
-    });
-  });
 });
