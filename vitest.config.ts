@@ -13,6 +13,7 @@ export default defineConfig({
       {
         test: {
           name: "unit",
+          setupFiles: ["test/support/no-keepalive.ts"],
           include: ["src/**/*.test.ts", "test/**/*.test.ts"],
           exclude: [...configDefaults.exclude, "**/*.e2e.test.ts", "**/*.external.test.ts"],
         },
@@ -26,6 +27,7 @@ export default defineConfig({
       {
         test: {
           name: "e2e",
+          setupFiles: ["test/support/no-keepalive.ts"],
           include: ["src/**/*.e2e.test.ts"],
         },
       },

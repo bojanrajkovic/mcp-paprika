@@ -7,6 +7,9 @@
 // they were added. Keep this list complete as new sync entities land, and use
 // `failLoudOnUpstream` so a future gap fails loudly instead of hanging.
 import { http, type HttpHandler, HttpResponse } from "msw";
+import { HttpNetworkFrame } from "msw/experimental";
+
+import type { UseMswServerOptions } from "./msw.js";
 
 export const PAPRIKA_AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 export const PAPRIKA_API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -45,10 +48,11 @@ export function paprikaSyncMockHandlers(): Array<HttpHandler> {
  * drive over `127.0.0.1`. This turns a missing upstream mock into an immediate,
  * obvious test failure instead of a silent real-network call that stalls.
  */
-export function failLoudOnUpstream(request: Request, print: { warning: () => void; error: () => void }): void {
-  const { hostname } = new URL(request.url);
+export const failLoudOnUpstream: NonNullable<UseMswServerOptions["onUnhandledFrame"]> = ({ frame, defaults }) => {
+  if (!(frame instanceof HttpNetworkFrame)) return;
+  const { hostname } = new URL(frame.data.request.url);
   if (hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1" || hostname === "[::1]") {
     return;
   }
-  print.error();
-}
+  defaults.error();
+};
