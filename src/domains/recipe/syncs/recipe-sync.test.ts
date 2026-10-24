@@ -5,11 +5,14 @@ import type { Infra } from "../../../kernel/registry.js";
 import type { RecipeSyncResult } from "../../../paprika/sync-types.js";
 import type { RecipeUid } from "../ids.js";
 import type { RecipeState } from "../module.js";
+import type { Recipe } from "../types.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useTempDir } from "../../../../test/support/disk-caches.js";
 import { makeKernelInfra } from "../../../../test/support/kernel-harness.js";
 import { registeredModules } from "../../../kernel/registry.js";
+import { PaprikaError } from "../../../paprika/errors.js";
+import { PartialSyncError } from "../../../paprika/sync-types.js";
 import { recipesSync } from "./recipe-sync.js";
 // Side-effect: populate the module registry so the recipe module is resolvable.
 import "../../../kernel/modules.generated.js";
@@ -25,13 +28,27 @@ describe("recipe diff-and-fetch reconcile", () => {
   let infra: Infra;
   let state: RecipeState;
   const listRecipes = vi.fn();
-  const getRecipes = vi.fn();
+  const fetchRecipes = vi.fn();
+
+  /**
+   * Answer `fetchRecipes` per UID from `recipes`; a UID with no recipe gets a
+   * fetch error (a stand-in for a rate-limited request that exhausted its retries).
+   */
+  function serve(...recipes: ReadonlyArray<Recipe>): void {
+    fetchRecipes.mockImplementation((uids: ReadonlyArray<string>) =>
+      uids.map((uid) => {
+        const recipe = recipes.find((r) => r.uid === uid);
+        return recipe === undefined ? errAsync(new PaprikaError(`429 for ${uid}`)) : okAsync(recipe);
+      }),
+    );
+  }
 
   beforeEach(async () => {
     await tmp.setup();
     listRecipes.mockReset();
-    getRecipes.mockReset().mockReturnValue(okAsync([]));
-    infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listRecipes, getRecipes } });
+    fetchRecipes.mockReset();
+    serve();
+    infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listRecipes, fetchRecipes } });
     const recipeModule = registeredModules().find((m) => m.id === "recipe");
     if (recipeModule === undefined) throw new Error("recipe module not registered");
     state = (await recipeModule.build(infra, {})).state as RecipeState;
@@ -57,11 +74,11 @@ describe("recipe diff-and-fetch reconcile", () => {
     it("adds a recipe present in the list but not the cache", async () => {
       const r = makeRecipe({ uid: "r-add" as RecipeUid, name: "Added", hash: "h1" });
       listRecipes.mockReturnValue(okAsync([{ uid: r.uid, hash: r.hash }]));
-      getRecipes.mockReturnValue(okAsync([r]));
+      serve(r);
 
       const result = await reconcile();
 
-      expect(getRecipes).toHaveBeenCalledWith([r.uid]);
+      expect(fetchRecipes).toHaveBeenCalledWith([r.uid]);
       expect(state.recipe.store.get(r.uid)?.name).toBe("Added");
       expect(result.changes.added.map((x) => x.uid)).toEqual([r.uid]);
     });
@@ -70,7 +87,7 @@ describe("recipe diff-and-fetch reconcile", () => {
       await seed(makeRecipe({ uid: "r-chg" as RecipeUid, name: "Old", hash: "old" }));
       const updated = makeRecipe({ uid: "r-chg" as RecipeUid, name: "New", hash: "new" });
       listRecipes.mockReturnValue(okAsync([{ uid: updated.uid, hash: "new" }]));
-      getRecipes.mockReturnValue(okAsync([updated]));
+      serve(updated);
 
       const result = await reconcile();
 
@@ -85,7 +102,7 @@ describe("recipe diff-and-fetch reconcile", () => {
       const result = await reconcile();
 
       expect(state.recipe.store.get("r-del" as RecipeUid)).toBeUndefined();
-      expect(getRecipes).not.toHaveBeenCalled();
+      expect(fetchRecipes).not.toHaveBeenCalled();
       expect(result.changes.removedUids).toEqual(["r-del"]);
     });
 
@@ -95,7 +112,7 @@ describe("recipe diff-and-fetch reconcile", () => {
 
       await reconcile();
 
-      expect(getRecipes).not.toHaveBeenCalled();
+      expect(fetchRecipes).not.toHaveBeenCalled();
       expect(state.recipe.store.get("r-same" as RecipeUid)?.name).toBe("Same");
     });
   });
@@ -120,13 +137,11 @@ describe("recipe diff-and-fetch reconcile", () => {
       state.recipe.store.markPendingDelete(trashed.uid);
       // Stale list still has it with the pre-trash hash → would otherwise diff.changed + re-fetch.
       listRecipes.mockReturnValue(okAsync([{ uid: trashed.uid, hash: "pre" }]));
-      getRecipes.mockReturnValue(
-        okAsync([makeRecipe({ uid: trashed.uid, name: "Trashed", hash: "pre", inTrash: false })]),
-      );
+      serve(makeRecipe({ uid: trashed.uid, name: "Trashed", hash: "pre", inTrash: false }));
 
       await reconcile();
 
-      expect(getRecipes).not.toHaveBeenCalled();
+      expect(fetchRecipes).not.toHaveBeenCalled();
       expect(state.recipe.store.get(trashed.uid)?.inTrash).toBe(true);
     });
 
@@ -156,6 +171,69 @@ describe("recipe diff-and-fetch reconcile", () => {
     expect(state.recipe.store.hasSynced).toBe(true);
   });
 
+  describe("#483 partial fetch progress", () => {
+    const a = makeRecipe({ uid: "r-a" as RecipeUid, name: "A", hash: "ha" });
+    const b = makeRecipe({ uid: "r-b" as RecipeUid, name: "B", hash: "hb" });
+    const c = makeRecipe({ uid: "r-c" as RecipeUid, name: "C", hash: "hc" });
+    const listAll = (): void => {
+      listRecipes.mockReturnValue(okAsync([a, b, c].map((r) => ({ uid: r.uid, hash: r.hash }))));
+    };
+
+    it("keeps every recipe that landed when a sibling fetch fails, and flushes them", async () => {
+      listAll();
+      serve(a, b); // c's fetch fails
+      const flush = vi.spyOn(state.recipe.cache, "flush");
+
+      const outcome = await recipesSync(state).reconcile({ state, deps: {}, infra });
+
+      const error = outcome._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PartialSyncError);
+      expect(error).toMatchObject({ landed: 2, failed: 1, cause: { message: "429 for r-c" } });
+      expect(state.recipe.store.get(a.uid)?.name).toBe("A");
+      expect(state.recipe.store.get(b.uid)?.name).toBe("B");
+      expect(state.recipe.store.get(c.uid)).toBeUndefined();
+      expect(flush).toHaveBeenCalledOnce();
+      expect(state.recipe.store.hasSynced).toBe(false);
+    });
+
+    it("emits recipe-changed for the recipes that landed, so discover indexes them", async () => {
+      listAll();
+      serve(a, b);
+      const emit = vi.spyOn(infra.indexEvents, "emit");
+
+      await recipesSync(state).reconcile({ state, deps: {}, infra });
+
+      expect(emit).toHaveBeenCalledWith({ type: "recipe-changed", recipes: [a, b] });
+    });
+
+    it("returns the plain fetch error (not partial) when nothing landed", async () => {
+      listAll();
+      serve(); // every fetch fails
+      const flush = vi.spyOn(state.recipe.cache, "flush");
+
+      const outcome = await recipesSync(state).reconcile({ state, deps: {}, infra });
+
+      const error = outcome._unsafeUnwrapErr();
+      expect(error).not.toBeInstanceOf(PartialSyncError);
+      expect(error).toMatchObject({ message: "429 for r-a" });
+      expect(flush).not.toHaveBeenCalled();
+    });
+
+    it("resumes on the next cycle, fetching only what's still missing", async () => {
+      listAll();
+      serve(a, b);
+      await recipesSync(state).reconcile({ state, deps: {}, infra });
+
+      fetchRecipes.mockClear();
+      serve(a, b, c);
+      await reconcile();
+
+      expect(fetchRecipes).toHaveBeenCalledWith([c.uid]);
+      expect(state.recipe.store.get(c.uid)?.name).toBe("C");
+      expect(state.recipe.store.hasSynced).toBe(true);
+    });
+  });
+
   describe("partial cache failure", () => {
     it("mirrors a successfully-put recipe into the store even when a sibling put fails", async () => {
       // cache.put eagerly advances the uid→hash index, so a recipe whose put
@@ -170,7 +248,7 @@ describe("recipe diff-and-fetch reconcile", () => {
           { uid: bad.uid, hash: bad.hash },
         ]),
       );
-      getRecipes.mockReturnValue(okAsync([good, bad]));
+      serve(good, bad);
       const realPut = state.recipe.cache.put.bind(state.recipe.cache);
       vi.spyOn(state.recipe.cache, "put").mockImplementation((recipe) =>
         recipe.uid === bad.uid ? errAsync({ context: "put", message: "disk full", cause: undefined }) : realPut(recipe),
@@ -178,10 +256,12 @@ describe("recipe diff-and-fetch reconcile", () => {
 
       const outcome = await recipesSync(state).reconcile({ state, deps: {}, infra });
 
-      // The cycle aborts (core err), but the recipe whose put landed is in the
-      // store — aligned with its already-advanced hash-index entry — and the
+      // The cycle aborts as partial (core err), but the recipe whose put landed is
+      // in the store — aligned with its already-advanced hash-index entry — and the
       // failed one is in neither.
-      expect(outcome._unsafeUnwrapErr()).toMatchObject({ message: "disk full" });
+      const error = outcome._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PartialSyncError);
+      expect(error).toMatchObject({ landed: 1, failed: 1, cause: { message: "disk full" } });
       expect(state.recipe.store.get(good.uid)?.name).toBe("Good");
       expect(state.recipe.store.get(bad.uid)).toBeUndefined();
     });

@@ -30,7 +30,7 @@ The notifier needs the server, the server is registered after the kernel is buil
 
 ### `notifyFromResults` fans out resource notifications from the loop, not the engine
 
-`buildKernel`'s `syncOnce` returns the `AnySyncResult[]` of a completed cycle; the interval loop passes them to `notifyFromResults`, which fires `resourceListChanged` only for change types with a resource surface (recipes, grocery-lists, grocery-items, menus, menu-items) and only when the change set is non-empty. The initial sync at build time discards its results (no session exists yet); the loop's immediate first cycle re-syncs and notifies.
+`buildKernel`'s `syncOnce` returns the cycle's `outcome` and the `AnySyncResult[]` of a completed cycle. The interval loop paces its next wait from the outcome (`nextSyncPace`, a pure state machine: a `core_partial` cycle, and the boot window, retry after `PARTIAL_RETRY_MS` until an `ok` or `MAX_CONVERGING_MISSES` zero-progress passes in a row; a steady loop always waits the full interval) and passes the results to `notifyFromResults`, which fires `resourceListChanged` only for change types with a resource surface (recipes, grocery-lists, grocery-items, menus, menu-items) and only when the change set is non-empty. The initial sync at build time discards its results (no session exists yet); the loop's immediate first cycle re-syncs and notifies.
 
 ### The index-event seam (`IndexEventEmitter`) crosses a non-edge
 

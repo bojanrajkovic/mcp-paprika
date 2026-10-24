@@ -3,7 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import type { AnySyncResult } from "../paprika/sync-types.js";
 
 import { makeStubNotifier } from "../../test/support/tool-test-utils.js";
-import { notifyFromResults, runSyncLoop } from "./sync-loop.js";
+import {
+  BOOT_PACE,
+  MAX_CONVERGING_MISSES,
+  nextSyncPace,
+  notifyFromResults,
+  PARTIAL_RETRY_MS,
+  runSyncLoop,
+  type SyncPace,
+} from "./sync-loop.js";
 
 // ---------------------------------------------------------------------------
 // notifyFromResults
@@ -76,12 +84,69 @@ describe("notifyFromResults", () => {
 });
 
 // ---------------------------------------------------------------------------
+// nextSyncPace
+// ---------------------------------------------------------------------------
+
+describe("nextSyncPace", () => {
+  const INTERVAL = 15 * 60_000;
+  const steady: SyncPace = { kind: "steady" };
+
+  it("starts converging, so a zero-progress first loop cycle after boot still retries fast", () => {
+    expect(nextSyncPace(BOOT_PACE, "core_aborted", INTERVAL)).toEqual({
+      pace: { kind: "converging", misses: 1 },
+      delayMs: PARTIAL_RETRY_MS,
+    });
+  });
+
+  it("settles to the interval after an ok cycle", () => {
+    expect(nextSyncPace(BOOT_PACE, "ok", INTERVAL)).toEqual({ pace: steady, delayMs: INTERVAL });
+  });
+
+  it("starts converging on a partial cycle, even from steady", () => {
+    expect(nextSyncPace(steady, "core_partial", INTERVAL)).toEqual({
+      pace: { kind: "converging", misses: 0 },
+      delayMs: PARTIAL_RETRY_MS,
+    });
+  });
+
+  it("resets the miss count when a converging cycle makes progress again", () => {
+    expect(nextSyncPace({ kind: "converging", misses: 2 }, "core_partial", INTERVAL).pace).toEqual({
+      kind: "converging",
+      misses: 0,
+    });
+  });
+
+  it(`falls back to the interval on the ${MAX_CONVERGING_MISSES.toString()}th zero-progress pass in a row`, () => {
+    let pace: SyncPace = { kind: "converging", misses: 0 };
+    const delays: number[] = [];
+    for (let i = 0; i < MAX_CONVERGING_MISSES; i++) {
+      const next = nextSyncPace(pace, "core_aborted", INTERVAL);
+      pace = next.pace;
+      delays.push(next.delayMs);
+    }
+    expect(delays).toEqual([...Array<number>(MAX_CONVERGING_MISSES - 1).fill(PARTIAL_RETRY_MS), INTERVAL]);
+    expect(pace).toEqual(steady);
+  });
+
+  it.each(["core_aborted", "flush_failed", "contract_breach"] as const)(
+    "keeps the interval for a %s cycle when steady, so an outage doesn't speed the loop up",
+    (outcome) => {
+      expect(nextSyncPace(steady, outcome, INTERVAL)).toEqual({ pace: steady, delayMs: INTERVAL });
+    },
+  );
+
+  it("never retries slower than the interval itself", () => {
+    expect(nextSyncPace(steady, "core_partial", 30_000).delayMs).toBe(30_000);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // runSyncLoop
 // ---------------------------------------------------------------------------
 
 describe("runSyncLoop", () => {
   it("calls onCycle immediately (before the first interval elapses)", async () => {
-    const onCycle = vi.fn().mockResolvedValue(undefined);
+    const onCycle = vi.fn().mockResolvedValue("ok");
 
     const handle = runSyncLoop(onCycle, 10_000); // very long interval — should never fire
 
@@ -93,7 +158,7 @@ describe("runSyncLoop", () => {
   });
 
   it("calls onCycle multiple times across short intervals then stabilises after stop()", async () => {
-    const onCycle = vi.fn().mockResolvedValue(undefined);
+    const onCycle = vi.fn().mockResolvedValue("ok");
 
     const INTERVAL = 15; // ms — small enough to get ≥2 calls quickly
 
@@ -132,7 +197,7 @@ describe("runSyncLoop", () => {
   });
 
   it("stop() aborts the in-flight wait promptly, with no extra onCycle calls", async () => {
-    const onCycle = vi.fn().mockResolvedValue(undefined);
+    const onCycle = vi.fn().mockResolvedValue("ok");
 
     const INTERVAL = 500; // long interval — only the immediate call should fire
 

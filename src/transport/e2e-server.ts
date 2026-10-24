@@ -51,7 +51,7 @@ interface IMockPaprikaClient {
   authenticate(): ResultAsync<void, PaprikaClientError>;
   listRecipes(): ResultAsync<Array<RecipeEntry>, PaprikaClientError>;
   getRecipe(uid: string): ResultAsync<Recipe, PaprikaClientError>;
-  getRecipes(uids: ReadonlyArray<string>): ResultAsync<Array<Recipe>, PaprikaClientError>;
+  fetchRecipes(uids: ReadonlyArray<string>): ReadonlyArray<ResultAsync<Recipe, PaprikaClientError>>;
   listCategories(): ResultAsync<Array<Category>, PaprikaClientError>;
   listAisles(): ResultAsync<Array<Aisle>, PaprikaClientError>;
   listPantry(): ResultAsync<Array<PantryItem>, PaprikaClientError>;
@@ -134,8 +134,8 @@ class MockPaprikaClient implements IMockPaprikaClient {
     return okAsync(this.mockRecipe);
   }
 
-  getRecipes(_uids: ReadonlyArray<string>): ResultAsync<Array<Recipe>, PaprikaClientError> {
-    return okAsync([this.mockRecipe]);
+  fetchRecipes(uids: ReadonlyArray<string>): ReadonlyArray<ResultAsync<Recipe, PaprikaClientError>> {
+    return uids.map(() => okAsync(this.mockRecipe));
   }
 
   listCategories(): ResultAsync<Array<Category>, PaprikaClientError> {

@@ -374,7 +374,9 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // change types with a resource surface.
   const loop = config.sync.enabled
     ? runSyncLoop(async () => {
-        notifyFromResults(await kernel.syncOnce(), notifier);
+        const cycle = await kernel.syncOnce();
+        notifyFromResults(cycle.results, notifier);
+        return cycle.outcome;
       }, config.sync.interval)
     : null;
   if (loop !== null) {
