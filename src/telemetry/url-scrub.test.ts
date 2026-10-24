@@ -1,4 +1,4 @@
-import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
+import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace";
 import { describe, expect, it, vi } from "vitest";
 
 import { scrubUrl, urlHostLabel, urlScrubbingExporter } from "./url-scrub.js";
