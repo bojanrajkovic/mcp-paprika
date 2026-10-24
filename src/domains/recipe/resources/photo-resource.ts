@@ -104,7 +104,7 @@ export const recipePhotoResource = defineResource<RecipeState, never>(
     // primary URI); the catch-all alias routes sized/indexed reads to the same handler.
     const list = async () => ({
       resources: ctx.state.recipe.store
-        .getAll()
+        .getActive()
         .map((recipe) => ({ recipe, uri: recipePhotoResourceUri(recipe) }))
         .filter((r): r is { recipe: Recipe; uri: string } => r.uri !== null)
         .map(({ recipe, uri }) => ({ uri, name: `${recipe.name} photo`, mimeType: "image/jpeg" })),

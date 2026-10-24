@@ -39,7 +39,7 @@ export const listRecipesTool = defineTool(
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
     return async (args) => {
-      const all = ctx.state.recipe.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
+      const all = ctx.state.recipe.store.getActive().sort((a, b) => a.name.localeCompare(b.name));
       const total = all.length;
       const page = all.slice(args.offset, args.offset + args.limit);
 
