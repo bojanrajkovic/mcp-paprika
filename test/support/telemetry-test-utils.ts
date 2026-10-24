@@ -8,12 +8,7 @@ import {
   MeterProvider,
   PeriodicExportingMetricReader,
 } from "@opentelemetry/sdk-metrics";
-import {
-  BasicTracerProvider,
-  InMemorySpanExporter,
-  type ReadableSpan,
-  SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import { InMemorySpanExporter, type ReadableSpan, SimpleSpanProcessor, TracerProvider } from "@opentelemetry/sdk-trace";
 
 /**
  * Shape returned by {@link installTestTelemetry}: the in-memory span exporter,
@@ -45,7 +40,7 @@ export type TestTelemetry = {
  */
 export function installTestTelemetry(): TestTelemetry {
   const spanExporter = new InMemorySpanExporter();
-  const tracerProvider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(spanExporter)] });
+  const tracerProvider = new TracerProvider({ spanProcessors: [new SimpleSpanProcessor({ exporter: spanExporter })] });
   const metricExporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE);
   const metricReader = new PeriodicExportingMetricReader({
     exporter: metricExporter,

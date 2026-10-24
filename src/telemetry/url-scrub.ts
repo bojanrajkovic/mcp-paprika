@@ -15,7 +15,7 @@
 // per RFC 6749 §2.2): the material that needs protecting rides in queries,
 // fragments, and userinfo, which is where the scrub draws the line.
 
-import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
+import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace";
 
 /** URL-valued attribute keys reduced to origin + path. */
 const URL_ATTRIBUTE_KEYS = ["url.full", "http.url"];
