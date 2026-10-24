@@ -20,7 +20,7 @@ export const recipeResource = defineResource<RecipeState, never>(
   },
   (ctx) => ({
     list: async () => {
-      const recipes = ctx.state.recipe.store.getAll();
+      const recipes = ctx.state.recipe.store.getActive();
       return {
         resources: recipes.map((recipe) => ({
           uri: `paprika://recipe/${recipe.uid}`,

@@ -110,10 +110,10 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
         store.set(recipe);
       }
 
-      expect(store.size).toBe(2);
+      expect(store.activeSize).toBe(2);
       expect(store.get(recipe1.uid)).toEqual(recipe1);
       expect(store.get(recipe2.uid)).toEqual(recipe2);
-      expect(store.getAll()).toHaveLength(2);
+      expect(store.getActive()).toHaveLength(2);
     });
   });
 

@@ -45,28 +45,28 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("getAll() returns only non-trashed recipes", () => {
-      it("getAll() returns all recipes where inTrash === false", () => {
+    describe("getActive() returns only non-trashed recipes", () => {
+      it("getActive() returns all recipes where inTrash === false", () => {
         const nonTrashed1 = makeRecipe();
         const nonTrashed2 = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
 
         store.load([nonTrashed1, nonTrashed2, trashed]);
 
-        const results = store.getAll();
+        const results = store.getActive();
 
         expect(results).toHaveLength(2);
         expect(results).toContain(nonTrashed1);
         expect(results).toContain(nonTrashed2);
       });
 
-      it("getAll() excludes recipes where inTrash === true", () => {
+      it("getActive() excludes recipes where inTrash === true", () => {
         const nonTrashed = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
 
         store.load([nonTrashed, trashed]);
 
-        const results = store.getAll();
+        const results = store.getActive();
 
         expect(results).not.toContain(trashed);
       });
@@ -118,31 +118,31 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("size is 0 on fresh store", () => {
-      it("size returns 0 on a fresh store", () => {
-        expect(store.size).toBe(0);
+    describe("activeSize is 0 on fresh store", () => {
+      it("activeSize returns 0 on a fresh store", () => {
+        expect(store.activeSize).toBe(0);
       });
     });
 
-    describe("size counts only non-trashed recipes", () => {
-      it("size returns count of non-trashed recipes only", () => {
+    describe("activeSize counts only non-trashed recipes", () => {
+      it("activeSize returns count of non-trashed recipes only", () => {
         const nonTrashed1 = makeRecipe();
         const nonTrashed2 = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
 
         store.load([nonTrashed1, nonTrashed2, trashed]);
 
-        expect(store.size).toBe(2);
+        expect(store.activeSize).toBe(2);
       });
     });
 
-    describe("size reflects loaded recipes", () => {
-      it("After load(), size reflects the number of non-trashed recipes in the input", () => {
+    describe("activeSize reflects loaded recipes", () => {
+      it("After load(), activeSize reflects the number of non-trashed recipes in the input", () => {
         const recipes = [makeRecipe(), makeRecipe({ inTrash: true }), makeRecipe()];
 
         store.load(recipes);
 
-        expect(store.size).toBe(2);
+        expect(store.activeSize).toBe(2);
       });
     });
   });
@@ -919,7 +919,7 @@ describe("RecipeStore", () => {
         const uid = "uid-1" as RecipeUid;
         store.markPendingUpsert(uid);
         expect(store.get(uid)).toBeUndefined();
-        expect(store.size).toBe(0);
+        expect(store.activeSize).toBe(0);
       });
     });
   });

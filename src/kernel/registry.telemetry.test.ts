@@ -34,7 +34,15 @@ function fakeModule(
   return {
     id,
     dependsOn: [],
-    build: async () => ({ state: {}, api: {}, tools: [], resources: undefined, syncs, onReady: undefined, flush }),
+    build: async () => ({
+      state: {},
+      api: {},
+      tools: [],
+      resources: undefined,
+      syncs,
+      onIndexReady: undefined,
+      flush,
+    }),
   } as unknown as ErasedModule;
 }
 

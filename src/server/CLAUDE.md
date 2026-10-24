@@ -2,11 +2,11 @@
 
 ## Purpose
 
-The non-kernel pieces of the composition path: the transport-blind `Notifier` seam, the pre-kernel bootstrap (`buildInfraBase` + `buildBrandedServer`), the background sync loop, and the cross-entity index-event seam. Module construction, the sync driver, and boot-phase ordering now live in the **kernel** (`../kernel/CLAUDE.md`); this directory is what wraps it for the two transports.
+The non-kernel pieces of the composition path: the transport-blind `Notifier` seam, the pre-kernel bootstrap (`buildInfraBase` + `buildBrandedServer`), the background sync loop, and the cross-entity index-event seam. Module construction, the sync driver, and the boot ordering (initial sync, then the `onIndexReady` hook) live in the **kernel** (`../kernel/CLAUDE.md`); this directory is what wraps it for the two transports.
 
 ## Key References
 
-- `../kernel/CLAUDE.md` + `docs/adr/0009-domain-isolated-tool-modules-kernel.md` — the kernel; module construction, the sync driver, and boot-phase ordering live there.
+- `../kernel/CLAUDE.md` + `docs/adr/0009-domain-isolated-tool-modules-kernel.md` — the kernel; module construction, the sync driver, and the boot ordering live there.
 - `docs/adr/0001-two-transports-and-composition-root.md` — the two-transport split, the `Notifier` seam, and the notifier/server bootstrap cycle (`ServerRef`) this still implements.
 - Source is the catalog: the four files here are small and their doc-comments carry the per-piece rationale — read them rather than an export inventory.
 
@@ -38,7 +38,7 @@ Recipe writes and the recipe/category reconciles emit `recipe-changed`/`recipe-r
 
 ### Startup logging is level-gated; SIGINT/SIGTERM writes raw stderr
 
-`buildInfraBase` logs `mcp-paprika starting` and `buildKernel` logs `running initial sync` at `info`; `MCP_LOG_LEVEL=warn`+ silently suppresses them. The signal handler in `src/index.ts` bypasses the structured logger (it may not be built yet, or already torn down) — one of the three sanctioned `process.stderr.write` exceptions (with `src/transport/stdio.ts` and the OTel diag logger), because stdout carries the stdio wire.
+`buildInfraBase` logs `mcp-paprika starting` and `buildKernel` logs `running initial sync` at `info`; `MCP_LOG_LEVEL=warn`+ silently suppresses them. The signal handler in `src/index.ts` bypasses the structured logger (it may not be built yet, or already torn down) — one of the three sanctioned `process.stderr.write` exceptions (with `src/transport/stdio.ts` and `src/telemetry/bootstrap.ts`), because stdout carries the stdio wire.
 
 ### Feature tools register unconditionally
 
