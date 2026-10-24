@@ -26,7 +26,7 @@ import type { AuthCache } from "./disk.js";
 import type { OAuthToken } from "./types.js";
 
 import { SILENT_LOG } from "../utils/log.js";
-import { OAuthTokenError } from "./errors.js";
+import { cacheUnavailable, OAuthTokenError } from "./errors.js";
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   generateOpaqueToken,
@@ -71,14 +71,12 @@ export class TokenStore {
     private readonly log: Logger = SILENT_LOG,
   ) {}
 
-  /**
-   * Map a cache failure to the wire-safe `server_error`, logging the real
-   * failure for the operator first — the SDK response carries only the generic
-   * message, so this log line is the diagnosable trail.
-   */
+  /** Map a cache failure to the wire-safe `server_error` — see {@link cacheUnavailable}. */
   private _storeUnavailable(e: CacheError): OAuthError {
-    this.log.error({ err: e.cause, context: e.context }, "token store cache failure");
-    return OAuthTokenError.serverError("token store unavailable");
+    return cacheUnavailable(this.log, e, {
+      logMessage: "token store cache failure",
+      wireMessage: "token store unavailable",
+    });
   }
 
   /**

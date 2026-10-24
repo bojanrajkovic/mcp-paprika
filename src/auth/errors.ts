@@ -20,6 +20,9 @@ import {
   ServerError,
 } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { Result } from "neverthrow";
+import type { Logger } from "pino";
+
+import type { CacheError } from "../cache/disk-cache.js";
 
 /**
  * OAuth boundary helper: unwrap a `Result` whose error is an
@@ -214,6 +217,23 @@ export const OAuthTokenError = {
     return new ServerError(message);
   },
 };
+
+/**
+ * Map a cache failure to the wire-safe `server_error`, logging the real failure
+ * for the operator first — the SDK response carries only the generic `message`,
+ * so this log line is the diagnosable trail. Shared by `TokenStore` and
+ * `DiskClientRegistrationStore`, whose per-store mappers were otherwise
+ * identical apart from the log/message strings, which stay distinct per
+ * call site (byte-identical to what each store logged/returned before).
+ */
+export function cacheUnavailable(
+  log: Logger,
+  e: CacheError,
+  messages: { readonly logMessage: string; readonly wireMessage: string },
+): OAuthError {
+  log.error({ err: e.cause, context: e.context }, messages.logMessage);
+  return OAuthTokenError.serverError(messages.wireMessage);
+}
 
 /**
  * Error thrown when a client is not found in the client registry.
