@@ -24,7 +24,7 @@ The rule across the per-domain concerns: **co-locate at the lightest granularity
 
 ## Key References
 
-- `../kernel/CLAUDE.md` — the kernel these register on (the `state`/`writes`/`deps`/`infra` narrowing, the sync driver, boot phases).
+- `../kernel/CLAUDE.md` — the kernel these register on (the `state`/`writes`/`deps`/`infra` narrowing, the sync driver, the `onIndexReady` hook).
 - `../entity/CLAUDE.md` — the `EntityStore` base and the pending-write (#57) invariants every store inherits.
 - `../cache/CLAUDE.md` — the per-entity `DiskCache` each entity's `DiskCacheDescriptor` (in its `types.ts`) describes.
 - ADR-0026 (drop the user-attached resource surface) — the MCP surface is tools + widgets; no domain registers a `paprika://` resource (supersedes ADR-0004's Content-resource rule).

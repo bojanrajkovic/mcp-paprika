@@ -37,13 +37,56 @@ function fakeModule(
   return {
     id,
     dependsOn: [],
-    build: async () => ({ state: {}, api: {}, tools: [], resources: undefined, syncs, onReady: undefined, flush }),
+    build: async () => ({
+      state: {},
+      api: {},
+      tools: [],
+      resources: undefined,
+      syncs,
+      onIndexReady: undefined,
+      flush,
+    }),
   } as unknown as ErasedModule;
 }
 
 function infra(): Infra {
   return makeKernelInfra({ cacheDir: "/tmp/kernel-driver-test-unused" });
 }
+
+describe("buildKernel boot ordering", () => {
+  it("runs onIndexReady exactly once, after the initial sync, and not on later cycles", async () => {
+    const order: string[] = [];
+    const indexed = {
+      id: "discover",
+      dependsOn: [],
+      build: async () => ({
+        state: {},
+        api: {},
+        tools: [],
+        resources: undefined,
+        syncs: [
+          {
+            tier: "core",
+            reconcile: () => {
+              order.push("sync");
+              return okAsync(undefined);
+            },
+          },
+        ],
+        onIndexReady: async () => {
+          order.push("index");
+        },
+        flush: undefined,
+      }),
+    } as unknown as ErasedModule;
+
+    const kernel = await buildKernel(infra(), [indexed]);
+    expect(order).toEqual(["sync", "index"]);
+
+    await kernel.syncOnce();
+    expect(order).toEqual(["sync", "index", "sync"]);
+  });
+});
 
 describe("buildKernel sync driver", () => {
   it("runs the recipe module's core reconcile first, others after (stable)", async () => {
@@ -191,7 +234,7 @@ describe("buildKernel module construction", () => {
           tools: [],
           resources: undefined,
           syncs: undefined,
-          onReady: undefined,
+          onIndexReady: undefined,
           flush: undefined,
         };
       },
