@@ -11,6 +11,11 @@
  * - Every attacker-controlled field (`clientName`, `redirectHost`) is
  *   HTML-escaped. `client_name` comes from open DCR, so an unescaped value is
  *   stored XSS — worse than the bug this screen closes.
+ * - Before escaping, both fields also run through `stripBidiControls`: HTML-escaping
+ *   neutralizes markup but not Unicode bidi-override/zero-width characters, which
+ *   `client_name` (open DCR, no charset restriction) could otherwise use to visually
+ *   spoof itself. A field that's empty after stripping falls back to visible copy
+ *   ("Unnamed client" / a flagged "Unknown destination"), never blank space.
  * - The requested OAuth `scope` is never rendered (this renderer takes no scope
  *   parameter); the grant description is fixed.
  * - Styles are inline under a per-render CSP nonce; `consentSecurityHeaders`
@@ -39,6 +44,23 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
+/**
+ * Strip every Unicode format character (`\p{Cf}`): the bidi controls (RLO/LRO/PDF,
+ * the directional isolates, marks), the zero-width characters (ZWSP/ZWJ/ZWNJ, BOM,
+ * the word joiner), and the other invisible ones like the soft hyphen. `clientName`
+ * is open-DCR-supplied text rendered at a trust decision — without this, an
+ * attacker can use an RLO override to visually reverse the name (disguising what
+ * it says) or pad it with invisible characters that make two distinct names look
+ * identical. The whole category, not a hand-picked list, so a newly assigned
+ * format character can't slip through. `escapeHtml` only neutralizes HTML
+ * metacharacters; it doesn't touch these, so this runs first, on the raw text.
+ */
+const BIDI_AND_INVISIBLE_CHARS = /\p{Cf}/gu;
+
+function stripBidiControls(value: string): string {
+  return value.replaceAll(BIDI_AND_INVISIBLE_CHARS, "");
+}
+
 /** Per-render CSPRNG nonce (128 bits, base64) for the inline <style>. */
 function generateNonce(): string {
   return randomBytes(16).toString("base64");
@@ -58,6 +80,7 @@ const STYLES = `
     --ink: oklch(0.26 0.012 70); --muted: oklch(0.53 0.012 70); --faint: oklch(0.66 0.010 70);
     --line: oklch(0.90 0.008 70); --line-2: oklch(0.83 0.010 70);
     --paprika-red: oklch(0.543 0.174 30); --paprika-red-ink: oklch(0.99 0.01 75); --dest-bg: oklch(0.965 0.012 70); /* --paprika-red = #C0392B, the connector identity color */
+    --warn-bg: oklch(0.94 0.045 25); --warn-ink: oklch(0.4 0.16 25); /* malformed/absent redirect host: the anchor is missing, say so loudly */
     --mono: ui-monospace, "SF Mono", Menlo, monospace;
     /* Editorial serif (the NYT-Cooking register), a deliberate brand choice that rhymes with the
        widgets' serif voice in a serif-first host. The page is standalone (no host shell to match), so
@@ -77,7 +100,13 @@ const STYLES = `
   .head { display: flex; align-items: center; gap: 13px; margin-bottom: 18px; }
   .avatar { width: 42px; height: 42px; border-radius: 10px; flex: none; background: oklch(0.92 0.03 250);
     color: oklch(0.43 0.10 250); display: grid; place-items: center; font-weight: 700; font-size: 1.1rem; }
-  .nm { font-weight: 670; font-size: 1.08rem; letter-spacing: -0.005em; }
+  /* min-width: 0 lets this flex item shrink below its text's intrinsic width; without it, an
+     unbroken 100+ char client name overflows the card instead of wrapping (harden: long text). */
+  .ident { min-width: 0; }
+  /* unicode-bidi: isolate contains a hostile RTL-override name to its own span — the card's
+     layout (the tag pill, the row order) stays LTR regardless of what the name itself does. */
+  .nm { font-weight: 670; font-size: 1.08rem; letter-spacing: -0.005em; overflow-wrap: anywhere;
+    unicode-bidi: isolate; }
   .tag { font-weight: 500; font-size: 0.7rem; color: var(--faint); border: 1px solid var(--line-2);
     border-radius: 5px; padding: 1px 5px; margin-left: 7px; vertical-align: 1px; }
   .sub2 { font-size: 0.86rem; color: var(--muted); }
@@ -87,6 +116,10 @@ const STYLES = `
     color: var(--muted); margin-bottom: 5px; }
   .dest .host { font-family: var(--mono); font-size: 1.3rem; font-weight: 700;
     letter-spacing: -0.01em; word-break: break-all; line-height: 1.2; }
+  /* Malformed/absent redirect host (harden): the anchor this screen exists to surface is
+     missing, so say so loudly instead of rendering a blank box that reads as a glitch. */
+  .dest-warn { background: var(--warn-bg); border-color: var(--warn-ink); }
+  .dest-warn .lbl, .dest-warn .host { color: var(--warn-ink); }
   .grants .lbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--faint); margin-bottom: 4px; }
   .grants p { margin: 0; font-size: 0.9rem; color: var(--muted); }
@@ -131,11 +164,24 @@ export interface ConsentPageParams {
  */
 export function renderConsentPage(params: ConsentPageParams): RenderedPage {
   const nonce = generateNonce();
-  const name = params.clientName && params.clientName.length > 0 ? params.clientName : "Unnamed client";
+  // Clean before the emptiness check: a name that's all bidi/zero-width
+  // characters (invisible once rendered) must still fall back, not display blank.
+  const cleanedName = stripBidiControls(params.clientName ?? "").trim();
+  const name = cleanedName.length > 0 ? cleanedName : "Unnamed client";
   const safeName = escapeHtml(name);
-  const safeHost = escapeHtml(params.redirectHost);
   const safeTicket = escapeHtml(params.ticket);
-  const initial = escapeHtml(name.charAt(0).toUpperCase() || "?");
+  // Array.from (codepoint-aware) rather than .charAt(0): a name starting with
+  // an astral character (most emoji) is a surrogate pair — charAt(0) would grab
+  // only its first half, rendering a broken glyph in the avatar.
+  const initial = escapeHtml((Array.from(name)[0] ?? "?").toUpperCase());
+
+  // redirectHost is the un-forgeable anchor this whole screen exists to
+  // surface (see header comment); every real caller derives it from a parsed
+  // URL's origin, but a blank/malformed value here must read as a visible
+  // warning, never as empty space that could pass for a rendering glitch.
+  const cleanedHost = stripBidiControls(params.redirectHost).trim();
+  const hasHost = cleanedHost.length > 0;
+  const hostDisplay = hasHost ? escapeHtml(cleanedHost) : "Unknown destination — deny this request";
 
   const body = `<main class="screen">
   <div class="brandbar"><span class="dot"></span> ${DISPLAY_NAME}</div>
@@ -143,25 +189,25 @@ export function renderConsentPage(params: ConsentPageParams): RenderedPage {
     <input type="hidden" name="ticket" value="${safeTicket}">
     <div class="head">
       <div class="avatar">${initial}</div>
-      <div>
-        <div class="nm">${safeName} <span class="tag">name self-reported</span></div>
+      <div class="ident">
+        <div class="nm" dir="auto">${safeName} <span class="tag">name self-reported</span></div>
         <div class="sub2">wants to connect to your Paprika account</div>
       </div>
     </div>
-    <div class="dest">
-      <div class="lbl">Authorization code will be sent to</div>
-      <div class="host">${safeHost}</div>
+    <div class="dest${hasHost ? "" : " dest-warn"}">
+      <div class="lbl">This code can only reach</div>
+      <div class="host">${hostDisplay}</div>
     </div>
     <div class="grants">
       <div class="lbl">It will be able to</div>
-      <p>Read and write your recipes, meals, grocery lists, and pantry.</p>
+      <p>Full access to your recipes, meals, grocery lists, and pantry.</p>
     </div>
-    <div class="denyline">Didn&#39;t just start this connection yourself? <b>Deny.</b></div>
+    <div class="denyline">Didn&#39;t request this yourself? <b>Deny.</b></div>
     <div class="actions">
       <button type="submit" name="decision" value="deny" class="btn btn-ghost">Deny</button>
       <button type="submit" name="decision" value="allow" class="btn btn-fill">Allow</button>
     </div>
-    <div class="foot">You&#39;ll sign in after allowing. Only you can complete this.</div>
+    <div class="foot">You&#39;ll sign in next — only you can complete it.</div>
   </form>
 </main>`;
 

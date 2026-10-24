@@ -64,6 +64,77 @@ describe("renderConsentPage", () => {
     expect(html.toLowerCase()).toContain("recipes");
   });
 
+  it("strips an RLO override from the client name (bidi-spoofing hardening)", () => {
+    // U+202E (RLO) would visually reverse everything after it — e.g. disguise
+    // "eviltrusted.com" as something else in an RTL-rendered run.
+    const { html } = renderConsentPage({ ...base, clientName: "safe‮gnisufnoc" });
+    expect(html).not.toContain("‮");
+    expect(html).toContain("safegnisufnoc");
+  });
+
+  it("strips zero-width characters from the client name", () => {
+    const { html } = renderConsentPage({ ...base, clientName: "Cl​aude" });
+    expect(html).not.toContain("​");
+    expect(html).toContain("Claude");
+  });
+
+  it("strips every invisible format character, not just the bidi and zero-width ranges", () => {
+    // U+2060 word joiner, U+061C Arabic letter mark, U+00AD soft hyphen, U+180E Mongolian
+    // vowel separator: each renders as nothing, so "Claude" + one of them would pass for "Claude".
+    for (const invisible of ["\u2060", "\u061C", "\u00AD", "\u180E"]) {
+      const { html } = renderConsentPage({ ...base, clientName: `Claude${invisible}` });
+      expect(html).not.toContain(invisible);
+      expect(html).toContain("Claude <span");
+    }
+  });
+
+  it("falls back to 'Unnamed client' when the name is only bidi/zero-width characters", () => {
+    const { html } = renderConsentPage({ ...base, clientName: "​‮⁦" });
+    expect(html).toContain("Unnamed client");
+  });
+
+  it("falls back to 'Unnamed client' when the name is only whitespace", () => {
+    const { html } = renderConsentPage({ ...base, clientName: "   " });
+    expect(html).toContain("Unnamed client");
+  });
+
+  it("renders a correct avatar initial for a name starting with an astral character (emoji)", () => {
+    // .charAt(0) would grab only the first UTF-16 code unit of a surrogate
+    // pair, producing an orphan half instead of the emoji.
+    const { html } = renderConsentPage({ ...base, clientName: "🎉Party Client" });
+    expect(html).toContain('<div class="avatar">🎉</div>');
+  });
+
+  it('renders dir="auto" on the client name so a hostile RTL name doesn\'t flip the row', () => {
+    const { html } = renderConsentPage(base);
+    expect(html).toMatch(/<div class="nm" dir="auto">/);
+  });
+
+  it("does not crash and still escapes a very long client name", () => {
+    const longName = "A".repeat(500);
+    const { html } = renderConsentPage({ ...base, clientName: longName });
+    expect(html).toContain(longName);
+  });
+
+  it("flags a blank redirect host as an unknown destination instead of rendering empty", () => {
+    const { html } = renderConsentPage({ ...base, redirectHost: "" });
+    expect(html).toContain("Unknown destination");
+    expect(html).toContain("dest-warn");
+  });
+
+  it("flags a redirect host that's only whitespace/invisible characters the same way", () => {
+    const { html } = renderConsentPage({ ...base, redirectHost: "​ ​" });
+    expect(html).toContain("Unknown destination");
+  });
+
+  it("does not flag a normal redirect host as an unknown destination", () => {
+    const { html } = renderConsentPage(base);
+    // "dest-warn" always appears in the inlined stylesheet's rule definition;
+    // what matters is the destination element itself doesn't carry the class.
+    expect(html).toContain('<div class="dest">');
+    expect(html).not.toContain("Unknown destination");
+  });
+
   it("returns a nonce that appears in the inline <style> tag", () => {
     const { html, nonce } = renderConsentPage(base);
     expect(nonce.length).toBeGreaterThan(0);
