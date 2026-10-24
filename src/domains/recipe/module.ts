@@ -346,12 +346,12 @@ register(
           resolveCategoryNames: (uids) => state.category.store.resolveNames([...uids]),
           recipesInCategory: (categoryUid) =>
             state.recipe.store
-              .getAll()
+              .getActive()
               .filter((r) => r.categories.includes(categoryUid))
               .map((r) => r.uid),
           hasSynced: () => state.recipe.store.hasSynced,
-          getAll: () => state.recipe.store.getAll(),
-          size: () => state.recipe.store.size,
+          getActive: () => state.recipe.store.getActive(),
+          activeSize: () => state.recipe.store.activeSize,
           // Resolve each recipe's category names through recipe's own category store so
           // the category dependency stays private — discover calls this instead of
           // importing recipeToRow and resolving names itself.

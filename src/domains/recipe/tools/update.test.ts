@@ -82,7 +82,7 @@ describe("update_recipe tool", () => {
     const recipe = makeRecipe();
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Conflict")));
     kh.seed({ recipes: [recipe] });
-    const before = kh.state().recipe.store.size;
+    const before = kh.state().recipe.store.activeSize;
 
     const result = await kh.callTool("update_recipe", { uid: recipe.uid, name: "New" });
 
@@ -91,7 +91,7 @@ describe("update_recipe tool", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toBeUndefined();
     // Store unchanged: no commit happened.
-    expect(kh.state().recipe.store.size).toBe(before);
+    expect(kh.state().recipe.store.activeSize).toBe(before);
   });
 
   it("cold-start guard fires before any store lookup", async () => {
