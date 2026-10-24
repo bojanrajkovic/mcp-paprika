@@ -36,8 +36,8 @@ import { errorTypeName, startOperation, tracePromise, traceResultAsync } from ".
  * checked.
  *
  * `dependsOn` is the single source of truth — its element union is the tools' and
- * hooks' `deps`. A boot pipeline ({@link BootPhase}) sequences side-effects the
- * construction topo-sort cannot express. The sync seam follows the same shape:
+ * hooks' `deps`. A post-sync boot hook ({@link ModuleParts.onIndexReady}) sequences
+ * side-effects the construction topo-sort cannot express. The sync seam follows the same shape:
  * each module contributes a `reconcile` per owned entity, reached through the same
  * {@link BootCtx}, and the kernel drives them — so a central sync needs no
  * global slice over the modules' hidden stores. See {@link SyncContribution} and
@@ -100,7 +100,7 @@ export interface Infra {
   readonly config: PaprikaConfig;
   /**
    * The recipe/category → discover re-index seam: recipe writes and the category
-   * reconcile emit here, and discover's `index` boot hook subscribes. Carried on
+   * reconcile emit here, and discover's `onIndexReady` hook subscribes. Carried on
    * `infra` because there is no dependency edge into discover (its contract is
    * empty by design). See {@link IndexEventEmitter}.
    */
@@ -118,7 +118,7 @@ export interface Infra {
 /**
  * The process-wide context a boot hook receives: the module's own internals
  * (`state`), exactly its declared dependencies' contracts (`deps`), and `infra`.
- * No `server` — boot phases run once per process, before any session exists.
+ * No `server` — boot-time code runs once per process, before any session exists.
  */
 export interface BootCtx<State, Deps extends DomainId> {
   readonly state: State;
@@ -142,14 +142,12 @@ export interface DomainCtx<State, Deps extends DomainId, Writes = Record<never, 
   readonly writes: Writes;
 }
 
-// Post-sync boot hooks. Construction order (topo-sort) handles "built before";
-// the INITIAL sync cycle (the driver below) runs next; THEN these hooks run — so
-// e.g. the vector index builds against already-synced stores. Sync is the driver,
-// not a hook, so the only post-sync phase is `index`; the array keeps the loop
-// shape for future phases.
-export type BootPhase = "index";
-const BOOT_PHASES: ReadonlyArray<BootPhase> = ["index"];
-type BootHooks<State, Deps extends DomainId> = Partial<Record<BootPhase, (ctx: BootCtx<State, Deps>) => Promise<void>>>;
+// Post-sync boot hook (see ModuleParts.onIndexReady below). Construction order
+// (topo-sort) handles "built before"; the INITIAL sync cycle (the driver below)
+// runs next; THEN this hook runs — so e.g. the vector index builds against
+// already-synced stores. Sync is the driver, not a hook. One hook, one consumer
+// (discover) — reintroduce a phase array only when a second post-sync phase
+// actually exists.
 
 /**
  * Sync tier — three buckets the driver runs in order each cycle: reference → core →
@@ -195,7 +193,7 @@ interface ErasedSync {
 
 /**
  * What a module's `.build((state, infra, deps) => …)` callback returns. `api` must satisfy
- * the contract the module registered for its own id; `tools`/`resources`/`onReady`
+ * the contract the module registered for its own id; `tools`/`resources`/`onIndexReady`
  * get a ctx narrowed to `State` + the `dependsOn` tuple — INFERRED, so the author
  * writes no per-module ctx alias; `flush` is optional.
  *
@@ -217,7 +215,8 @@ export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, 
   readonly writes?: Writes;
   readonly resources?: ReadonlyArray<ResourceDef<State, Deps>>;
   readonly syncs?: ReadonlyArray<SyncContribution<State, Deps>>;
-  readonly onReady?: BootHooks<State, Deps>;
+  /** Runs once, after the initial sync cycle (see the boot-hook note above `ModuleParts`). */
+  readonly onIndexReady?: (ctx: BootCtx<State, Deps>) => Promise<void>;
   readonly flush?: () => ResultAsync<void, CacheError>;
 }
 
@@ -251,7 +250,7 @@ interface ErasedBuild {
   readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources?: ReadonlyArray<ErasedResourceDef>;
   readonly syncs?: ReadonlyArray<ErasedSync>;
-  readonly onReady?: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>>;
+  readonly onIndexReady?: (ctx: ErasedBootCtx) => Promise<void>;
   readonly flush?: () => ResultAsync<void, CacheError>;
 }
 
@@ -325,7 +324,7 @@ export function defineModule<Id extends DomainId, const DepList extends Readonly
             tools: parts.tools,
             resources: parts.resources,
             syncs: parts.syncs,
-            onReady: parts.onReady,
+            onIndexReady: parts.onIndexReady,
             flush: parts.flush,
           };
         },
@@ -439,15 +438,14 @@ interface Built {
   readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources: ReadonlyArray<ErasedResourceDef> | undefined;
   readonly syncs: ReadonlyArray<ErasedSync> | undefined;
-  readonly onReady: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>> | undefined;
+  readonly onIndexReady: ((ctx: ErasedBootCtx) => Promise<void>) | undefined;
 }
 
 /**
  * Build the kernel: (0) construct every module in dependency order — each `.state`
  * factory hydrates its own cache, so "all built" ⇒ "all caches warm"; then (1) run
- * the initial sync cycle; then (2) run the boot phases in order, each to completion
- * before the next. Returns a per-session registrar. Defaults to the self-registered
- * modules.
+ * the initial sync cycle; then (2) run every module's `onIndexReady` hook. Returns
+ * a per-session registrar. Defaults to the self-registered modules.
  */
 export async function buildKernel(
   infra: Infra,
@@ -466,8 +464,8 @@ export async function buildKernel(
   const bootCtxOf = (b: Built): ErasedBootCtx => ({ state: b.state, deps: depsOf(b.dependsOn), infra });
 
   // The boot trace: one root span covering construction → initial sync →
-  // boot phases (the cycle and reconcile spans parent under it via the active
-  // context), with a child per module build. Boot is the one place per-module
+  // the onIndexReady hook (the cycle and reconcile spans parent under it via the
+  // active context), with a child per module build. Boot is the one place per-module
   // timing matters — every .state factory hydrates its disk caches serially in
   // dependency order, so a slow startup names its culprit here. A build or
   // hook that throws (boot fail-fast) ends the open spans
@@ -501,7 +499,7 @@ export async function buildKernel(
         tools: b.tools,
         resources: b.resources,
         syncs: b.syncs,
-        onReady: b.onReady,
+        onIndexReady: b.onIndexReady,
       });
     }
   });
@@ -688,10 +686,11 @@ export async function buildKernel(
     });
   };
 
-  // Boot: construct → run the INITIAL sync cycle → run post-sync hooks. The initial
-  // cycle gates the hooks, so e.g. the vector `index` builds against already-synced
-  // stores. The interval loop just calls `syncOnce` repeatedly. The startup breadcrumb
-  // (#158) brackets the cycle: a failure logs `sync failed` (error) from the catch above.
+  // Boot: construct → run the INITIAL sync cycle → run the post-sync onIndexReady
+  // hook. The initial cycle gates the hook, so e.g. the vector index builds against
+  // already-synced stores. The interval loop just calls `syncOnce` repeatedly. The
+  // startup breadcrumb (#158) brackets the cycle: a failure logs `sync failed`
+  // (error) from the catch above.
   infra.log.info("running initial sync");
   // The initial cycle's results are intentionally discarded: at this point no server /
   // session exists (stdio's ServerRef is unset; HTTP has zero sessions), so a resource
@@ -701,14 +700,12 @@ export async function buildKernel(
   // wire notifyFromResults onto this call too.
   await inBoot(async () => {
     await syncOnce("boot");
-    for (const phase of BOOT_PHASES) {
-      await tracePromise(getTracer(), `boot.phase ${phase}`, {}, async () => {
-        for (const b of built) {
-          const hook = b.onReady?.[phase];
-          if (hook !== undefined) await hook(bootCtxOf(b));
-        }
-      });
-    }
+    // Span name kept verbatim as "boot.phase index" (pre-collapse dashboards key on it).
+    await tracePromise(getTracer(), "boot.phase index", {}, async () => {
+      for (const b of built) {
+        if (b.onIndexReady !== undefined) await b.onIndexReady(bootCtxOf(b));
+      }
+    });
   });
   bootOp.end();
 
