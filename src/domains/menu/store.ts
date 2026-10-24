@@ -4,18 +4,8 @@ import type { Menu } from "./types.js";
 import { EntityStore } from "../../entity/index.js";
 
 export class MenuStore extends EntityStore<Menu, MenuUid> {
-  private _lastSyncedAt: Date | null = null;
-
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
-  }
-
-  get lastSyncedAt(): Date | null {
-    return this._lastSyncedAt;
-  }
-
-  setLastSyncedAt(at: Date = new Date()): void {
-    this._lastSyncedAt = at;
   }
 
   /**

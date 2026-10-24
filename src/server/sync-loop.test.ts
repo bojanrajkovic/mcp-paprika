@@ -1,87 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AnySyncResult } from "../paprika/sync-types.js";
-
-import { makeStubNotifier } from "../../test/support/tool-test-utils.js";
 import {
   BOOT_PACE,
   MAX_CONVERGING_MISSES,
   nextSyncPace,
-  notifyFromResults,
   PARTIAL_RETRY_MS,
   runSyncLoop,
   type SyncPace,
 } from "./sync-loop.js";
-
-// ---------------------------------------------------------------------------
-// notifyFromResults
-// ---------------------------------------------------------------------------
-
-describe("notifyFromResults", () => {
-  it("fires resourceListChanged once per qualifying result", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
-
-    const results = [
-      { changeType: "recipes", changes: { added: [{}], updated: [], removedUids: [] } },
-      { changeType: "grocery-lists", changes: { added: [], updated: [{}], removedUids: [] } },
-      { changeType: "grocery-items", changes: { added: [], updated: [], removedUids: ["x"] } },
-      { changeType: "menus", changes: { added: [{}], updated: [], removedUids: [] } },
-      { changeType: "menu-items", changes: { added: [], updated: [{}], removedUids: [] } },
-    ] as unknown as ReadonlyArray<AnySyncResult>;
-
-    notifyFromResults(results, notifier);
-
-    expect(resourceListChanged).toHaveBeenCalledTimes(5);
-  });
-
-  it("skips a pantry changeType entirely", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
-
-    const results = [
-      { changeType: "pantry", changes: { added: [{}], updated: [{}], removedUids: ["y"] } },
-    ] as unknown as ReadonlyArray<AnySyncResult>;
-
-    notifyFromResults(results, notifier);
-
-    expect(resourceListChanged).not.toHaveBeenCalled();
-  });
-
-  it("skips a qualifying changeType whose changes are all empty", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
-
-    const results = [
-      { changeType: "recipes", changes: { added: [], updated: [], removedUids: [] } },
-      { changeType: "grocery-lists", changes: { added: [], updated: [], removedUids: [] } },
-    ] as unknown as ReadonlyArray<AnySyncResult>;
-
-    notifyFromResults(results, notifier);
-
-    expect(resourceListChanged).not.toHaveBeenCalled();
-  });
-
-  it("fans out nothing for an empty results array", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
-
-    notifyFromResults([], notifier);
-
-    expect(resourceListChanged).not.toHaveBeenCalled();
-  });
-
-  it("fires for added, updated, and removedUids independently", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
-
-    // One result with only `added`, one with only `updated`, one with only `removedUids`
-    const results = [
-      { changeType: "recipes", changes: { added: [{}], updated: [], removedUids: [] } },
-      { changeType: "menus", changes: { added: [], updated: [{}], removedUids: [] } },
-      { changeType: "menu-items", changes: { added: [], updated: [], removedUids: ["z"] } },
-    ] as unknown as ReadonlyArray<AnySyncResult>;
-
-    notifyFromResults(results, notifier);
-
-    expect(resourceListChanged).toHaveBeenCalledTimes(3);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // nextSyncPace

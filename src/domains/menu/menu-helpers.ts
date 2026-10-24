@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { MealType } from "../meal-type/types.js";
 import type { RecipeUid } from "../recipe/ids.js";
-import type { RecipeRow } from "../recipe/recipe-markdown.js";
+import type { RecipeRow } from "../recipe/recipe-helpers.js";
 import type { Recipe } from "../recipe/types.js";
 import type { MenuItem } from "./menu-item/types.js";
 import type { Menu } from "./types.js";
@@ -10,7 +10,7 @@ import type { Menu } from "./types.js";
 import { integer } from "../../shared/tools.js";
 import { MealTypeUidSchema } from "../meal-type/ids.js";
 import { RecipeUidSchema } from "../recipe/ids.js";
-import { recipeRowSchema } from "../recipe/recipe-markdown.js";
+import { recipeRowSchema } from "../recipe/recipe-helpers.js";
 import { MenuItemUidSchema, MenuUidSchema } from "./ids.js";
 
 /**
@@ -76,8 +76,7 @@ export type MenuReadStructured = z.infer<typeof menuReadOutputSchema>;
 
 /**
  * Map menu items into {@link MenuItemRow}s, resolving each type's name through the
- * meal-type catalog (the same resolution {@link menuToMarkdown} uses, so the text and
- * the rows agree by construction). A dangling `typeUid` resolves to `typeName: null`.
+ * meal-type catalog. A dangling `typeUid` resolves to `typeName: null`.
  *
  * `recipeRowsByUid` carries the denormalized recipe metadata the caller resolved from
  * the recipe store (keyed by `RecipeUid`); a freeform item or a dangling link (a uid
@@ -95,9 +94,9 @@ export function menuItemsToRows(
     nameByTypeUid.set(mt.uid, mt.name);
     orderByTypeUid.set(mt.uid, mt.orderFlag);
   }
-  // Emit rows in the SAME display order menuToMarkdown renders — day ascending, then
-  // within a day by meal-type orderFlag (unknown/dangling types last), then item
-  // orderFlag — so a widget rendering from structuredContent.items matches the text
+  // Emit rows in display order — day ascending, then within a day by meal-type
+  // orderFlag (unknown/dangling types last), then item orderFlag — so a widget
+  // rendering from structuredContent.items renders in a stable display order
   // (the store can hand us items in insertion/sync order, not display order).
   const ordered = [...items].sort((a, b) => {
     if (a.day !== b.day) return a.day - b.day;
@@ -132,82 +131,4 @@ export function menuToReadStructured(
     notes: menu.notes,
     items: menuItemsToRows(items, mealTypes, recipeRowsByUid),
   };
-}
-
-/**
- * Pure renderer for a single menu and its items. Iterates the menu's full
- * `days` span (Day 1..menu.days); a day with no items renders
- * `_(no meals planned)_`. Within a day, items sort by their meal-type's
- * `orderFlag` (an unknown `typeUid` sorts last), then by item `orderFlag`.
- *
- * Each item line shows the resolved meal-type name and the recipe display name
- * (already denormalized on `item.name`). The menu UID and the per-item
- * menuitem/recipe UIDs travel on the structured channel ({@link menuToReadStructured})
- * and the resource header — the human lines carry no identifiers.
- *
- * Pure — takes the `mealTypes` catalog array for `typeUid`→name/order resolution.
- * Both callers pass `ctx.deps["meal-type"].getAll()`.
- */
-export function menuToMarkdown(
-  menu: Readonly<Menu>,
-  items: ReadonlyArray<Readonly<MenuItem>>,
-  mealTypes: ReadonlyArray<Readonly<MealType>>,
-): string {
-  // Resolve meal-type name and order once. `UNKNOWN_ORDER` sorts unknown types
-  // last within a day (a menuitem may reference a type that's been deleted from
-  // the catalog, or a custom type not yet synced).
-  const UNKNOWN_ORDER = Number.MAX_SAFE_INTEGER;
-  const nameByTypeUid = new Map<string, string>();
-  const orderByTypeUid = new Map<string, number>();
-  for (const mt of mealTypes) {
-    nameByTypeUid.set(mt.uid, mt.name);
-    orderByTypeUid.set(mt.uid, mt.orderFlag);
-  }
-
-  const lines: Array<string> = [];
-  lines.push(`# ${menu.name}`);
-  lines.push("");
-  lines.push(`**Days:** ${menu.days.toString()}`);
-  if (menu.notes !== "") {
-    lines.push(`**Notes:** ${menu.notes}`);
-  }
-
-  // Bucket items by day for the full-span render.
-  const itemsByDay = new Map<number, Array<Readonly<MenuItem>>>();
-  for (const item of items) {
-    const bucket = itemsByDay.get(item.day);
-    if (bucket === undefined) {
-      itemsByDay.set(item.day, [item]);
-    } else {
-      bucket.push(item);
-    }
-  }
-
-  for (let day = 1; day <= menu.days; day += 1) {
-    lines.push("");
-    lines.push(`## Day ${day.toString()}`);
-    const dayItems = itemsByDay.get(day);
-    if (dayItems === undefined || dayItems.length === 0) {
-      lines.push("");
-      lines.push("_(no meals planned)_");
-      continue;
-    }
-    const sorted = [...dayItems].sort((a, b) => {
-      const orderA = orderByTypeUid.get(a.typeUid) ?? UNKNOWN_ORDER;
-      const orderB = orderByTypeUid.get(b.typeUid) ?? UNKNOWN_ORDER;
-      if (orderA !== orderB) return orderA - orderB;
-      return a.orderFlag - b.orderFlag;
-    });
-    lines.push("");
-    for (const item of sorted) {
-      // A typeUid that misses the catalog is a DANGLING reference (its type was
-      // deleted): render the item with no type prefix rather than
-      // leaking the raw UID into the line.
-      const typeName = nameByTypeUid.get(item.typeUid);
-      const line = typeName !== undefined ? `- **${typeName}:** ${item.name}` : `- ${item.name}`;
-      lines.push(line);
-    }
-  }
-
-  return lines.join("\n");
 }

@@ -183,39 +183,6 @@ describe("syncReplaceAllEntity", () => {
     expect(store.isPendingUpsert(list.uid)).toBe(true);
   });
 
-  it("calls afterLoad between store.load and cache.put loop", async () => {
-    const list = makeGroceryList();
-    const store = new GroceryListStore();
-    const loadSpy = vi.spyOn(store, "load");
-    const { cache, put } = makeCache([]);
-    const afterLoadOrder: Array<string> = [];
-    loadSpy.mockImplementation((...args) => {
-      afterLoadOrder.push("load");
-      return GroceryListStore.prototype.load.call(store, ...args);
-    });
-    put.mockImplementation(() => {
-      afterLoadOrder.push("put");
-      return okAsync<void, never>(undefined);
-    });
-    const afterLoad = vi.fn(() => {
-      afterLoadOrder.push("afterLoad");
-    });
-    await syncReplaceAllEntity({
-      fetch: () => okAsync([list]),
-      cache,
-      store,
-      equals: listsEqual,
-      label: "grocery lists",
-      log: SILENT_LOG,
-      afterLoad,
-    });
-    const loadIdx = afterLoadOrder.indexOf("load");
-    const afterLoadIdx = afterLoadOrder.indexOf("afterLoad");
-    const putIdx = afterLoadOrder.indexOf("put");
-    expect(loadIdx).toBeLessThan(afterLoadIdx);
-    expect(afterLoadIdx).toBeLessThan(putIdx);
-  });
-
   it("propagates errors from fetch", async () => {
     const store = new GroceryListStore();
     const { cache } = makeCache([]);

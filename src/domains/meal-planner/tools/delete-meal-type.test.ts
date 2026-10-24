@@ -47,7 +47,6 @@ describe("delete_meal_type tool", () => {
     const text = await kh.callToolText("delete_meal_type", { uid: brunch.uid });
 
     expect(text).toBe('Deleted meal type "Brunch".');
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
     const saveMealTypes = vi.mocked(kh.client().saveMealTypes);
     expect(saveMealTypes).toHaveBeenCalledOnce();
     const saved = saveMealTypes.mock.calls[0]![0] as ReadonlyArray<MealType>;

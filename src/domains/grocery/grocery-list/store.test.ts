@@ -117,27 +117,5 @@ describe("GroceryListStore", () => {
 
       expect(results).toHaveLength(0);
     });
-
-    it("lastSyncedAt returns null before setLastSyncedAt()", () => {
-      expect(store.lastSyncedAt).toBeNull();
-    });
-
-    it("lastSyncedAt returns Date after setLastSyncedAt()", () => {
-      const now = new Date();
-      store.setLastSyncedAt(now);
-
-      expect(store.lastSyncedAt).toBe(now);
-    });
-
-    it("setLastSyncedAt() defaults to current date when called without argument", () => {
-      const before = new Date();
-      store.setLastSyncedAt();
-      const after = new Date();
-
-      const at = store.lastSyncedAt;
-      expect(at).not.toBeNull();
-      expect(at!.getTime()).toBeGreaterThanOrEqual(before.getTime());
-      expect(at!.getTime()).toBeLessThanOrEqual(after.getTime());
-    });
   });
 });

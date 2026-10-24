@@ -60,7 +60,6 @@ describe("rate_recipe tool", () => {
     await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 5 });
 
     expect(kh.state().recipe.store.get(recipe.uid)?.rating).toBe(5);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("calls saveRecipe and notifySync exactly once each", async () => {

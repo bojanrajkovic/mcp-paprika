@@ -46,7 +46,6 @@ describe("favorite_recipe tool", () => {
     await kh.callTool("favorite_recipe", { uid: recipe.uid });
 
     expect(kh.state().recipe.store.get(recipe.uid)?.onFavorites).toBe(true);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("carries structuredContent with the favorited recipe's machine fields", async () => {
@@ -139,7 +138,6 @@ describe("unfavorite_recipe tool", () => {
     await kh.callTool("unfavorite_recipe", { uid: recipe.uid });
 
     expect(kh.state().recipe.store.get(recipe.uid)?.onFavorites).toBe(false);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("carries structuredContent with the unfavorited recipe's machine fields", async () => {

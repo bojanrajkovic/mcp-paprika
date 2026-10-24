@@ -6,7 +6,7 @@ import type { RecipeState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { cookPrepSchema, cookRecipeOutputSchema, recipePhotoResourceUri } from "../recipe-markdown.js";
+import { cookPrepSchema, cookRecipeOutputSchema, recipePhotoResourceUri } from "../recipe-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // One parsed ingredient line: the canonical text plus its component section (a

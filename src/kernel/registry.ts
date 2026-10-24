@@ -175,8 +175,8 @@ export type SyncTier = "reference" | "core" | "additive";
  * entity via `syncs`. `reconcile` receives the SAME {@link BootCtx} the boot hooks
  * do: its own store/cache via `state`, its declared deps' contracts via `deps`, the
  * Paprika client via `infra.client`. So no central all-stores context is needed. It
- * resolves to an `AnySyncResult` to be emitted as `sync:complete` (recipes/grocery/
- * menus), or `void` for reference/soft entities that emit nothing; an `err` is the
+ * resolves to an `AnySyncResult` carrying the cycle's per-entity changes (recipes/grocery/
+ * menus), or `void` for reference/soft entities that report none; an `err` is the
  * abort signal the driver scopes by tier — a reconcile never
  * throws. `sweep` is the per-store pending-write TTL sweep the driver runs once at
  * end-of-cycle.
@@ -209,8 +209,9 @@ interface ErasedSync {
  * `resources` is parallel to `tools`: each entry is a `defineResource` {@link ResourceDef}
  * the kernel registers via `resource.register(ctx)`, reading its own data via
  * `ctx.state` and any shared data via `ctx.deps.<id>` contracts. Resources are
- * read-only (Content domains only — recipe, grocery-list, menu — plus the widgets
- * feature), so they never touch `ctx.writes` and most modules supply none.
+ * read-only (the recipe photo proxy and the widgets feature — both `ui://`; ADR-0026
+ * removed the `paprika://` content resources), so they never touch `ctx.writes` and
+ * most modules supply none.
  */
 export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, Writes = Record<never, never>> {
   readonly api: DomainRegistry[Id];
@@ -382,12 +383,12 @@ export interface Kernel {
    * Run ONE sync cycle: reference catalogs first (best-effort), then core (recipe
    * first, then the rest in dependency order; a core `err` aborts), then additive
    * best-effort, then flush + sweep. Never throws.
-   * Returns the cycle's `outcome` plus the results a production wiring emits as
-   * `sync:complete` (feeding the notifier subscriber) — but results ONLY for a cycle
-   * that completed through flush; an aborted cycle (a core `err` or a flush error)
-   * returns `[]`, so a partial, un-flushed cycle fans out no resource notification.
-   * The interval driver reads `outcome` to pace its next cycle (`core_partial`
-   * retries sooner). The initial cycle already ran at build time (gating the
+   * Returns the cycle's `outcome` plus its per-entity change results, which feed the
+   * change-count metrics. Results come back ONLY for a cycle that completed through
+   * flush; an aborted cycle (a core `err` or a flush error) returns `[]`, so a partial,
+   * un-flushed cycle counts no changes. The interval driver reads `outcome` to pace its
+   * next cycle (`core_partial` retries sooner). The initial cycle already ran at build
+   * time (gating the
    * post-sync hooks); the interval driver calls this on its loop.
    *
    * `trigger` only labels telemetry (the cycle span + duration histogram);
@@ -581,7 +582,7 @@ export async function buildKernel(
     // stamps the outcome, records the duration histogram, and — only for a
     // cycle that completed through flush — counts the applied changes. The
     // change counters mirror the results contract: an aborted cycle reports
-    // none, exactly as it fans out no notification.
+    // none.
     const cycleSpan = getTracer().startSpan("paprika.sync_cycle", { attributes: { [ATTR_SYNC_TRIGGER]: trigger } });
     const cycleElapsedSeconds = startTimer();
     const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): SyncCycle => {
@@ -678,8 +679,8 @@ export async function buildKernel(
         }
         // Only a cycle that reached flush reports results: a core-reconcile err (or
         // a flush error) aborts the cycle. Returning the partially accumulated
-        // `results` for an aborted, un-flushed cycle would fan out a resource
-        // notification for state that never became durable — return `[]` instead.
+        // `results` for an aborted, un-flushed cycle would count changes for state
+        // that never became durable — return `[]` instead.
         return (await flushAll()).match(
           () => {
             let swept = 0;
@@ -707,12 +708,8 @@ export async function buildKernel(
   // stores. The interval loop just calls `syncOnce` repeatedly. The startup breadcrumb
   // (#158) brackets the cycle: a failure logs `sync failed` (error) from the catch above.
   infra.log.info("running initial sync");
-  // The initial cycle's results are intentionally discarded: at this point no server /
-  // session exists (stdio's ServerRef is unset; HTTP has zero sessions), so a resource
-  // notification would no-op. The interval
-  // driver's immediate first iteration re-syncs and DOES call notifyFromResults once a
-  // session can receive it. If the bootstrap order ever changes so a server exists here,
-  // wire notifyFromResults onto this call too.
+  // The initial cycle's results are intentionally discarded — the interval driver
+  // re-syncs immediately to keep the cache warm, and nothing consumes a cycle's results.
   await inBoot(async () => {
     await syncOnce("boot");
     for (const phase of BOOT_PHASES) {

@@ -5,7 +5,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverState } from "../module.js";
 
-import { browseContextSchema, recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
+import { browseContextSchema, recipeRowSchema } from "../../../domains/recipe/recipe-helpers.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, structuredResult } from "../../../shared/tools.js";
 

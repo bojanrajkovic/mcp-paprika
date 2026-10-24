@@ -7,7 +7,7 @@ import type { MealType } from "./types.js";
 
 /**
  * Meal-type's public contract — the shared meal-type catalog the meal and menu
- * domains (and the menu resource) resolve against. Read lookups, plus the write
+ * domains resolve against. Read lookups, plus the write
  * paths: `ensureMealType` auto-creates a custom type on first reference (mirroring
  * aisle's `ensureAisle`), `resolveOrCreate` is the spec-driven resolve-or-create the
  * meal/menu single-item write tools call, and `deleteMealType` backs the meal-planner
@@ -20,11 +20,6 @@ import type { MealType } from "./types.js";
  * check before resolving or auto-creating a type.
  */
 export interface MealTypeApi extends HasSynced {
-  /**
-   * Resolve a list of meal-type UIDs to their display names, in order, skipping
-   * unknown/dangling UIDs. Backs the menu resource and the meal/menu renderers.
-   */
-  resolveNames(uids: ReadonlyArray<MealTypeUid>): ReadonlyArray<string>;
   /**
    * Resolve a `{name} | {uid} | {builtin}` spec against the catalog. Returns the
    * resolved `MealType` on a hit, or a structured error reason callers map to

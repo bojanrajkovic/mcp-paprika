@@ -5,7 +5,7 @@ import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, integer, structuredResult } from "../../../shared/tools.js";
-import { listRecipesOutputSchema, recipeToRow } from "../recipe-markdown.js";
+import { listRecipesOutputSchema, recipeToRow } from "../recipe-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**

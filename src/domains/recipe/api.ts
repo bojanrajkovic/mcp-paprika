@@ -3,7 +3,7 @@ import type { Result } from "neverthrow";
 import type { HasSynced } from "../../kernel/registry.js";
 import type { CategoryUid, RecipeUid } from "./ids.js";
 import type { Photo } from "./photo/types.js";
-import type { RecipeRow } from "./recipe-markdown.js";
+import type { RecipeRow } from "./recipe-helpers.js";
 import type { Recipe } from "./types.js";
 
 /**

@@ -4,7 +4,7 @@ import type { RecipeState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { resolveLookup, resolveOrPick, structuredResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
