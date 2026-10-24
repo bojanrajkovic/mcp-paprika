@@ -40,8 +40,10 @@ import {
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
 import { Result } from "neverthrow";
+import pino from "pino";
 import { z } from "zod";
 
+import { getDiagLogTarget, lazy } from "./scope.js";
 import { urlScrubbingExporter } from "./url-scrub.js";
 
 const DIAG_LEVELS: Readonly<Record<string, DiagLogLevel>> = {
@@ -54,18 +56,33 @@ const DIAG_LEVELS: Readonly<Record<string, DiagLogLevel>> = {
   all: DiagLogLevel.ALL,
 };
 
-// process.stderr.write is deliberate: diag fires inside the SDK's export loop,
-// before/after the structured logger's lifetime, and must never touch stdout
-// (the stdio MCP wire). Same documented-exception class as src/index.ts; see
-// src/telemetry/CLAUDE.md.
-function stderrDiagLogger(): DiagLogger {
+// Before the composition root sets a target (the telemetry preload runs before any
+// logger exists), diag lines go to stderr — never stdout, the stdio MCP wire. Pino's
+// own level is "trace" so it never re-filters: `diag.setLogger`'s level is the gate.
+const stderrDiagLog = lazy(() => pino({ base: null, level: "trace" }, pino.destination({ dest: 2, sync: true })));
+
+/**
+ * The OTel diag logger: structured pino records (`component: "otel"`) on the target
+ * from `setDiagLogTarget` — the app's own log destination — falling back to stderr.
+ * The target is read per call, so lines logged after the app logger exists follow it.
+ * Exported for tests.
+ */
+export function diagLogger(): DiagLogger {
   const at =
-    (level: string) =>
+    (level: "error" | "warn" | "info" | "debug" | "trace") =>
     (message: string, ...args: ReadonlyArray<unknown>): void => {
-      const detail = args.length > 0 ? ` ${args.map(String).join(" ")}` : "";
-      process.stderr.write(`[otel:${level}] ${message}${detail}\n`);
+      // An Error rides `err` (pino serializes its message and stack); anything else
+      // rides `args`, so exporter failures keep the detail an operator needs.
+      const err = args.find((a) => a instanceof Error);
+      const rest = args.filter((a) => a !== err);
+      const fields = {
+        component: "otel",
+        ...(err === undefined ? {} : { err }),
+        ...(rest.length === 0 ? {} : { args: rest }),
+      };
+      (getDiagLogTarget() ?? stderrDiagLog())[level](fields, message);
     };
-  return { error: at("error"), warn: at("warn"), info: at("info"), debug: at("debug"), verbose: at("verbose") };
+  return { error: at("error"), warn: at("warn"), info: at("info"), debug: at("debug"), verbose: at("trace") };
 }
 
 const packageJsonSchema = z.object({ version: z.string() });
@@ -132,12 +149,12 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
     () => {
       register("@opentelemetry/instrumentation/hook.mjs", import.meta.url);
 
-      // Consume OTEL_LOG_LEVEL ourselves (stderr logger, default ERROR so a
+      // Consume OTEL_LOG_LEVEL ourselves (our pino diag logger, default ERROR so a
       // dead collector is visible without being chatty), and clear it so the
       // NodeSDK constructor can't install its stdout-writing console logger.
       const rawLevel = process.env["OTEL_LOG_LEVEL"];
       delete process.env["OTEL_LOG_LEVEL"];
-      diag.setLogger(stderrDiagLogger(), DIAG_LEVELS[rawLevel?.toLowerCase() ?? ""] ?? DiagLogLevel.ERROR);
+      diag.setLogger(diagLogger(), DIAG_LEVELS[rawLevel?.toLowerCase() ?? ""] ?? DiagLogLevel.ERROR);
 
       const version = serviceVersion();
       // The reader does not read OTEL_METRIC_EXPORT_INTERVAL / _TIMEOUT itself

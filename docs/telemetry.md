@@ -16,7 +16,7 @@ Signals gate individually past that: each exports only when its own endpoint is 
 
 All other tuning rides the [standard OTel environment variables](https://opentelemetry.io/docs/languages/sdk-configuration/) (`OTEL_SERVICE_NAME`, `OTEL_TRACES_SAMPLER`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_METRIC_EXPORT_INTERVAL`, `OTEL_RESOURCE_ATTRIBUTES`, …) — none of this is mirrored into the server's own Zod config. These can live in the same XDG-config `.env` file the rest of the configuration uses (the bootstrap loads it before the gate check; see `docs/configuration.md` § ".env file"). Two deliberate deviations from stock SDK behavior, both for the stdio wire:
 
-- **`OTEL_LOG_LEVEL` routes diag output to stderr**, never the SDK's console logger (whose info/debug levels write to stdout — the MCP protocol wire in stdio mode). Default diag level is `error`, so a dead collector is visible without being chatty.
+- **`OTEL_LOG_LEVEL` routes diag output into the server's own log stream**, never the SDK's console logger (whose info/debug levels write to stdout — the MCP protocol wire in stdio mode). Diag lines are JSON records with `component: "otel"`, written wherever the app logs go: stdout under HTTP, the log file or stderr under stdio. Default diag level is `error`, so a dead collector is visible without being chatty.
 - **No console exporters exist**, even behind flags. Export is OTLP/HTTP only; to eyeball telemetry locally, run a collector with a debug exporter (below).
 
 ## How it loads (the two bootstrap paths)
