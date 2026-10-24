@@ -111,7 +111,7 @@ function paprikaMockHandlers() {
 // nested OAuth describe's beforeAll, which runs before the first test's outer beforeEach.
 // Note: msw's lifecycle hooks are wired by the composable; variable is used indirectly.
 void useMswServer([...paprikaMockHandlers(), ...oidcStub.handlers], {
-  onUnhandledRequest: failLoudOnUpstream,
+  onUnhandledFrame: failLoudOnUpstream,
   onReset: () => oidcStub.resetOverrides(),
 });
 const xdg = useXdgIsolation("mcp-paprika-http");

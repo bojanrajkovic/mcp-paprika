@@ -44,7 +44,7 @@ const ALLOWED_EMAIL = "user@x.com";
 // failLoudOnUpstream: any unmocked real-host request errors (bypassing the
 // in-process localhost server the tests drive), so a missing Paprika/OIDC mock
 // fails immediately instead of silently hitting the network and stalling.
-const msw = useMswServer([], { onUnhandledRequest: failLoudOnUpstream });
+const msw = useMswServer([], { onUnhandledFrame: failLoudOnUpstream });
 
 // ============================================================================
 // Config factory

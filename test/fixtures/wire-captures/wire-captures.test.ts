@@ -51,7 +51,7 @@ describe("wire capture fixtures", () => {
 
     it("handlers replay recorded responses", async () => {
       const server = setupServer(...mealHandlers);
-      server.listen({ onUnhandledRequest: "error" });
+      server.listen({ onUnhandledFrame: "error" });
 
       try {
         const response = await fetch("https://paprikaapp.com/api/v2/sync/meals/", {
