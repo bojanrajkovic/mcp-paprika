@@ -328,7 +328,7 @@ describe("OIDC Presets", () => {
           clientId: "test-client",
           clientSecret: "test-secret",
           publicUrl: "https://example.com",
-          trustProxy: false,
+          clientIp: { kind: "peer" },
           allowlist: { emails: ["test@example.com"], subs: [] },
           redirectAllowlist: [],
         };

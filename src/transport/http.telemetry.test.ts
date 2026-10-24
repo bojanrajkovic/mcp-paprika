@@ -2,14 +2,15 @@ import { Hono } from "hono";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { installTestTelemetry } from "../../test/support/telemetry-test-utils.js";
+import { type ClientIpSource, PEER_CLIENT_IP } from "./client-ip.js";
 import { tracedRequests } from "./http.js";
 
 // Module scope, before any recording — see the helper's doc-comment.
 const telemetry = installTestTelemetry();
 
-function appWithRoutes(trustProxy = false): Hono {
+function appWithRoutes(clientIp?: ClientIpSource): Hono {
   const app = new Hono();
-  app.use("*", tracedRequests(trustProxy));
+  app.use("*", tracedRequests(clientIp));
   app.get("/healthz", (c) => c.json({ ok: true }));
   app.all("/mcp", (c) => c.text("mcp"));
   app.get("/other", (c) => c.text("other"));
@@ -57,16 +58,17 @@ describe("tracedRequests", () => {
     expect(span.attributes["http.request.header.accept-language"]).toBe("en-US");
   });
 
-  it("trusts x-forwarded-for for client.address ONLY when trustProxy is set", async () => {
-    // Behind a trusted proxy: the leftmost forwarded hop is the real client.
-    const trusting = appWithRoutes(true);
+  it("reads client.address from the proxy header ONLY in header mode", async () => {
+    // Behind a trusted proxy: the rightmost entry is the hop that proxy added; the
+    // leftmost came from the client and may be forged.
+    const trusting = appWithRoutes({ kind: "header", header: "x-forwarded-for" });
     await trusting.request("/other", { headers: { "x-forwarded-for": "203.0.113.5, 198.51.100.1" } });
-    expect(telemetry.spanExporter.getFinishedSpans()[0]!.attributes["client.address"]).toBe("203.0.113.5");
+    expect(telemetry.spanExporter.getFinishedSpans()[0]!.attributes["client.address"]).toBe("198.51.100.1");
 
     // Directly exposed: a forged header is ignored, and the in-memory adapter has
     // no socket peer, so client.address is simply unset (never the spoofed value).
     telemetry.spanExporter.reset();
-    const direct = appWithRoutes(false);
+    const direct = appWithRoutes(PEER_CLIENT_IP);
     await direct.request("/other", { headers: { "x-forwarded-for": "203.0.113.5" } });
     expect(telemetry.spanExporter.getFinishedSpans()[0]!.attributes["client.address"]).toBeUndefined();
   });
