@@ -66,7 +66,7 @@ async function runIndexBoot(
   const discoverModule = registeredModules().find((m) => m.id === "discover")!;
   const built = await discoverModule.build(infra, {});
   (built.state as { vectorStore: VectorStore | null }).vectorStore = fromAny(mockVs);
-  await built.onReady!.index!({ state: built.state, deps: { recipe: makeRecipeDeps(recipes) }, infra });
+  await built.onIndexReady!({ state: built.state, deps: { recipe: makeRecipeDeps(recipes) }, infra });
   return { infra, records };
 }
 
@@ -270,7 +270,7 @@ describe("discover module — index boot hook (#177)", () => {
       expect((built.state as { vectorStore: VectorStore | null }).vectorStore).toBeNull();
 
       // The hook early-returns; with no subscription, emitting a re-index event must not throw.
-      await built.onReady!.index!({ state: built.state, deps: { recipe: makeRecipeDeps([]) }, infra });
+      await built.onIndexReady!({ state: built.state, deps: { recipe: makeRecipeDeps([]) }, infra });
       expect(() => infra.indexEvents.emit({ type: "recipe-changed", recipes: [] })).not.toThrow();
     });
   });
