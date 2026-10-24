@@ -44,6 +44,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "oauth.clientId": "MCP_OIDC_CLIENT_ID",
   "oauth.clientSecret": "MCP_OIDC_CLIENT_SECRET",
   "oauth.trustProxy": "MCP_TRUST_PROXY",
+  "oauth.clientIpHeader": "MCP_CLIENT_IP_HEADER",
   "oauth.allowlist.emails": "MCP_ALLOWED_EMAILS",
   "oauth.allowlist.subs": "MCP_ALLOWED_SUBS",
   "oauth.redirectAllowlist": "MCP_OAUTH_REDIRECT_ALLOWLIST",
@@ -246,11 +247,23 @@ export const paprikaConfigSchema = z
         allowedAlgs: listField.optional(),
         clientId: z.string().min(1).optional(),
         clientSecret: z.string().min(1).optional(),
-        // Trust X-Forwarded-For / CF-Connecting-IP for the DCR rate-limit key.
-        // Default false (safe for direct exposure). Set true behind a sanitizing
-        // reverse proxy (k8s ingress, Tailscale Funnel, Cloudflare). See
-        // src/auth/routes.ts:buildDcrRateLimit for why this matters.
+        // Trust a front proxy's client-IP header for the DCR rate-limit key and
+        // the request span's client.address. Default false (safe for direct
+        // exposure). Set true behind a sanitizing reverse proxy (k8s ingress,
+        // Tailscale Funnel, Cloudflare). See src/transport/client-ip.ts.
         trustProxy: booleanField.default(false),
+        // Which header that proxy sets (rightmost entry wins); resolved to
+        // `x-forwarded-for` when unset. Meaningless without trustProxy, so the
+        // superRefine below rejects that combination instead of ignoring it.
+        // An empty value (a templated manifest's `value: ""`) means unset.
+        clientIpHeader: z.preprocess(
+          (v) => (v === "" ? undefined : v),
+          z
+            .string()
+            .regex(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/, "must be an HTTP header name, e.g. cf-connecting-ip")
+            .transform((v) => v.toLowerCase())
+            .optional(),
+        ),
         allowlist: z
           .object({
             emails: listField.default([]),
@@ -271,6 +284,15 @@ export const paprikaConfigSchema = z
   .superRefine((cfg, ctx) => {
     if (cfg.transport !== "http") return;
     const oauth = cfg.oauth;
+
+    if (oauth?.clientIpHeader !== undefined && !oauth.trustProxy) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["oauth", "clientIpHeader"],
+        message:
+          "MCP_CLIENT_IP_HEADER needs MCP_TRUST_PROXY=true; without a trusted proxy the header is client-forgeable",
+      });
+    }
 
     // Check publicUrl (required when transport=http)
     if (!oauth?.publicUrl) {
@@ -512,6 +534,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_OIDC_CLIENT_ID"] !== undefined) oauth["clientId"] = env["MCP_OIDC_CLIENT_ID"];
   if (env["MCP_OIDC_CLIENT_SECRET"] !== undefined) oauth["clientSecret"] = env["MCP_OIDC_CLIENT_SECRET"];
   if (env["MCP_TRUST_PROXY"] !== undefined) oauth["trustProxy"] = env["MCP_TRUST_PROXY"];
+  if (env["MCP_CLIENT_IP_HEADER"] !== undefined) oauth["clientIpHeader"] = env["MCP_CLIENT_IP_HEADER"];
   if (env["MCP_OAUTH_REDIRECT_ALLOWLIST"] !== undefined)
     oauth["redirectAllowlist"] = env["MCP_OAUTH_REDIRECT_ALLOWLIST"];
 

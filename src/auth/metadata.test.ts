@@ -48,7 +48,7 @@ describe("OAuth Metadata Customization", () => {
         clientSecret: "stub-client-secret",
         scopes: ["openid", "email"],
         emailVerifiedPolicy: "if-present",
-        trustProxy: false,
+        clientIp: { kind: "peer" },
         allowlist: { emails: [], subs: [] },
         allowedAlgs: ["RS256"],
         redirectAllowlist: [],

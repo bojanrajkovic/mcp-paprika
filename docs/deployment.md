@@ -95,7 +95,8 @@ connections end to end. Three approaches:
   (required for rate limiting; pair it with `MCP_TRUST_PROXY=true`), and forwards to the
   container on a private port.
 - **Cloudflare Tunnel:** no inbound port exposed; Cloudflare terminates TLS. Pairs well
-  with Cloudflare Access for an extra authentication layer.
+  with Cloudflare Access for an extra authentication layer. Set `MCP_TRUST_PROXY=true` and
+  `MCP_CLIENT_IP_HEADER=cf-connecting-ip`.
 - **Tailscale Funnel:** exposes the server publicly over HTTPS with a Tailscale-managed
   cert and no inbound port to open, the homelab-friendly way to give claude.ai a
   reachable `MCP_PUBLIC_URL`. Set `MCP_TRUST_PROXY=true`, since Funnel forwards the

@@ -41,7 +41,7 @@ import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemet
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
 import { unwrapAtBoot } from "../utils/errors.js";
-import { clientAddress, peerAddress } from "./client-ip.js";
+import { clientAddress, type ClientIpSource, PEER_CLIENT_IP, peerAddress } from "./client-ip.js";
 import { buildFaviconRouter } from "./favicon.js";
 import { buildWidgetPreviewRouter } from "./widget-preview.js";
 import { buildWidgetVendorRouter } from "./widget-vendor.js";
@@ -103,7 +103,7 @@ const PROBE_PATHS = new Set(["/healthz"]);
  *
  * Exported for isolated unit testing, same seam as {@link accessLog}.
  */
-export function tracedRequests(trustProxy = false): MiddlewareHandler {
+export function tracedRequests(clientIp: ClientIpSource = PEER_CLIENT_IP): MiddlewareHandler {
   // Name a POST /mcp span after the JSON-RPC method the handler stashed on the
   // context (e.g. `POST /mcp tools/call`), so tool calls stand out from the
   // protocol chatter (initialize, tools/list, ping, notifications) that otherwise
@@ -126,7 +126,7 @@ export function tracedRequests(trustProxy = false): MiddlewareHandler {
       return next();
     }
     return instrument(c, async () => {
-      enrichRequestSpan(c, trustProxy);
+      enrichRequestSpan(c, clientIp);
       return next();
     });
   };
@@ -137,18 +137,18 @@ const CAPTURED_REQUEST_HEADERS = ["origin", "accept-language"];
 
 /**
  * Add the caller fingerprint @hono/otel omits to the active request span:
- * `user_agent.original`, the real `client.address` (trustProxy-aware — see
+ * `user_agent.original`, the real `client.address` (proxy-aware — see
  * {@link clientAddress}), and the socket `network.peer.address` when it differs
  * (the proxy hop). Runs INSIDE the instrument span, the same seam
  * {@link tagMcpRequestSpan} uses. Best-effort: a missing value is left unset,
  * never an error into request handling.
  */
-function enrichRequestSpan(c: Context, trustProxy: boolean): void {
+function enrichRequestSpan(c: Context, clientIp: ClientIpSource): void {
   const span = trace.getActiveSpan();
   if (span === undefined) return;
   const userAgent = c.req.header("user-agent");
   if (userAgent !== undefined) span.setAttribute(ATTR_USER_AGENT_ORIGINAL, userAgent);
-  const client = clientAddress(c, trustProxy);
+  const client = clientAddress(c, clientIp);
   if (client !== null) span.setAttribute(ATTR_CLIENT_ADDRESS, client);
   const peer = peerAddress(c);
   if (peer !== null && peer !== client) span.setAttribute(ATTR_NETWORK_PEER_ADDRESS, peer);
@@ -388,7 +388,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // Request spans + HTTP server metrics: outermost, so the access log and
   // every downstream handler run inside the request span (tool spans parent
   // under it via the active context).
-  hono.use("*", tracedRequests(authContext?.config.trustProxy ?? false));
+  hono.use("*", tracedRequests(authContext?.config.clientIp ?? PEER_CLIENT_IP));
 
   // Response-flush span: inside the request span, brackets the body write the request/app spans
   // miss (both close at handler return). The only server-side view of serialize+write cost.
@@ -452,7 +452,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     //    (mcpAuthRouter processes it internally; middleware added after would be bypassed).
     //    The middleware-level cap is a fast-path 429; the authoritative atomic enforcement
     //    lives inside DiskClientRegistrationStore.registerClient (same MAX_REGISTERED_CLIENTS).
-    hono.use("/register", buildDcrRateLimit({ trustProxy: auth.config.trustProxy }));
+    hono.use("/register", buildDcrRateLimit({ clientIp: auth.config.clientIp }));
     hono.use("/register", buildClientCap(authCache, MAX_REGISTERED_CLIENTS));
 
     // 3. mcpAuthRouter mounts DCR + authorize + token + revoke.
