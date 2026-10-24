@@ -8,7 +8,7 @@ An [MCP](https://modelcontextprotocol.io/) server for the [Paprika](https://www.
 - **Semantic search** via `discover_recipes` — find recipes by natural language description using any OpenAI-compatible embedding provider
 - **AI recipe photos** via `generate_recipe_photo` — generate a styled food photo for a recipe (or restyle its existing one) using OpenRouter image models, and attach it automatically
 - **Background sync** — keeps your local cache in sync with Paprika's cloud
-- **MCP resources** — recipes as `paprika://recipe/{uid}`, grocery lists as `paprika://grocery-list/{uid}`, and menus as `paprika://menu/{uid}`
+- **Interactive widgets** — a recipe browser, a cooking view, grocery and pantry checklists, a meal-week planner, and menus, rendered as MCP Apps widgets on hosts that support them
 - **Two transports** — stdio (default, for CLI clients) and Streamable HTTP (for mobile/web clients)
 - **Container image** — a distroless runtime ready for self-hosting
 

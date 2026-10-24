@@ -22,18 +22,8 @@ export type TimeConstraints = {
 };
 
 export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
-  private _lastSyncedAt: Date | null = null;
-
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
-  }
-
-  get lastSyncedAt(): Date | null {
-    return this._lastSyncedAt;
-  }
-
-  setLastSyncedAt(at: Date = new Date()): void {
-    this._lastSyncedAt = at;
   }
 
   override getAll(): Array<Recipe> {

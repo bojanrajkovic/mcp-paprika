@@ -23,7 +23,7 @@ const SERVER_VERSION = _pkg.version;
 const SERVER_INSTRUCTIONS = `mcp-paprika bridges your Paprika recipe library: recipes, the pantry, grocery lists, meal planning, and menus. Tools read as plain commands in verb_entity order (read_recipe, list_pantry_items, update_grocery_item), so most acts are guessable from the name.
 
 Orientation:
-- Recipes, grocery lists, and menus are exposed both as tools (which you call) and as paprika://… resources the user can attach. The read_* tools fetch one by UID on your own, without waiting for an attach.
+- Recipes, grocery lists, and menus are read with the read_* tools (read_recipe, read_grocery_list, read_menu), which fetch one by UID directly.
 - Finding recipes: search_recipes matches by name / ingredient / description and also filters by an ingredient list and by max prep / cook / total time — pass any one of those. discover_recipes (present only when semantic search is configured) handles natural-language queries.
 - Open-ended edits vs. named acts: the update_* tools change free-form content fields only. The acts a user names have their own verbs — rate_recipe, favorite_recipe / unfavorite_recipe, pin_recipe / unpin_recipe, categorize_recipe, mark_grocery_item_purchased, mark_pantry_item_out_of_stock / restock_pantry_item, reschedule_meal, move_menu_item. Trying to set one of those through update_* is rejected; reach for the verb.
 - Recipe trash is the one reversible delete, spoken in steps: trash_recipe moves a recipe to the trash, restore_recipe brings it back, and purge_recipe permanently removes one already trashed. Deleting anything else (grocery items, pantry items, menu items, lists, aisles, meal types) is immediate and permanent.

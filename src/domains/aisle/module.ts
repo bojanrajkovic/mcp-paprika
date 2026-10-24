@@ -78,12 +78,7 @@ register(
       // both pass the check before either commits.
       const catalogWriteMutex = new Mutex();
       // The commit protocol lives in src/entity/commit.ts; this binds aisle's slice.
-      // Aisle commits fire resourceListChanged even though aisles have no resource
-      // of their own: grocery-list RESOURCES resolve item aisle names through this
-      // catalog live (render-resolution), so a rename/reorder/delete
-      // changes their rendered content without any grocery entity changing.
       const aisleFx = {
-        onCommitted: () => infra.notifier.resourceListChanged(),
         finish: () => notifySyncBestEffort(infra.client, infra.log),
       };
       const commitAisles = (aisles: ReadonlyArray<Readonly<Aisle>>): ResultAsync<void, CacheError> =>
@@ -150,7 +145,6 @@ register(
         noun: "Aisle",
         state,
         save: (tombstone) => infra.client.saveAisles([tombstone]),
-        onCommitted: aisleFx.onCommitted,
         finish: aisleFx.finish,
       });
       const deleteAisle: AisleApi["deleteAisle"] = (uid) => catalogWriteMutex.runExclusive(() => deleteAisleInner(uid));

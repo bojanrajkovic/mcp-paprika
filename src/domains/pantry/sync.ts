@@ -14,9 +14,8 @@ import { pantryItemsEqual } from "./types.js";
  * `core` tier — pantry is step 3 of the in-order core sequence
  * (recipes → categories → aisles → pantry → grocery), inside the outer try that
  * aborts the cycle on failure; it is NOT one of the additive (meals/menus/photos)
- * best-effort blocks. Returns a `PantrySyncResult` to be emitted as
- * `sync:complete` (the subscriber is a no-op for pantry — it has no resource
- * surface — but returning the changes faithfully preserves the emission contract).
+ * best-effort blocks. Returns a `PantrySyncResult` so its changes are counted in
+ * the sync change metrics.
  */
 export function pantrySync(state: PantryState): SyncContribution<PantryState, "aisle"> {
   return {

@@ -22,15 +22,15 @@ Both implementations swallow transport failures: `singleServerNotifier` silently
 
 ### `ServerRef` breaks the notifier/server bootstrap cycle (stdio)
 
-The notifier needs the server, the server is registered after the kernel is built, and the kernel's initial sync may fire `resourceListChanged` before any server exists. stdio resolves this with a `{ get, set }` `ServerRef` whose `get()` returns `undefined` until `set()` runs post-build, so an early notify silently no-ops. HTTP has no single server and uses `broadcastNotifier` over a live sessions snapshot instead. See ADR-0001.
+The notifier needs the server, the server is registered after the kernel is built, and the kernel's initial sync may push a logging notification before any server exists. stdio resolves this with a `{ get, set }` `ServerRef` whose `get()` returns `undefined` until `set()` runs post-build, so an early notify silently no-ops. HTTP has no single server and uses `broadcastNotifier` over a live sessions snapshot instead. See ADR-0001.
 
 ### `buildInfraBase` is the credential fast-fail, outside the kernel
 
 `client.authenticate()` errs here on bad credentials and `unwrapAtBoot` aborts boot (ADR-0014 form #5); the kernel's `syncOnce` swallows everything, so a credential error would otherwise be invisible (#158). Keep authentication in `buildInfraBase`, not in a module. The transports assemble the full `Infra` from this base plus `notifier`/`config`/`indexEvents`/`generatedImageStore`, then call `buildKernel`.
 
-### `notifyFromResults` fans out resource notifications from the loop, not the engine
+### The sync loop keeps the cache warm; it consumes no cycle results
 
-`buildKernel`'s `syncOnce` returns the `AnySyncResult[]` of a completed cycle; the interval loop passes them to `notifyFromResults`, which fires `resourceListChanged` only for change types with a resource surface (recipes, grocery-lists, grocery-items, menus, menu-items) and only when the change set is non-empty. The initial sync at build time discards its results (no session exists yet); the loop's immediate first cycle re-syncs and notifies.
+`buildKernel`'s `syncOnce` still returns the `AnySyncResult[]` of a completed cycle, but nothing consumes it: the interval loop just re-runs `syncOnce` to keep the in-memory stores warm against remote changes. There is no client-facing notification, because the surface has no resources to refresh (ADR-0026); the `Notifier` carries only `loggingMessage`.
 
 ### The index-event seam (`IndexEventEmitter`) crosses a non-edge
 

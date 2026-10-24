@@ -35,9 +35,6 @@ function countNotification(type: string, transport: string, outcome: "sent" | "f
  * server (stdio) or many (HTTP sessions).
  */
 export interface Notifier {
-  /** Tell connected clients to re-fetch the resource list. Fire-and-forget. */
-  resourceListChanged(): void;
-
   /** Push a logging message to connected clients. Resolves after best-effort delivery. */
   loggingMessage(params: LoggingMessageParams): Promise<void>;
 }
@@ -83,20 +80,6 @@ export function createServerRef(): ServerRef {
 export function singleServerNotifier(serverOrGetter: McpServer | (() => McpServer | undefined)): Notifier {
   const getServer = typeof serverOrGetter === "function" ? serverOrGetter : () => serverOrGetter;
   return {
-    resourceListChanged() {
-      const server = getServer();
-      if (!server) {
-        countNotification("resource_list_changed", "stdio", "dropped");
-        return;
-      }
-      try {
-        server.sendResourceListChanged();
-        countNotification("resource_list_changed", "stdio", "sent");
-      } catch {
-        // Swallow errors so a notification failure cannot break the sync loop.
-        countNotification("resource_list_changed", "stdio", "failed");
-      }
-    },
     async loggingMessage(params) {
       const server = getServer();
       if (!server) {
@@ -133,18 +116,6 @@ export type SessionSnapshot = () => Iterable<McpServer>;
  */
 export function broadcastNotifier(snapshot: SessionSnapshot): Notifier {
   return {
-    resourceListChanged() {
-      const servers = [...snapshot()];
-      for (const server of servers) {
-        try {
-          server.sendResourceListChanged();
-          countNotification("resource_list_changed", "http", "sent");
-        } catch {
-          // Per-session failure must not stop the broadcast.
-          countNotification("resource_list_changed", "http", "failed");
-        }
-      }
-    },
     async loggingMessage(params) {
       const servers = [...snapshot()];
       // Each call is wrapped in an async IIFE so a synchronous throw from

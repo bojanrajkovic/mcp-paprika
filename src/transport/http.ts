@@ -30,7 +30,7 @@ import { buildKernel } from "../kernel/registry.js";
 import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
-import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
+import { runSyncLoop } from "../server/sync-loop.js";
 import {
   clientAttrs,
   clientFingerprint,
@@ -369,12 +369,11 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   const log = opts._testLog ?? rootLog.child({ component: "transport-http" });
 
   // The interval loop runs its first cycle immediately (then waits), so — with
-  // buildKernel's initial cycle — startup syncs twice. notifyFromResults turns each
-  // cycle's returned results into resourceListChanged notifications, filtered to the
-  // change types with a resource surface.
+  // buildKernel's initial cycle — startup syncs twice. The cycle keeps the local cache
+  // warm; its results are discarded (no resource-list notification to fan out).
   const loop = config.sync.enabled
     ? runSyncLoop(async () => {
-        notifyFromResults(await kernel.syncOnce(), notifier);
+        await kernel.syncOnce();
       }, config.sync.interval)
     : null;
   if (loop !== null) {

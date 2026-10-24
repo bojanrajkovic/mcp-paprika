@@ -121,7 +121,6 @@ describe("categorize_recipe tool", () => {
 
     const stored = kh.state().recipe.store.get(recipe.uid);
     expect(stored?.categories).toEqual([catA.uid, catB.uid]);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("calls saveRecipe and notifySync exactly once on a successful categorize", async () => {

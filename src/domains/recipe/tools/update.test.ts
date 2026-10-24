@@ -123,7 +123,6 @@ describe("update_recipe tool", () => {
     await kh.callTool("update_recipe", { uid: recipe.uid, name: "Updated Name" });
 
     expect(kh.state().recipe.store.get(updated.uid)?.name).toBe("Updated Name");
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 });
 

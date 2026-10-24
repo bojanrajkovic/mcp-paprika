@@ -9,7 +9,7 @@ import type { Recipe } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, structuredResult } from "../../../shared/tools.js";
 import { parseDuration } from "../../../utils/duration.js";
-import { recipeToRow, searchRecipesOutputSchema } from "../recipe-markdown.js";
+import { recipeToRow, searchRecipesOutputSchema } from "../recipe-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 export const searchRecipesInputSchema = z

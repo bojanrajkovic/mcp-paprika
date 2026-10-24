@@ -77,14 +77,11 @@ type ResourceEntry = {
 /** Stub Notifier with vi.fn spies on each method, for assertions in tests. */
 export function makeStubNotifier(): {
   notifier: Notifier;
-  resourceListChanged: ReturnType<typeof vi.fn>;
   loggingMessage: ReturnType<typeof vi.fn>;
 } {
-  const resourceListChanged = vi.fn();
   const loggingMessage = vi.fn().mockResolvedValue(undefined);
   return {
-    notifier: { resourceListChanged, loggingMessage },
-    resourceListChanged,
+    notifier: { loggingMessage },
     loggingMessage,
   };
 }
@@ -95,12 +92,10 @@ export function makeTestServer(): {
   callTool: (name: string, args: Record<string, unknown>) => Promise<CallToolResult>;
   callResourceList: (name: string) => Promise<unknown>;
   callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
-  sendResourceListChanged: ReturnType<typeof vi.fn>;
   setElicitResponder: (responder?: ElicitResponder) => void;
 } {
   const handlers = new Map<string, (args: Record<string, unknown>) => Promise<CallToolResult>>();
   const resourceHandlers = new Map<string, ResourceEntry>();
-  const sendResourceListChanged = vi.fn();
   // Drives the elicitation gate (ADR-0020): unset → no client capability → the gate is
   // unsupported → fail-open (a confirm proceeds, a PICK falls back to prose). A test sets
   // a responder via setElicitResponder to exercise the accept / decline paths.
@@ -121,7 +116,6 @@ export function makeTestServer(): {
         read: (uri, variables) => readCallback(uri, variables, {}),
       });
     },
-    sendResourceListChanged,
     // The base Server slice the elicitation helpers (ADR-0020) read off `ctx.server.server`.
     server: {
       getClientCapabilities: () => (elicitResponder ? FORM_CAPABLE : undefined),
@@ -148,10 +142,9 @@ export function makeTestServer(): {
     callResource: (name, uid, uri) => {
       const entry = resourceHandlers.get(name);
       if (!entry) throw new Error(`Resource not registered: ${name}`);
-      const url = new URL(uri ?? `paprika://recipe/${uid}`);
+      const url = new URL(uri ?? `ui://recipe/${uid}/photo`);
       return entry.read(url, { uid } as Record<string, string | string[]>);
     },
-    sendResourceListChanged,
     setElicitResponder: (responder) => {
       elicitResponder = responder;
     },

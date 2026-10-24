@@ -7,13 +7,10 @@ import { menusEqual } from "../types.js";
 
 /**
  * Menu sync — replace-all with pending-write filtering via `syncReplaceAllEntity`.
- * Carries `afterLoad: () => store.setLastSyncedAt()` — the menu-specific side-effect
- * that backs the `paprika://menu/{uid}` resource's "Last synced" header line.
  *
  * `additive` tier — the menu read/write surface must not abort core sync; degrading
- * to stale data for one cycle is preferable to regressing core sync. Menus have an
- * MCP resource surface, so this returns a `MenuSyncResult` to be emitted as
- * `sync:complete`.
+ * to stale data for one cycle is preferable to regressing core sync. Returns a
+ * `MenuSyncResult` so its changes are counted in the cycle's change-count metrics.
  */
 export function menusSync(state: MenuState): SyncContribution<MenuState, "recipe" | "meal-type"> {
   return {
@@ -27,7 +24,6 @@ export function menusSync(state: MenuState): SyncContribution<MenuState, "recipe
         equals: menusEqual,
         label: "menus",
         log: ctx.infra.log,
-        afterLoad: () => ctx.state.menus.store.setLastSyncedAt(),
       }).map((changes): MenuSyncResult => ({ changeType: "menus", changes }));
     },
     sweep: () => state.menus.store.sweepPending(),

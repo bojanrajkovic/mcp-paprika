@@ -56,9 +56,6 @@ describe("update_aisle tool", () => {
     const saved = saveAisles.mock.calls[0]![0] as ReadonlyArray<Aisle>;
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ uid: produce.uid, name: "Fresh Produce", orderFlag: 0 });
-    // Grocery-list resources render aisle names from this catalog live, so the
-    // commit must tell subscribed clients to refresh.
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
     // The whole post-rename catalog (same shape list_aisles produces) rides structuredContent.
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toEqual({

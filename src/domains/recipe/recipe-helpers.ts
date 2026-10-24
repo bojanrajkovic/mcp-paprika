@@ -182,7 +182,7 @@ export function recipeToReadStructured(recipe: Recipe, categoryNames: Array<stri
     nutritionalInfo: recipe.nutritionalInfo,
     source: recipe.source,
     sourceUrl: recipe.sourceUrl,
-    // Display photo, coalesced like the recipe resource (recipe-resource.ts): an imported
+    // Display photo, coalescing imageUrl over photoUrl: an imported
     // recipe carries image_url with photo_url still null, so a card rendering from photoUrl
     // alone would drop the photo. `|| null` normalizes a trailing "" (a fresh recipe's
     // imageUrl) to null.
@@ -238,102 +238,6 @@ export const cookRecipeOutputSchema = z.object({
 });
 
 export type CookRecipeStructured = z.infer<typeof cookRecipeOutputSchema>;
-
-export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>, lastCookedAt?: string | null): string {
-  const lines: Array<string> = [];
-
-  lines.push(`# ${recipe.name}`);
-
-  if (categoryNames.length > 0) {
-    lines.push("");
-    lines.push(`**Categories:** ${categoryNames.join(", ")}`);
-  }
-
-  lines.push("");
-  lines.push(`**Created:** ${recipe.created}`);
-
-  if (lastCookedAt) {
-    lines.push(`**Last Cooked:** ${lastCookedAt.slice(0, 10)}`);
-  }
-
-  if (recipe.rating > 0) {
-    lines.push(`**Rating:** ${recipe.rating.toString()}/5`);
-  }
-
-  if (recipe.isPinned) {
-    lines.push(`**Pinned:** Yes`);
-  }
-
-  if (recipe.onGroceryList) {
-    lines.push(`**On Grocery List:** Yes`);
-  }
-
-  if (recipe.onFavorites) {
-    lines.push(`**On Favorites:** Yes`);
-  }
-
-  if (recipe.description) {
-    lines.push("");
-    lines.push(recipe.description);
-  }
-
-  const timeParts: Array<string> = [];
-  if (recipe.prepTime) timeParts.push(`Prep: ${recipe.prepTime}`);
-  if (recipe.cookTime) timeParts.push(`Cook: ${recipe.cookTime}`);
-  if (recipe.totalTime) timeParts.push(`Total: ${recipe.totalTime}`);
-  if (timeParts.length > 0) {
-    lines.push("");
-    lines.push(timeParts.join(" · "));
-  }
-
-  if (recipe.servings) {
-    lines.push("");
-    lines.push(`**Servings:** ${recipe.servings}`);
-  }
-
-  if (recipe.difficulty) {
-    lines.push("");
-    lines.push(`**Difficulty:** ${recipe.difficulty}`);
-  }
-
-  lines.push("");
-  lines.push("## Ingredients");
-  lines.push("");
-  lines.push(recipe.ingredients);
-
-  lines.push("");
-  lines.push("## Directions");
-  lines.push("");
-  lines.push(recipe.directions);
-
-  if (recipe.notes) {
-    lines.push("");
-    lines.push("## Notes");
-    lines.push("");
-    lines.push(recipe.notes);
-  }
-
-  if (recipe.nutritionalInfo) {
-    lines.push("");
-    lines.push("## Nutritional Info");
-    lines.push("");
-    lines.push(recipe.nutritionalInfo);
-  }
-
-  if (recipe.source) {
-    lines.push("");
-    if (recipe.sourceUrl) {
-      lines.push(`**Source:** [${recipe.source}](${recipe.sourceUrl})`);
-    } else {
-      lines.push(`**Source:** ${recipe.source}`);
-    }
-  } else if (recipe.sourceUrl) {
-    lines.push("");
-    lines.push(`**Source:** ${recipe.sourceUrl}`);
-  }
-
-  return lines.join("\n");
-}
 
 /**
  * Resolves category references to CategoryUid values. Each ref is matched

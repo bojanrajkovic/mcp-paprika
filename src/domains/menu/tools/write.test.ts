@@ -42,7 +42,6 @@ describe("create_menu tool", () => {
     expect(savedArg?.notes).toBe("");
     expect(savedArg?.deleted).toBe(false);
     expect(savedArg?.uid).toMatch(/^[0-9A-F-]{36}$/);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
     expect(kh.state().menus.store.getAll()).toHaveLength(1);
   });
 
@@ -299,7 +298,6 @@ describe("delete_menu tool", () => {
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     expect(savedArgs?.[0]?.deleted).toBe(true);
     expect(kh.state().menus.store.get("m-1" as MenuUid)).toBeUndefined();
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("cascades the tombstone to every menuitem before tombstoning the menu", async () => {

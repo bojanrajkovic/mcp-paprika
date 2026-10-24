@@ -85,7 +85,6 @@ describe("add_recipe_to_grocery_list tool", () => {
     expect(structured.items.map((i) => i.uid)).toEqual(saved.map((i) => i.uid));
     // Committed to the store + Content notification fired.
     expect(kh.state().items.store.getByListUid(defaultList.uid)).toHaveLength(2);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("reports a missing default list when listUid is omitted", async () => {
