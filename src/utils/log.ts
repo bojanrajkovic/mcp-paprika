@@ -241,8 +241,10 @@ function lowestLevel(a: LevelWithSilent, b: LevelWithSilent): LevelWithSilent {
  * Redact paths are baked in at construction and apply to both streams.
  * Called exactly once per process by `buildAppContext`.
  */
-export function createLogger(opts: LoggerOptions): pino.Logger {
-  const primary = resolvePrimaryDestination(opts);
+export function createLogger(
+  opts: LoggerOptions,
+  primary: NodeJS.WritableStream = resolvePrimaryDestination(opts),
+): pino.Logger {
   const fanout = notifierStream(opts.notifier);
   const rootLevel = lowestLevel(opts.level, opts.notifyLevel);
 

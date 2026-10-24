@@ -6,6 +6,7 @@
 // that deliberately import nothing heavy (`src/entity/`, `src/cache/`).
 
 import { type Meter, metrics, trace, type Tracer } from "@opentelemetry/api";
+import type { Logger } from "pino";
 
 /** Instrumentation scope name shared by every span and instrument this server emits. */
 export const TELEMETRY_SCOPE = "mcp-paprika";
@@ -16,6 +17,25 @@ export function getTracer(): Tracer {
 
 export function getMeter(): Meter {
   return metrics.getMeter(TELEMETRY_SCOPE);
+}
+
+let diagLogTarget: Logger | undefined;
+
+/**
+ * Where `sdk.ts`'s OTel diag logger writes once the app's log destination is known.
+ * The diag logger is installed in the telemetry preload, before config or any
+ * logger exists, so the composition root sets this right after it builds the app
+ * logger. Until then, diag lines go to a bare stderr logger. The target is a bare
+ * pino logger on the app's destination, NOT the app logger itself: the app
+ * logger fans warn+ records out to connected MCP clients, and exporter noise must
+ * stay operator-only.
+ */
+export function setDiagLogTarget(logger: Logger | undefined): void {
+  diagLogTarget = logger;
+}
+
+export function getDiagLogTarget(): Logger | undefined {
+  return diagLogTarget;
 }
 
 /**
