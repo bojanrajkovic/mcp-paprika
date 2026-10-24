@@ -13,6 +13,7 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { ResourceDef, ResourceSpec } from "./resource.js";
 import type { ToolDef, ToolSpec } from "./tool.js";
 
+import { PartialSyncError } from "../paprika/sync-types.js";
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { errorTypeName, startOperation, tracePromise, traceResultAsync } from "../telemetry/trace-result.js";
 
@@ -381,25 +382,36 @@ export interface Kernel {
    * Run ONE sync cycle: reference catalogs first (best-effort), then core (recipe
    * first, then the rest in dependency order; a core `err` aborts), then additive
    * best-effort, then flush + sweep. Never throws.
-   * Returns the results a production wiring emits as `sync:complete` (feeding the
-   * notifier subscriber) — but ONLY for a cycle that completed through flush; an
-   * aborted cycle (a core `err` or a flush error) returns `[]`, so a partial,
-   * un-flushed cycle fans out no resource notification. The initial cycle already
-   * ran at build time (gating the
+   * Returns the cycle's `outcome` plus the results a production wiring emits as
+   * `sync:complete` (feeding the notifier subscriber) — but results ONLY for a cycle
+   * that completed through flush; an aborted cycle (a core `err` or a flush error)
+   * returns `[]`, so a partial, un-flushed cycle fans out no resource notification.
+   * The interval driver reads `outcome` to pace its next cycle (`core_partial`
+   * retries sooner). The initial cycle already ran at build time (gating the
    * post-sync hooks); the interval driver calls this on its loop.
    *
    * `trigger` only labels telemetry (the cycle span + duration histogram);
    * behavior is identical. buildKernel's internal initial call passes "boot";
    * every external caller is the interval path and takes the default.
    */
-  syncOnce(trigger?: SyncTrigger): Promise<ReadonlyArray<AnySyncResult>>;
+  syncOnce(trigger?: SyncTrigger): Promise<SyncCycle>;
 }
 
 /** What started a sync cycle — a telemetry label, not a behavioral input. */
 export type SyncTrigger = "boot" | "interval";
 
-/** How a sync cycle ended, as recorded on its span and duration histogram. */
-type SyncOutcome = "ok" | "core_aborted" | "flush_failed" | "contract_breach";
+/**
+ * How a sync cycle ended, as recorded on its span and duration histogram.
+ * `core_partial` is a core abort whose reconcile persisted part of its batch
+ * ({@link PartialSyncError}); `core_aborted` is one that made no progress.
+ */
+export type SyncOutcome = "ok" | "core_partial" | "core_aborted" | "flush_failed" | "contract_breach";
+
+/** One completed `syncOnce`: how it ended, and the results (empty unless it flushed). */
+export interface SyncCycle {
+  readonly outcome: SyncOutcome;
+  readonly results: ReadonlyArray<AnySyncResult>;
+}
 
 const ATTR_SYNC_TRIGGER = "mcp_paprika.sync.trigger";
 const ATTR_SYNC_OUTCOME = "mcp_paprika.sync.outcome";
@@ -563,7 +575,7 @@ export async function buildKernel(
       if (sync.sweep !== undefined) sweepers.push(sync.sweep);
     }
   }
-  const syncOnce = async (trigger: SyncTrigger = "interval"): Promise<ReadonlyArray<AnySyncResult>> => {
+  const syncOnce = async (trigger: SyncTrigger = "interval"): Promise<SyncCycle> => {
     // The cycle span parents every reconcile span (and their undici fetch
     // children) via the active context; `finish` is the single end point that
     // stamps the outcome, records the duration histogram, and — only for a
@@ -572,7 +584,7 @@ export async function buildKernel(
     // none, exactly as it fans out no notification.
     const cycleSpan = getTracer().startSpan("paprika.sync_cycle", { attributes: { [ATTR_SYNC_TRIGGER]: trigger } });
     const cycleElapsedSeconds = startTimer();
-    const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): ReadonlyArray<AnySyncResult> => {
+    const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): SyncCycle => {
       const elapsedSeconds = cycleElapsedSeconds();
       cycleSpan.setAttribute(ATTR_SYNC_OUTCOME, outcome);
       if (outcome !== "ok") cycleSpan.setStatus({ code: SpanStatusCode.ERROR });
@@ -614,7 +626,7 @@ export async function buildKernel(
       } else {
         infra.log.debug(fields, "sync cycle complete");
       }
-      return results;
+      return { outcome, results };
     };
     return context.with(trace.setSpan(context.active(), cycleSpan), async () => {
       const results: Array<AnySyncResult> = [];
@@ -648,8 +660,10 @@ export async function buildKernel(
           if (coreErr !== undefined) {
             // A core err aborts the cycle: no flush, no sweep, no results — the
             // partially reconciled state stays in memory and the next cycle retries.
+            // A PartialSyncError already persisted its own landed items, so it's
+            // reported apart for the loop to retry sooner.
             infra.log.error({ err: coreErr }, "sync failed");
-            return finish("core_aborted", []);
+            return finish(coreErr instanceof PartialSyncError ? "core_partial" : "core_aborted", []);
           }
         }
         for (const run of additiveSyncs) {

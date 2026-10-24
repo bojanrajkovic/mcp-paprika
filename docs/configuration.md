@@ -103,6 +103,9 @@ tradeoff**: high concurrency against a single origin makes rate-limiting (HTTP 4
 circuit-breaker trips more likely. Values above `20` are allowed but log a startup
 warning. The retry and circuit-breaker stack still protects you; tune conservatively.
 
+If Paprika rate-limits a cold start partway through, the recipes that arrived are kept,
+and sync retries the rest after a short delay rather than waiting `PAPRIKA_SYNC_INTERVAL`.
+
 ## Logging
 
 The server uses structured [pino](https://getpino.io/) logging. In stdio mode, logs go

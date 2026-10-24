@@ -276,4 +276,46 @@ describe("Sync → Tool Pipeline Integration", () => {
       expect(getText(await callTool("search_recipes", { query: "updated", limit: 20 }))).toContain("Updated Name");
     });
   });
+
+  describe("Rate-limited cold start (#483)", () => {
+    it("keeps the recipes that landed before a 429 storm, and a restart fetches only the rest", async () => {
+      const uids = Array.from({ length: 12 }, (_, i) => `recipe-${i.toString()}`);
+      const ALLOWED = 8; // Paprika starts answering 429 after this many recipe requests
+      let limited = true;
+      let recipeRequests = 0;
+      const requested: string[] = [];
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () =>
+          HttpResponse.json({ result: uids.map((uid) => ({ uid, hash: `hash-${uid}` })) }),
+        ),
+        http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
+          const uid = params["uid"] as string;
+          requested.push(uid);
+          recipeRequests++;
+          if (limited && recipeRequests > ALLOWED) return HttpResponse.json({}, { status: 429 });
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid, { name: `Dish ${uid}` }) });
+        }),
+      );
+
+      // Cold start: the initial cycle lands 8 recipes, then every fetch is rate-limited.
+      const first = await buildKernelHarness();
+      const landed = new Set(requested.slice(0, ALLOWED));
+      expect(landed.size).toBe(ALLOWED);
+      expect(getText(await first.callTool("search_recipes", { query: "dish", limit: 20 }))).toContain("not yet synced");
+
+      // Restart against the same cache dir with the rate limit lifted: the hydrated cache
+      // already holds the 8 that landed (they were flushed), so only the other 4 are fetched.
+      requested.length = 0;
+      limited = false;
+      const second = await buildKernelHarness();
+
+      expect(new Set(requested)).toEqual(new Set(uids.filter((uid) => !landed.has(uid))));
+      const items = (
+        JSON.parse(getText(await second.callTool("search_recipes", { query: "dish", limit: 20 }))) as {
+          items: unknown[];
+        }
+      ).items;
+      expect(items).toHaveLength(uids.length);
+    });
+  });
 });
