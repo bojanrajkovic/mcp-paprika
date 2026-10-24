@@ -15,7 +15,7 @@ import type { TokenStore } from "./token-store.js";
 import type { ResolvedOAuthConfig } from "./types.js";
 import type { IdTokenPayload } from "./types.js";
 
-import { clientAddress } from "../transport/client-ip.js";
+import { clientAddress, type ClientIpSource } from "../transport/client-ip.js";
 import { toMessage } from "../utils/log.js";
 import { verifyIdentity } from "./allowlist.js";
 import { consentSecurityHeaders, renderDeniedPage, renderExpiredPage } from "./consent-page.js";
@@ -425,22 +425,21 @@ export function pickTokenAuthMethod(supported: ReadonlyArray<string> | undefined
 /**
  * Rate-limit middleware for DCR (POST /register). 10 requests / hour / IP.
  *
- * `trustProxy` controls how the per-request key is derived:
- * - `true` — honor `x-forwarded-for` (leftmost) then `cf-connecting-ip`,
- *   falling back to the connection's remote address. Use only behind a
- *   reverse proxy that sanitizes those headers (Tailscale Funnel, an
- *   ingress controller, Cloudflare, etc.); otherwise an attacker can spoof
- *   a fresh address per request and trivially bypass the limit.
- * - `false` — derive the key from the connection's remote address only.
- *   This is the safe default for a direct-exposed server; behind a proxy
- *   it lumps every request under the proxy's address, so flip to `true`
- *   once a trusted proxy is in place.
+ * `clientIp` controls how the per-request key is derived:
+ * - `header` — the rightmost entry of the trusted proxy's header, falling
+ *   back to the connection's remote address. Use only behind a reverse proxy
+ *   that sets that header (Tailscale Funnel, an ingress controller,
+ *   Cloudflare, etc.); otherwise an attacker can spoof a fresh address per
+ *   request and trivially bypass the limit.
+ * - `peer` — the connection's remote address only. This is the safe default
+ *   for a direct-exposed server; behind a proxy it lumps every request under
+ *   the proxy's address, so switch to `header` once a trusted proxy is in place.
  */
-export function buildDcrRateLimit(options: { readonly trustProxy: boolean }): MiddlewareHandler {
+export function buildDcrRateLimit(options: { readonly clientIp: ClientIpSource }): MiddlewareHandler {
   const inner = rateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
     limit: 10,
-    keyGenerator: (c) => clientAddress(c, options.trustProxy) ?? "unknown",
+    keyGenerator: (c) => clientAddress(c, options.clientIp) ?? "unknown",
     standardHeaders: "draft-6",
   });
   // Hono mounts the middleware on the `/register` prefix, but RFC 7592

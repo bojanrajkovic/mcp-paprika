@@ -19,7 +19,8 @@ reference.
 | `MCP_OIDC_CLIENT_SECRET`         | `oauth.clientSecret`        | Yes (http)   | —          | OAuth client secret issued by the IdP                                             |
 | `MCP_ALLOWED_EMAILS`             | `oauth.allowlist.emails`    | Yes (http) ² | `[]`       | Comma-separated email addresses allowed to use the server                         |
 | `MCP_ALLOWED_SUBS`               | `oauth.allowlist.subs`      | Yes (http) ² | `[]`       | Comma-separated OIDC subject identifiers allowed to use the server                |
-| `MCP_TRUST_PROXY`                | `oauth.trustProxy`          | No           | `false`    | Trust `X-Forwarded-For` for DCR rate limiting (set behind a sanitizing proxy)     |
+| `MCP_TRUST_PROXY`                | `oauth.trustProxy`          | No           | `false`    | Trust a front proxy's client-IP header (see [Trust proxy](#trust-proxy))          |
+| `MCP_CLIENT_IP_HEADER`           | `oauth.clientIpHeader`      | No           | —          | Header that proxy sets; needs `MCP_TRUST_PROXY=true` (default `x-forwarded-for`)  |
 | `MCP_OAUTH_REDIRECT_ALLOWLIST`   | `oauth.redirectAllowlist`   | No           | `[]`       | Recognized redirect origins for the [consent gate](#redirect-origin-consent-gate) |
 | `MCP_OIDC_SCOPES`                | `oauth.scopes`              | No           | —          | Extra OAuth scopes to request (comma-separated)                                   |
 | `MCP_OIDC_EMAIL_VERIFIED_POLICY` | `oauth.emailVerifiedPolicy` | No           | `strict` ³ | Email verification policy: `strict`, `skip`, or `if-present`                      |
@@ -83,10 +84,27 @@ access regardless of email-verification status.
 
 ## Trust proxy
 
-`MCP_TRUST_PROXY=true` keys the DCR rate limiter off `X-Forwarded-For` instead of the
-direct peer address. Set it when a trusted reverse proxy (nginx, Tailscale Funnel,
-Cloudflare) sanitizes that header before it reaches the server. The default `false` is
-safe for direct internet exposure without a proxy.
+The DCR rate limiter (10 registrations per hour per IP) and the request span's
+`client.address` need the caller's real IP. With the default `MCP_TRUST_PROXY=false`, the
+server uses the connection's peer address. That's safe for direct internet exposure, but
+behind a proxy every caller shares the proxy's address and one rate-limit bucket.
+
+Set `MCP_TRUST_PROXY=true` behind a reverse proxy you control. The server then reads the
+**rightmost** entry of `MCP_CLIENT_IP_HEADER` (default `x-forwarded-for`). The rightmost
+entry is the one your proxy added; anything to its left came from the client and can be
+forged. If the header is missing, the server falls back to the peer address.
+
+| Front proxy                    | `MCP_CLIENT_IP_HEADER`       |
+| ------------------------------ | ---------------------------- |
+| Tailscale Funnel, nginx, Caddy | unset (`x-forwarded-for`)    |
+| Cloudflare (proxy or Tunnel)   | `cf-connecting-ip`           |
+| Fly.io                         | `fly-client-ip`              |
+| More than one proxy in a chain | the outermost proxy's header |
+
+Behind a chain (for example Cloudflare in front of an ingress controller), the rightmost
+`x-forwarded-for` entry is the inner proxy, so set the header the outermost proxy owns.
+Setting `MCP_CLIENT_IP_HEADER` without `MCP_TRUST_PROXY=true` fails at boot, because
+without a trusted proxy any header is client-controlled.
 
 ## OAuth redirect URI
 

@@ -26,7 +26,7 @@ async function register(app: Hono, ip: string): Promise<Response> {
 describe("buildDcrRateLimit failure attribution", () => {
   it("does not record rate_limited for a downstream 429 (the client cap's rejection)", async () => {
     const app = new Hono();
-    app.use("/register", buildDcrRateLimit({ trustProxy: true }));
+    app.use("/register", buildDcrRateLimit({ clientIp: { kind: "header", header: "x-forwarded-for" } }));
     // Stand-in for buildClientCap, mounted after the limiter on /register:
     // the downstream chain answers 429 itself (recorded there as cap_reached).
     app.post("/register", (c) => c.json({ error: "invalid_request" }, 429));
@@ -39,7 +39,7 @@ describe("buildDcrRateLimit failure attribution", () => {
 
   it("records rate_limited when the limiter itself rejects", async () => {
     const app = new Hono();
-    app.use("/register", buildDcrRateLimit({ trustProxy: true }));
+    app.use("/register", buildDcrRateLimit({ clientIp: { kind: "header", header: "x-forwarded-for" } }));
     app.post("/register", (c) => c.json({ ok: true }, 201));
 
     for (let i = 0; i < 11; i++) await register(app, "203.0.113.51");

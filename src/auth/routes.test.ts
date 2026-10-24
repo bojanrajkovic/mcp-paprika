@@ -69,7 +69,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
       presetName: null,
       scopes: ["openid", "email"],
       emailVerifiedPolicy: "if-present",
-      trustProxy: true,
+      clientIp: { kind: "header", header: "x-forwarded-for" },
       allowlist: { emails: ["user@example.com"], subs: [] },
       allowedAlgs: ["RS256"],
       redirectAllowlist: [],
@@ -689,7 +689,7 @@ describe("Auth Routes", () => {
       // legitimate updates and deletes. Drive 10 POSTs first to exhaust the
       // bucket, then assert PUT and DELETE on /register/:id still pass through.
       const testApp = new Hono();
-      testApp.use("/register", buildDcrRateLimit({ trustProxy: true }));
+      testApp.use("/register", buildDcrRateLimit({ clientIp: { kind: "header", header: "x-forwarded-for" } }));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));
       testApp.put("/register/:id", (c) => c.json({ ok: true, op: "put" }, 200));
       testApp.delete("/register/:id", (c) => c.body(null, 204));
@@ -732,7 +732,7 @@ describe("Auth Routes", () => {
       // The `buildDcrRateLimit()` middleware limits POST /register to 10 requests per hour per IP.
       // Test: 10 requests from same IP succeed (201), 11th is rejected (429).
       const testApp = new Hono();
-      testApp.use("/register", buildDcrRateLimit({ trustProxy: true }));
+      testApp.use("/register", buildDcrRateLimit({ clientIp: { kind: "header", header: "x-forwarded-for" } }));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));
 
       const ip = "203.0.113.7";
@@ -765,7 +765,7 @@ describe("Auth Routes", () => {
     it("different IPs have separate rate-limit windows", async () => {
       // After 10 requests from one IP, a request from a different IP should not be rate-limited.
       const testApp = new Hono();
-      testApp.use("/register", buildDcrRateLimit({ trustProxy: true }));
+      testApp.use("/register", buildDcrRateLimit({ clientIp: { kind: "header", header: "x-forwarded-for" } }));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));
 
       const ip1 = "203.0.113.7";
@@ -796,14 +796,14 @@ describe("Auth Routes", () => {
       expect(resIp2.status).toBe(201);
     });
 
-    it("trustProxy=false ignores x-forwarded-for (every request collapses to one bucket)", async () => {
-      // The default is `trustProxy: false`. With that, the rate-limiter must NOT
+    it("peer mode ignores x-forwarded-for (every request collapses to one bucket)", async () => {
+      // The default is peer mode (`MCP_TRUST_PROXY=false`). With that, the rate-limiter must NOT
       // honor an attacker-controlled `x-forwarded-for`; otherwise a client could
       // vary the header per request and trivially bypass the 10/hr limit. Under
       // Hono's `app.request()` no socket address is available either, so all
       // requests fall back to the "unknown" bucket and share the 10-request budget.
       const testApp = new Hono();
-      testApp.use("/register", buildDcrRateLimit({ trustProxy: false }));
+      testApp.use("/register", buildDcrRateLimit({ clientIp: { kind: "peer" } }));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));
 
       // First 10 requests succeed, even though each carries a different XFF.
