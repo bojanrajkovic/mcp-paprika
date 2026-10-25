@@ -455,7 +455,12 @@
     gap: 10px;
     transition: background 0.1s;
   }
-  .row:hover:not(:disabled) {
+  @media (hover: hover) {
+    .row:hover:not(:disabled) {
+      background: var(--hover);
+    }
+  }
+  .row:active:not(:disabled) {
     background: var(--hover);
   }
   .row:focus-visible {

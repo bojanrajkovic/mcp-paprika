@@ -309,6 +309,9 @@
       background: var(--hover);
     }
   }
+  .bd-meal:not(.bd-free):active:not(:disabled) {
+    background: var(--hover);
+  }
   .bd-meal:disabled {
     cursor: default;
   }
@@ -345,6 +348,10 @@
       background: var(--hover);
       color: var(--accent);
     }
+  }
+  .bd-plan:active .bd-plan-glyph {
+    background: var(--hover);
+    color: var(--accent);
   }
   @media (pointer: coarse) {
     .bd-meal,

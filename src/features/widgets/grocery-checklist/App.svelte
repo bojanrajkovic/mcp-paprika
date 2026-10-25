@@ -644,8 +644,10 @@
       background 0.13s,
       transform 0.1s cubic-bezier(0.25, 1, 0.5, 1);
   }
-  .row:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .row:hover {
+      background: var(--hover);
+    }
   }
   /* Immediate tactile feedback on tap — this surface is used one-handed in a store aisle, so the
      press has to read before the network round-trip (mark_grocery_item_purchased) resolves, not

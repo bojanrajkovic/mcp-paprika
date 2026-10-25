@@ -311,6 +311,9 @@
       background: var(--hover);
     }
   }
+  .ms-name:active:not(:disabled) {
+    background: var(--hover);
+  }
   /* Touch hosts get a real tap target on the recipe-open row (same floor PillButton uses). */
   @media (pointer: coarse) {
     .ms-name {

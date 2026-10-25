@@ -84,7 +84,12 @@
     justify-content: center;
     gap: 5px;
   }
-  .act:hover {
+  @media (hover: hover) {
+    .act:hover {
+      background: color-mix(in oklch, var(--ink) 6%, var(--bg));
+    }
+  }
+  .act:active {
     background: color-mix(in oklch, var(--ink) 6%, var(--bg));
   }
   .act.primary {
@@ -93,7 +98,12 @@
     color: var(--accent-ink);
     font-weight: 600;
   }
-  .act.primary:hover {
+  @media (hover: hover) {
+    .act.primary:hover {
+      background: color-mix(in oklch, var(--accent) 88%, black);
+    }
+  }
+  .act.primary:active {
     background: color-mix(in oklch, var(--accent) 88%, black);
   }
   .act.primary:disabled {

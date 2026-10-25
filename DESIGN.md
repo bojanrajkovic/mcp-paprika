@@ -271,6 +271,7 @@ The consent screen's load-bearing element: a soft warm panel (`dest-bg`, 11px ra
 - **Do** keep the warm cast on every neutral (hue ~72) so the surfaces sit native in a warm host.
 - **Do** borrow native affordances — real tap targets, swipe-to-act with a visible-button fallback — rather than inventing new ones.
 - **Do** keep the consent screen calm and legible: anchor on the redirect host, state the grant plainly, give Deny equal weight to Allow.
+- **Do** gate every widget `:hover` rule behind `@media (hover: hover)` and pair it with an unconditional `:active` rule carrying the same (or an equivalent) treatment — a touch tap has no "leave" event, so an ungated `:hover` sticks lit until something else is tapped; `:active` gives touch its own press feedback that clears naturally on release.
 
 ### Don't:
 

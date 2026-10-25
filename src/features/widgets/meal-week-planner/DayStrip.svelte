@@ -119,6 +119,9 @@
       background: var(--hover);
     }
   }
+  .day-chip:active {
+    background: var(--hover);
+  }
   .day-chip.sel {
     background: var(--hover);
   }
