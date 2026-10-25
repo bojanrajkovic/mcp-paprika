@@ -57,37 +57,63 @@
       min-height: 44px;
     }
   }
-  .pill.neutral:hover {
-    background: var(--hover);
-    color: var(--ink);
-  }
   .pill.danger {
     padding: 5px 12px;
-  }
-  .pill.danger:hover {
-    background: var(--danger-bg);
-    color: var(--danger);
-    border-color: color-mix(in oklch, var(--danger) 50%, transparent);
   }
   .pill.danger-strong {
     border-color: color-mix(in oklch, var(--danger) 55%, transparent);
     color: var(--danger);
-  }
-  .pill.danger-strong:hover {
-    background: var(--danger-bg);
   }
   .pill.accent {
     border-color: color-mix(in oklch, var(--accent) 45%, transparent);
     color: var(--accent);
     padding: 4px 12px;
   }
-  .pill.accent:hover {
+  /* Press feedback everywhere, touch included: the hover treatment, applied momentarily.
+     Without this a tap gives no visual acknowledgment until the async action lands. */
+  .pill.neutral:active {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .pill.danger:active {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: color-mix(in oklch, var(--danger) 50%, transparent);
+  }
+  .pill.danger-strong:active {
+    background: var(--danger-bg);
+  }
+  .pill.accent:active {
     background: color-mix(in oklch, var(--accent) 12%, transparent);
   }
-  /* Muted at rest, fills accent on hover — a soft call-to-action (the empty-slot Plan pill). */
-  .pill.accent-fill:hover {
+  .pill.accent-fill:active {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--accent-ink);
+  }
+  /* Hover treatments only where hover exists — on touch, :hover sticks after a tap and the
+     pill appears frozen in its hover state until something else is tapped. */
+  @media (hover: hover) {
+    .pill.neutral:hover {
+      background: var(--hover);
+      color: var(--ink);
+    }
+    .pill.danger:hover {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-color: color-mix(in oklch, var(--danger) 50%, transparent);
+    }
+    .pill.danger-strong:hover {
+      background: var(--danger-bg);
+    }
+    .pill.accent:hover {
+      background: color-mix(in oklch, var(--accent) 12%, transparent);
+    }
+    /* Muted at rest, fills accent on hover — a soft call-to-action (the empty-slot Plan pill). */
+    .pill.accent-fill:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-ink);
+    }
   }
 </style>

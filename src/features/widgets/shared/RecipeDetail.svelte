@@ -74,37 +74,42 @@
 </header>
 
 <div class="detail">
-  {#if heroSrc}<img
-      class="hero"
-      src={heroSrc}
-      alt={`Photo of ${recipe.name}`}
-    />{/if}
-  <h2 class="rname" style:view-transition-name={titleTransitionName ?? "none"}>
-    {recipe.name}
-  </h2>
-  {#if meta.length > 0}<p class="meta">{meta.join(" · ")}</p>{/if}
+  <div class="measure">
+    {#if heroSrc}<img
+        class="hero"
+        src={heroSrc}
+        alt={`Photo of ${recipe.name}`}
+      />{/if}
+    <h2
+      class="rname"
+      style:view-transition-name={titleTransitionName ?? "none"}
+    >
+      {recipe.name}
+    </h2>
+    {#if meta.length > 0}<p class="meta">{meta.join(" · ")}</p>{/if}
 
-  {#if ingredients.length > 0}
-    <section>
-      <h3>Ingredients</h3>
-      <ul>
-        {#each ingredients as line, i (i)}<li>{line}</li>{/each}
-      </ul>
-    </section>
-  {/if}
+    {#if ingredients.length > 0}
+      <section>
+        <h3>Ingredients</h3>
+        <ul>
+          {#each ingredients as line, i (i)}<li>{line}</li>{/each}
+        </ul>
+      </section>
+    {/if}
 
-  {#if directions.length > 0}
-    <section>
-      <h3>Directions</h3>
-      <div class="steps">
-        {#each directions as line, i (i)}<p>{line}</p>{/each}
-      </div>
-    </section>
-  {/if}
+    {#if directions.length > 0}
+      <section>
+        <h3>Directions</h3>
+        <div class="steps">
+          {#each directions as line, i (i)}<p>{line}</p>{/each}
+        </div>
+      </section>
+    {/if}
 
-  {#if ingredients.length === 0 && directions.length === 0}
-    <p class="bare">No ingredients or directions recorded for this recipe.</p>
-  {/if}
+    {#if ingredients.length === 0 && directions.length === 0}
+      <p class="bare">No ingredients or directions recorded for this recipe.</p>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -140,6 +145,12 @@
     overflow-y: auto;
     padding: 4px 16px 20px;
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+  /* Reading measure: in a wide host the recipe column caps near the readability ceiling
+     (~72ch of 14px body) instead of running the full pane; the scroll region above stays
+     full-bleed so the scrollbar hugs the pane edge. */
+  .measure {
+    max-width: 40rem;
   }
   .hero {
     display: block;
@@ -177,21 +188,19 @@
     padding: 0;
     list-style: none;
   }
+  /* No per-row hairlines — the accent-dot bullets carry the separation (the system's
+     list rows never stripe; one separator per category, not a line per item). */
   ul li {
     position: relative;
-    padding: 4px 0 4px 16px;
+    padding: 5px 0 5px 16px;
     font-size: 14px;
     line-height: 1.4;
-    border-top: 1px solid var(--line);
-  }
-  ul li:first-child {
-    border-top: 0;
   }
   ul li::before {
     content: "";
     position: absolute;
     left: 2px;
-    top: 12px;
+    top: 13px;
     width: 4px;
     height: 4px;
     border-radius: 50%;
