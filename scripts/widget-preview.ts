@@ -250,6 +250,9 @@ const PANTRY = {
   ],
 };
 const PANTRY_EMPTY = { items: [] };
+// Every item out of stock — the drawer auto-opens and is the whole surface (the onboard state the
+// widget designs for; restocking from here sends rows back to their aisles).
+const PANTRY_ALL_OUT = { items: PANTRY.items.map((item) => ({ ...item, inStock: false })) };
 
 // --- menu --------------------------------------------------------------------
 const MENU = {
@@ -381,10 +384,13 @@ const WIDGETS: readonly WidgetSample[] = [
   {
     name: "pantry-checklist",
     title: "Pantry",
-    blurb: "In-stock toggles, expiry badges (amber “soon”, red “expired”), swipe-to-remove with a button fallback.",
+    blurb:
+      "In-stock checklist with expiry badges (amber “soon”, red “expired”); out-of-stock items drop into the drawer — swipe on touch, a hover-revealed button on pointer.",
     variants: [
       { label: "Stocked + expiring", payload: PANTRY },
+      { label: "All out of stock (drawer auto-opens)", payload: PANTRY_ALL_OUT },
       { label: "Empty", payload: PANTRY_EMPTY },
+      { label: "Very large pantry (150 items, ×30)", payload: PANTRY, scale: 30 },
     ],
   },
   {
