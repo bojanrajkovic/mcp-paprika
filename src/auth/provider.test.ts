@@ -90,7 +90,7 @@ describe("MintingOAuthServerProvider", () => {
         clientSecret: "stub-client-secret",
         scopes: ["openid", "email"],
         emailVerifiedPolicy: "if-present",
-        trustProxy: false,
+        clientIp: { kind: "peer" },
         allowlist: { emails: ["user@example.com"], subs: [] },
         allowedAlgs: ["RS256"],
         // Recognize claude.ai so the existing authorize tests exercise the
@@ -620,7 +620,7 @@ describe("MintingOAuthServerProvider", () => {
           clientSecret: "stub-client-secret",
           scopes: ["openid", "email"],
           emailVerifiedPolicy: "if-present",
-          trustProxy: false,
+          clientIp: { kind: "peer" },
           allowlist: { emails: ["user@example.com"], subs: [] },
           allowedAlgs: ["RS256"],
           redirectAllowlist: ["https://claude.ai"],

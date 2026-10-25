@@ -343,6 +343,8 @@ describe("Configuration loading", () => {
       "MCP_ALLOWED_EMAILS",
       "MCP_ALLOWED_SUBS",
       "MCP_OAUTH_REDIRECT_ALLOWLIST",
+      "MCP_TRUST_PROXY",
+      "MCP_CLIENT_IP_HEADER",
     ] as const;
 
     let tempDir: string;
@@ -596,6 +598,62 @@ describe("Configuration loading", () => {
           (config) => expect(config.oauth?.trustProxy).toBe(false),
           (error) => expect.fail(`expected Ok, got Err: ${error.reason}`),
         );
+      });
+
+      describe("MCP_CLIENT_IP_HEADER", () => {
+        beforeEach(() => {
+          process.env["PAPRIKA_EMAIL"] = "user@test.com";
+          process.env["PAPRIKA_PASSWORD"] = "secret";
+          process.env["MCP_TRANSPORT"] = "http";
+          process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+          process.env["MCP_OIDC_PRESET"] = "google";
+          process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+          process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+          process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
+        });
+
+        it("is lowercased when set alongside MCP_TRUST_PROXY", () => {
+          process.env["MCP_TRUST_PROXY"] = "true";
+          process.env["MCP_CLIENT_IP_HEADER"] = "CF-Connecting-IP";
+          loadConfig(tempDir).match(
+            (config) => expect(config.oauth?.clientIpHeader).toBe("cf-connecting-ip"),
+            (error) => expect.fail(`expected Ok, got Err: ${error.reason}`),
+          );
+        });
+
+        it("is rejected without MCP_TRUST_PROXY=true", () => {
+          process.env["MCP_CLIENT_IP_HEADER"] = "cf-connecting-ip";
+          loadConfig(tempDir).match(
+            () => expect.fail("expected Err"),
+            (error) => expect(error.reason).toContain("MCP_CLIENT_IP_HEADER needs MCP_TRUST_PROXY=true"),
+          );
+        });
+
+        it("accepts any RFC 7230 header-name character, e.g. an underscore", () => {
+          process.env["MCP_TRUST_PROXY"] = "true";
+          process.env["MCP_CLIENT_IP_HEADER"] = "X_Real_IP";
+          loadConfig(tempDir).match(
+            (config) => expect(config.oauth?.clientIpHeader).toBe("x_real_ip"),
+            (error) => expect.fail(`expected Ok, got Err: ${error.reason}`),
+          );
+        });
+
+        it("treats an empty value as unset, even without MCP_TRUST_PROXY", () => {
+          process.env["MCP_CLIENT_IP_HEADER"] = "";
+          loadConfig(tempDir).match(
+            (config) => expect(config.oauth?.clientIpHeader).toBeUndefined(),
+            (error) => expect.fail(`expected Ok, got Err: ${error.reason}`),
+          );
+        });
+
+        it("is rejected when it isn't a header name", () => {
+          process.env["MCP_TRUST_PROXY"] = "true";
+          process.env["MCP_CLIENT_IP_HEADER"] = "x-forwarded-for, cf-connecting-ip";
+          loadConfig(tempDir).match(
+            () => expect.fail("expected Err"),
+            (error) => expect(error.reason).toContain("must be an HTTP header name"),
+          );
+        });
       });
 
       it("filters empty entries from comma-separated values", () => {
