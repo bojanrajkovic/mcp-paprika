@@ -24,15 +24,15 @@
       "accent": {
         "role": "primary",
         "displayName": "Paprika (accent)",
-        "canonical": "oklch(0.543 0.174 30)",
+        "canonical": "oklch(0.5 0.174 30)",
         "dark": "oklch(0.7 0.155 33)",
-        "hex": "#C0392B",
+        "hex": "#B1291C",
         "tonalRamp": [
           "oklch(0.15 0.06 30)",
           "oklch(0.25 0.10 30)",
           "oklch(0.35 0.14 30)",
           "oklch(0.45 0.17 30)",
-          "oklch(0.543 0.174 30)",
+          "oklch(0.5 0.174 30)",
           "oklch(0.66 0.15 30)",
           "oklch(0.78 0.11 30)",
           "oklch(0.92 0.04 30)"
@@ -383,7 +383,7 @@
       "refersTo": "pill-accent",
       "description": "A widget action pill in the paprika brand accent — the pantry Restock.",
       "html": "<button class=\"ds-pill-accent\">Restock</button>",
-      "css": ".ds-pill-accent { appearance: none; background: transparent; color: oklch(0.543 0.174 30); font: 600 12px system-ui, -apple-system, sans-serif; padding: 4px 12px; border: 1px solid color-mix(in oklch, oklch(0.543 0.174 30) 45%, transparent); border-radius: 999px; cursor: pointer; transition: background 0.13s; } .ds-pill-accent:hover { background: color-mix(in oklch, oklch(0.543 0.174 30) 12%, transparent); } .ds-pill-accent:focus-visible { outline: 2px solid oklch(0.543 0.174 30); outline-offset: 2px; }"
+      "css": ".ds-pill-accent { appearance: none; background: transparent; color: oklch(0.5 0.174 30); font: 600 12px system-ui, -apple-system, sans-serif; padding: 4px 12px; border: 1px solid color-mix(in oklch, oklch(0.5 0.174 30) 45%, transparent); border-radius: 999px; cursor: pointer; transition: background 0.13s; } .ds-pill-accent:hover { background: color-mix(in oklch, oklch(0.5 0.174 30) 12%, transparent); } .ds-pill-accent:focus-visible { outline: 2px solid oklch(0.5 0.174 30); outline-offset: 2px; }"
     },
     {
       "name": "Neutral Pill (Clear)",
@@ -391,7 +391,7 @@
       "refersTo": "pill-neutral",
       "description": "A muted widget action pill that resolves to ink on hover — grocery's Clear / Keep.",
       "html": "<button class=\"ds-pill-neutral\">Clear purchased</button>",
-      "css": ".ds-pill-neutral { appearance: none; background: transparent; color: oklch(0.52 0.012 72); font: 600 12px system-ui, -apple-system, sans-serif; padding: 5px 11px; border: 1px solid oklch(0.91 0.007 72); border-radius: 999px; cursor: pointer; transition: background 0.13s, color 0.13s; } .ds-pill-neutral:hover { background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); } .ds-pill-neutral:focus-visible { outline: 2px solid oklch(0.543 0.174 30); outline-offset: 2px; }"
+      "css": ".ds-pill-neutral { appearance: none; background: transparent; color: oklch(0.52 0.012 72); font: 600 12px system-ui, -apple-system, sans-serif; padding: 5px 11px; border: 1px solid oklch(0.91 0.007 72); border-radius: 999px; cursor: pointer; transition: background 0.13s, color 0.13s; } .ds-pill-neutral:hover { background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); } .ds-pill-neutral:focus-visible { outline: 2px solid oklch(0.5 0.174 30); outline-offset: 2px; }"
     },
     {
       "name": "List Row (done)",
@@ -415,7 +415,7 @@
       "refersTo": "toast",
       "description": "The floating status strip at the top of a widget, with the floating-toast shadow and an optional accent action.",
       "html": "<div class=\"ds-toast\"><span>Moved to pantry</span><button class=\"ds-toast-undo\">Undo</button></div>",
-      "css": ".ds-toast { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); border: 1px solid oklch(0.91 0.007 72); border-radius: 10px; padding: 9px 12px; font: 550 13px system-ui, -apple-system, sans-serif; box-shadow: 0 8px 24px -12px oklch(0 0 0 / 0.5); } .ds-toast-undo { appearance: none; border: 0; background: transparent; color: oklch(0.543 0.174 30); font: 700 13px system-ui, -apple-system, sans-serif; cursor: pointer; padding: 2px 4px; }"
+      "css": ".ds-toast { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); border: 1px solid oklch(0.91 0.007 72); border-radius: 10px; padding: 9px 12px; font: 550 13px system-ui, -apple-system, sans-serif; box-shadow: 0 8px 24px -12px oklch(0 0 0 / 0.5); } .ds-toast-undo { appearance: none; border: 0; background: transparent; color: oklch(0.5 0.174 30); font: 700 13px system-ui, -apple-system, sans-serif; cursor: pointer; padding: 2px 4px; }"
     },
     {
       "name": "Brand Mark",
@@ -430,7 +430,7 @@
       "kind": "custom",
       "description": "The signature 0–5 rating indicator — five small accent dots, the first N lit; a compact density mark rather than star glyphs, right-aligned at the trailing edge of a browse/menu row. The group carries an accessible name; the dots are decorative.",
       "html": "<span class=\"ds-dots\" role=\"img\" aria-label=\"Rated 3 of 5\"><span class=\"ds-dot ds-on\"></span><span class=\"ds-dot ds-on\"></span><span class=\"ds-dot ds-on\"></span><span class=\"ds-dot\"></span><span class=\"ds-dot\"></span></span>",
-      "css": ".ds-dots { display: flex; gap: 2px; margin-left: auto; flex: none; } .ds-dot { width: 5px; height: 5px; border-radius: 50%; background: oklch(0.543 0.174 30); opacity: 0.2; } .ds-dot.ds-on { opacity: 1; }"
+      "css": ".ds-dots { display: flex; gap: 2px; margin-left: auto; flex: none; } .ds-dot { width: 5px; height: 5px; border-radius: 50%; background: oklch(0.5 0.174 30); opacity: 0.2; } .ds-dot.ds-on { opacity: 1; }"
     },
     {
       "name": "Status Screen",

@@ -4,7 +4,7 @@ description: The warm, editorial visual system for the two HTML surfaces of the 
 colors:
   brand: "oklch(0.543 0.174 30)"
   brand-ink: "oklch(0.99 0.012 40)"
-  accent: "oklch(0.543 0.174 30)"
+  accent: "oklch(0.5 0.174 30)"
   accent-ink: "oklch(0.99 0.012 40)"
   fresh-green: "oklch(0.58 0.13 150)"
   fresh-green-ink: "oklch(0.99 0.02 150)"
@@ -131,10 +131,10 @@ A rationed, food-warm palette: one brand identity color, three semantic signals,
 ### Primary
 
 - **Paprika** (`oklch(0.543 0.174 30)` light / `oklch(0.7 0.155 33)` dark, `#C0392B`): The connector's one identity color. An earthy, brick-like red. It nods to the Paprika app it bridges without claiming that brand. Used sparingly, as identity and action, never as decoration. Two token pairs carry it:
-  - **`brand` / `brand-ink`** — the identity, used only as a fill behind its own ink: the header "P" tile on the widgets; the brand dot and the **Allow** button on the consent screen.
-  - **`accent` / `accent-ink`** — the widgets' interactive accent: focus rings, the **Restock** pill, rating dots, filled action buttons, and the toast's **Undo**.
+  - **`brand` / `brand-ink`** (`oklch(0.543 0.174 30)` light / `oklch(0.7 0.155 33)` dark) — the identity, used only as a fill behind its own ink: the header "P" tile on the widgets; the brand dot and the **Allow** button on the consent screen.
+  - **`accent` / `accent-ink`** (`oklch(0.5 0.174 30)`, `#B1291C`, light / `oklch(0.7 0.155 33)` dark) — the widgets' interactive accent: focus rings, the **Restock** pill, rating dots, filled action buttons, and the toast's **Undo**.
 
-  The two pairs hold the same paprika value. They are separate tokens because they have different jobs: the accent appears as text, thin rings, and small dots, where legibility constrains it, while the brand appears only as a fill. Splitting them lets the accent be tuned for contrast without moving the mark. The consent page is a separate, light-only surface that paints its dot and Allow button with one `--paprika-red` token, the brand value.
+  The two pairs are separate tokens because they have different jobs. The brand appears only as a fill. The accent also appears as text on accent-tinted fills (the cook flow's active tab and raw-ingredient chips, up to 18% accent on chip hover), where the brand value falls under WCAG AA (4.02:1 on a hovered chip, 4.28:1 on the active tab). The light accent is therefore pinned at L0.50, the same hue and chroma one step darker, which clears 4.5:1 for every accent-as-text use (4.71:1 worst case, on a hovered chip). Don't lighten it back to the brand value. The dark theme's accent already passes as text (4.62:1 worst case) and stays equal to the brand. The consent page is a separate, light-only surface that paints its dot and Allow button with one `--paprika-red` token, the brand value.
 
 ### Secondary — Semantic signals
 
@@ -156,7 +156,7 @@ The widget surface themes to the host (light/dark, lightness shifts while hue ho
 
 ### Named Rules
 
-**The One Identity Color Rule.** Paprika is the only identity color on either surface. Everything else is neutral or a semantic signal. If a color isn't paprika and isn't carrying state, it's a warm neutral.
+**The One Identity Color Rule.** Paprika is the only identity color on either surface. Everything else is neutral or a semantic signal. If a color isn't paprika and isn't carrying state, it's a warm neutral. The light-theme `accent` is the same paprika hue and chroma one lightness step darker, tuned for legibility as text; it is not a second identity color.
 
 **The Two-Reds Rule.** Paprika-red is _identity_; alert-red is _danger_; they must never blur into each other. The brand is one earthy paprika-red everywhere — it is not shifted or re-hued per surface. Danger is a separate, vivid fire-engine red, deliberately more saturated, so the two warm reds stay legible apart when they share a view (a paprika brand tile in the header, an alert-red expired badge in a row). Brand and danger are never the same red.
 
