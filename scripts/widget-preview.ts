@@ -265,19 +265,21 @@ const MENU = {
   days: 2,
   notes: "Slow mornings, two ways.",
   items: [
+    // `day` is 1-indexed, matching the Paprika wire (docs/wire-captures/menus.har.json) — the
+    // widget clamps day to ≥1, so a 0 here silently mis-buckets into Day 1.
     {
       uid: "m1",
-      day: 0,
+      day: 1,
       name: "Eggs Benedict",
       typeUid: "mt-breakfast",
       typeName: "Breakfast",
       recipeUid: "recipe-eggs-benedict",
       recipe: R_BENEDICT,
     },
-    { uid: "m2", day: 0, name: "Mimosas", typeUid: "mt-brunch", typeName: "Brunch", recipeUid: null, recipe: null },
+    { uid: "m2", day: 1, name: "Mimosas", typeUid: "mt-brunch", typeName: "Brunch", recipeUid: null, recipe: null },
     {
       uid: "m3",
-      day: 1,
+      day: 2,
       name: "Asparagus with lemon butter",
       typeUid: "mt-lunch",
       typeName: "Lunch",

@@ -168,7 +168,8 @@
     line-height: 1.25;
   }
   .meta {
-    font-size: 12.5px;
+    /* 13px — the DESIGN.md meta size (quantity/meta: 13px, muted). */
+    font-size: 13px;
     color: var(--muted);
     margin: 0 0 4px;
   }

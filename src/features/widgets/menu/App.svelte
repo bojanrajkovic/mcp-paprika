@@ -97,6 +97,35 @@
     return out;
   });
 
+  // Consecutive empty days collapse into one "Days N–M" group so a sparse menu (a 30-day
+  // template filled in at just two days) doesn't repeat "Day N / No meals planned" dozens of
+  // times down the scroll. A populated day, or an empty day with a populated neighbor on both
+  // sides, still renders as its own one-day group (`from === to`) — only a RUN of emptiness
+  // collapses, so the gap stays visible without repeating itself.
+  const displaySections = $derived.by(() => {
+    const out: { from: number; to: number; items: MenuItem[] }[] = [];
+    // A run of consecutive empty sections buffers here (just its day numbers — the items are
+    // always []) until a populated section or the end flushes it as one collapsed group.
+    let emptyRun: number[] = [];
+    const flushEmptyRun = () => {
+      const first = emptyRun[0];
+      const last = emptyRun.at(-1);
+      if (first !== undefined && last !== undefined)
+        out.push({ from: first, to: last, items: [] });
+      emptyRun = [];
+    };
+    for (const sec of sections) {
+      if (sec.items.length > 0) {
+        flushEmptyRun();
+        out.push({ from: sec.day, to: sec.day, items: sec.items });
+      } else {
+        emptyRun.push(sec.day);
+      }
+    }
+    flushEmptyRun();
+    return out;
+  });
+
   // A menu carries no photo, so the header tile is a deterministic colour hashed from the menu
   // name — the same placeholder treatment a photo-less recipe row gets (shared/tile.ts).
   const tile = $derived(nameTile(menu?.name ?? "", theme === "dark"));
@@ -156,6 +185,23 @@
   function backToMenu() {
     detail = null;
     loadingItemUid = null;
+  }
+
+  // The empty-menu CTA: the widget can't add menu items itself (which dishes? which days?), so
+  // it hands off to the assistant — the same "widget triggers, assistant plans" pattern as
+  // schedule() below and the meal-week-planner's empty slots.
+  function planMenu() {
+    if (!menu) return;
+    app.sendMessage({
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: `Suggest dishes to fill out my “${menu.name}” menu.`,
+        },
+      ],
+    });
+    showToast("Asked the assistant to plan this menu.", "info");
   }
 
   // Scheduling needs a start date the widget can't pick ("next Monday"? "the 15th"?) and
@@ -265,97 +311,118 @@
       </div>
     </header>
 
-    <div class="body">
-      {#each sections as sec (sec.day)}
-        {#if !singleDay}
-          <div class="day">
-            <span class="dl"
-              >Day {sec.day}{#if days > 1}<span class="dctx">
-                  of {days}</span
-                >{/if}</span
-            >
-          </div>
-        {/if}
-        {#if sec.items.length === 0}
-          <div class="empty">No meals planned</div>
-        {:else}
-          {#each sec.items as item (item.uid)}
-            {#if item.recipe !== null && item.recipeUid !== null}
-              {@const time = relevantTime(item.recipe)}
-              <button
-                class="row rich"
-                onclick={() => openRecipe(item)}
-                disabled={loadingItemUid !== null}
-                aria-label="Open {item.name}"
+    {#if menu.items.length === 0}
+      <!-- Empty-menu onboarding: teach how dishes get here (the widget can't add them itself) and
+           offer the one act it CAN take — the assistant hand-off. The footer's Schedule CTA is
+           suppressed with the body: scheduling an empty menu is a dead end. -->
+      <StatusScreen
+        icon="🍽️"
+        title="Nothing on this menu yet"
+        desc="Dishes land here day by day. Ask your assistant to add some — “put eggs Benedict on day 1” — or let it plan the whole menu."
+      >
+        <PillButton
+          variant="accent-fill"
+          onclick={planMenu}
+          ariaLabel="Ask the assistant to suggest dishes for this menu"
+        >
+          Plan this menu…
+        </PillButton>
+      </StatusScreen>
+    {:else}
+      <div class="body">
+        {#each displaySections as sec (sec.from)}
+          {#if !singleDay}
+            <div class="day">
+              <span class="dl"
+                >{#if sec.from === sec.to}Day {sec.from}{:else}Days {sec.from}–{sec.to}{/if}{#if days > 1}<span
+                    class="dctx"
+                  >
+                    of {days}</span
+                  >{/if}</span
               >
-                <RecipeThumb
-                  photoResourceUri={item.recipe.photoResourceUri}
-                  name={item.name}
-                  dark={theme === "dark"}
-                  {loadPhoto}
-                />
-                <span class="info">
-                  <span class="name">{item.name}</span>
-                  <span class="sub">
-                    {#if item.typeName !== null}<span class="eyebrow"
+            </div>
+          {/if}
+          {#if sec.items.length === 0}
+            <div class="empty">No meals planned</div>
+          {:else}
+            {#each sec.items as item (item.uid)}
+              {#if item.recipe !== null && item.recipeUid !== null}
+                {@const time = relevantTime(item.recipe)}
+                <button
+                  class="row rich"
+                  onclick={() => openRecipe(item)}
+                  disabled={loadingItemUid !== null}
+                  aria-label="Open {item.name}"
+                >
+                  <RecipeThumb
+                    photoResourceUri={item.recipe.photoResourceUri}
+                    name={item.name}
+                    dark={theme === "dark"}
+                    {loadPhoto}
+                  />
+                  <span class="info">
+                    <span class="name">{item.name}</span>
+                    <span class="sub">
+                      {#if item.typeName !== null}<span class="eyebrow"
+                          >{item.typeName}</span
+                        >{/if}
+                      {#if item.typeName !== null && time}<span class="sep"
+                          >·</span
+                        >{/if}
+                      {#if time}<span class="time">{time}</span>{/if}
+                      <RatingDots rating={item.recipe.rating} />
+                    </span>
+                  </span>
+                  {#if loadingItemUid === item.uid}
+                    <Spinner size={14} />
+                  {:else}
+                    <Chevron />
+                  {/if}
+                </button>
+              {:else if item.recipeUid !== null}
+                <button
+                  class="row"
+                  onclick={() => openRecipe(item)}
+                  disabled={loadingItemUid !== null}
+                  aria-label="Open {item.name}"
+                >
+                  <span class="rt">
+                    {#if item.typeName !== null}<span class="mt"
                         >{item.typeName}</span
                       >{/if}
-                    {#if item.typeName !== null && time}<span class="sep"
-                        >·</span
-                      >{/if}
-                    {#if time}<span class="time">{time}</span>{/if}
-                    <RatingDots rating={item.recipe.rating} />
+                    <span class="name">{item.name}</span>
                   </span>
-                </span>
-                {#if loadingItemUid === item.uid}
-                  <Spinner size={14} />
-                {:else}
-                  <Chevron />
-                {/if}
-              </button>
-            {:else if item.recipeUid !== null}
-              <button
-                class="row"
-                onclick={() => openRecipe(item)}
-                disabled={loadingItemUid !== null}
-                aria-label="Open {item.name}"
-              >
-                <span class="rt">
-                  {#if item.typeName !== null}<span class="mt"
-                      >{item.typeName}</span
-                    >{/if}
-                  <span class="name">{item.name}</span>
-                </span>
-                {#if loadingItemUid === item.uid}
-                  <Spinner size={14} />
-                {:else}
-                  <Chevron />
-                {/if}
-              </button>
-            {:else}
-              <div class="row freeform">
-                <span class="rt">
-                  {#if item.typeName !== null}<span class="mt"
-                      >{item.typeName}</span
-                    >{/if}
-                  <span class="name">{item.name}</span>
-                </span>
-              </div>
-            {/if}
-          {/each}
-        {/if}
-      {/each}
-    </div>
+                  {#if loadingItemUid === item.uid}
+                    <Spinner size={14} />
+                  {:else}
+                    <Chevron />
+                  {/if}
+                </button>
+              {:else}
+                <div class="row freeform">
+                  <span class="rt">
+                    {#if item.typeName !== null}<span class="mt"
+                        >{item.typeName}</span
+                      >{/if}
+                    <span class="name">{item.name}</span>
+                  </span>
+                </div>
+              {/if}
+            {/each}
+          {/if}
+        {/each}
+      </div>
 
-    <footer>
-      <PillButton
-        variant="accent"
-        onclick={schedule}
-        ariaLabel="Schedule this menu onto the planner"
-      >
-        🗓 Schedule this menu…
-      </PillButton>
-    </footer>
+      <footer>
+        <PillButton
+          variant="accent"
+          onclick={schedule}
+          ariaLabel="Schedule this menu onto the planner"
+        >
+          🗓 Schedule this menu…
+        </PillButton>
+      </footer>
+    {/if}
   {:else}
     <StatusScreen icon="📋" title="No menu to show" />
   {/if}
@@ -389,22 +456,25 @@
     min-width: 0;
   }
   header h2 {
+    /* The document title — the same 19/650/-0.01em treatment as RecipeDetail's heading (same
+       role: the content's own name), one clear step above the 15px row names. */
     margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    line-height: 1.18;
+    font-size: 19px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
     text-wrap: balance;
   }
   .meta {
     margin-top: 3px;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
   .notes {
     margin-top: 5px;
-    font-size: 12.5px;
+    font-size: 13px;
     line-height: 1.4;
     color: var(--faint);
     font-style: italic;
@@ -428,7 +498,9 @@
   .dl {
     font-family: var(--widget-font);
     font-size: 15px;
-    font-weight: 600;
+    /* 650 — the system's one heading weight (title, labels, detail heading all carry it); the
+       size ties it to the rows it heads, the weight separates it from their 500/400 names. */
+    font-weight: 650;
     letter-spacing: -0.01em;
     color: var(--ink);
   }
@@ -482,6 +554,8 @@
     flex: none;
     font-family: ui-sans-serif, system-ui, sans-serif;
     font-size: 12px;
+    /* 500 — the same weight `.eyebrow` gives this label on rich rows; one role, one treatment. */
+    font-weight: 500;
     color: var(--muted);
   }
   .mt::after {
