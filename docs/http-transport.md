@@ -13,14 +13,14 @@ host and origin allowlists, and graceful shutdown.
 
 ## Environment variables
 
-| Variable                     | Config path            | Required | Default     | Description                                                                                    |
-| ---------------------------- | ---------------------- | -------- | ----------- | ---------------------------------------------------------------------------------------------- |
-| `MCP_HTTP_PORT`              | `http.port`            | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)                                               |
-| `MCP_HTTP_HOST`              | `http.host`            | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                                                         |
-| `MCP_ALLOWED_HOSTS`          | `http.allowedHosts`    | No       | `[]`        | `Host`-header allowlist (DNS rebinding protection)                                             |
-| `MCP_ALLOWED_ORIGINS`        | `http.allowedOrigins`  | No       | `[]`        | `Origin`-header allowlist (browser-only; locks out CLI clients)                                |
-| `MCP_HTTP_SHUTDOWN_DRAIN_MS` | `http.shutdownDrainMs` | No       | `"5s"`      | Readiness-drain delay on `SIGTERM` (see [Graceful shutdown](#graceful-shutdown-kubernetes))    |
-| `MCP_WIDGET_PREVIEW`         | `http.widgetPreview`   | No       | `false`     | Mount the dev-only `/widget-preview` route (see [Widget preview](#widget-preview-development)) |
+| Variable                  | Required | Default     | Description                                                                                    |
+| ------------------------- | -------- | ----------- | ---------------------------------------------------------------------------------------------- |
+| `MCP_HTTP_PORT`           | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)                                               |
+| `MCP_HTTP_HOST`           | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                                                         |
+| `MCP_ALLOWED_HOSTS`       | No       | `[]`        | `Host`-header allowlist (DNS rebinding protection)                                             |
+| `MCP_ALLOWED_ORIGINS`     | No       | `[]`        | `Origin`-header allowlist (browser-only; locks out CLI clients)                                |
+| `MCP_HTTP_SHUTDOWN_DRAIN` | No       | `"5s"`      | Readiness-drain delay on `SIGTERM` (see [Graceful shutdown](#graceful-shutdown-kubernetes))    |
+| `MCP_WIDGET_PREVIEW`      | No       | `false`     | Mount the dev-only `/widget-preview` route (see [Widget preview](#widget-preview-development)) |
 
 `MCP_HTTP_PORT` accepts a number string or a bare number, coerced to an integer in
 the range `1`–`65535`. `MCP_HTTP_HOST` accepts any non-empty string and defaults to
@@ -113,7 +113,7 @@ On `SIGTERM` the server shuts down in two phases:
 
 1. **Readiness drain.** `/healthz` immediately starts returning `503`, so
    Kubernetes marks the pod not-ready and removes it from the Service endpoints,
-   and the server keeps serving for `MCP_HTTP_SHUTDOWN_DRAIN_MS` (default `5s`).
+   and the server keeps serving for `MCP_HTTP_SHUTDOWN_DRAIN` (default `5s`).
    This window lets endpoint removal and kube-proxy / ingress routing propagate, so
    a request routed just before the pod was deleted still reaches a working server
    instead of a refused connection.
@@ -125,8 +125,8 @@ On `SIGTERM` the server shuts down in two phases:
 
 Budget the timing so the **total** stays under `terminationGracePeriodSeconds`: the
 drain delay plus the `10s` drain timeout (default `5 + 10 = 15s`) must be less than
-the grace period (the chart/manifest default is `30s`). `MCP_HTTP_SHUTDOWN_DRAIN_MS`
-accepts a duration (`"5s"`) or milliseconds; `0` disables the drain delay, which is
+the grace period (the chart/manifest default is `30s`). `MCP_HTTP_SHUTDOWN_DRAIN`
+takes a duration ([format](configuration.md#duration-format)), like `"5s"`; `0` disables the drain delay, which is
 appropriate when you're not running under an orchestrator, or for a single-replica
 `Recreate` rollout where there's no other replica to route to. Keep it well under
 `terminationGracePeriodSeconds`.

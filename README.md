@@ -64,7 +64,7 @@ container, behind a reverse proxy, or with Docker Compose.
 
 **Reference**
 
-- **[Configuration](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/configuration.md)** — env vars, config files, platform paths
+- **[Configuration](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/configuration.md)** — env vars, the `.env` file, platform paths
 - **[HTTP transport](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/http-transport.md)** — binding, host/origin allowlists, graceful shutdown
 - **[OAuth 2.1 configuration](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/oauth-configuration.md)** — OIDC providers, allowlist, consent gate
 - **[Tools reference](https://github.com/bojanrajkovic/mcp-paprika/tree/main/docs/tools)** — every tool with parameters and examples

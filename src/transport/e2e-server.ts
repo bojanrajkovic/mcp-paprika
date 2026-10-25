@@ -216,7 +216,7 @@ async function main(): Promise<void> {
   // try to hit the network. Dropping the `features` key (it is optional) leaves
   // `config.features?.…` undefined, so both feature modules build null components and
   // their tools register-but-decline. The test isolates XDG_CONFIG_HOME so no real
-  // config.json bleeds in; env still supplies the (mock-satisfied) Paprika credentials.
+  // .env bleeds in; env still supplies the (mock-satisfied) Paprika credentials.
   const { features: _features, ...config } = loadConfig().match(
     (c) => c,
     (err) => {
