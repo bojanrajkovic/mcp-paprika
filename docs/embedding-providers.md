@@ -2,16 +2,19 @@
 
 The `discover_recipes` tool uses embeddings for semantic search, and works with any
 OpenAI-compatible `/v1/embeddings` endpoint. Three environment variables select the
-provider (see [configuration.md](configuration.md) for the full config reference):
+provider (see [configuration.md](configuration.md) for the full config reference).
+`OPENAI_API_KEY` and `OPENAI_BASE_URL` are shared with photo generation, which turns on
+when the base URL is OpenRouter, unless `IMAGE_GEN_ENABLED=false`:
 
-| Env var           | Description            | Example                         |
-| ----------------- | ---------------------- | ------------------------------- |
-| `OPENAI_BASE_URL` | Base URL (up to `/v1`) | `https://openrouter.ai/api/v1`  |
-| `OPENAI_API_KEY`  | Bearer token           | `sk-or-v1-...`                  |
-| `EMBEDDING_MODEL` | Model identifier       | `openai/text-embedding-3-small` |
+| Env var           | Description                                    | Example                         |
+| ----------------- | ---------------------------------------------- | ------------------------------- |
+| `OPENAI_BASE_URL` | Base URL (up to `/v1`); defaults to OpenRouter | `https://openrouter.ai/api/v1`  |
+| `OPENAI_API_KEY`  | Bearer token                                   | `sk-or-v1-...`                  |
+| `EMBEDDING_MODEL` | Model identifier                               | `openai/text-embedding-3-small` |
 
-Set all three together to enable semantic search. If any are missing, the server starts
-without `discover_recipes`.
+Set `OPENAI_API_KEY` and `EMBEDDING_MODEL` to enable semantic search; `OPENAI_BASE_URL`
+defaults to OpenRouter. Without the key or the model, `discover_recipes` answers that
+semantic search isn't configured.
 
 ## Provider matrix
 

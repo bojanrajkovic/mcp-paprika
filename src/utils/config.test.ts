@@ -11,6 +11,7 @@ import {
   type EmbeddingConfig,
   loadConfig,
   paprikaConfigSchema,
+  resolveEmbeddingConfig,
   resolveImageGenConfig,
 } from "./config.js";
 
@@ -888,6 +889,10 @@ describe("Configuration loading", () => {
       "MCP_HTTP_SHUTDOWN_DRAIN",
       "MCP_HTTP_SHUTDOWN_DRAIN_MS",
       "REPLICATE_API_TOKEN",
+      "IMAGE_GEN_API_KEY",
+      "IMAGE_GEN_BASE_URL",
+      "IMAGE_GEN_REUSE_EMBEDDINGS_CREDS",
+      "IMAGE_GEN_ENABLED",
       "OPENAI_API_KEY",
       "OPENAI_BASE_URL",
       "EMBEDDING_MODEL",
@@ -1033,6 +1038,51 @@ describe("Configuration loading", () => {
           },
         );
       });
+
+      it("an empty leftover IMAGE_GEN_API_KEY doesn't block boot", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["IMAGE_GEN_API_KEY"] = "";
+
+        loadConfig(tempDir).match(
+          () => {},
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+
+      it("a leftover REPLICATE_API_TOKEN is ignored (nothing ever read it)", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["REPLICATE_API_TOKEN"] = "r8_x";
+
+        loadConfig(tempDir).match(
+          () => {},
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+
+      it.each(["IMAGE_GEN_API_KEY", "IMAGE_GEN_BASE_URL", "IMAGE_GEN_REUSE_EMBEDDINGS_CREDS"])(
+        "the removed %s fails with a migration error saying what to do instead",
+        (name) => {
+          process.env["PAPRIKA_EMAIL"] = "user@test.com";
+          process.env["PAPRIKA_PASSWORD"] = "secret";
+          process.env[name] = "x";
+
+          loadConfig(tempDir).match(
+            () => {
+              expect.fail("Expected Err but got Ok");
+            },
+            (error) => {
+              expect(error.kind).toBe("migration");
+              expect(error.reason).toContain(`${name} was removed.`);
+            },
+          );
+        },
+      );
 
       it("the old MCP_HTTP_SHUTDOWN_DRAIN_MS name fails with a migration error naming the new one", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
@@ -1456,126 +1506,78 @@ describe("Configuration loading", () => {
     });
   });
 
-  describe("features.imageGen config", () => {
-    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
-    const embeddings = { apiKey: "emb-key", baseUrl: "https://openrouter.ai/api/v1", model: "text-embedding-3-large" };
+  describe("AI feature config (shared OPENAI_API_KEY)", () => {
+    const parse = (env: Record<string, string>) =>
+      paprikaConfigSchema.safeParse(buildEnvOverrides({ ...BASE_ENV, ...env }));
 
-    it("imageGen absent → resolveImageGenConfig returns null", () => {
-      const result = paprikaConfigSchema.safeParse(validBase);
+    it("no OPENAI_API_KEY → both features off", () => {
+      const result = parse({});
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.features?.imageGen).toBeUndefined();
+        expect(resolveEmbeddingConfig(result.data)).toBeNull();
         expect(resolveImageGenConfig(result.data)).toBeNull();
       }
     });
 
-    it("dedicated apiKey only → resolves with default OpenRouter baseUrl", () => {
-      const input = { ...validBase, features: { imageGen: { apiKey: "img-key" } } };
-      const result = paprikaConfigSchema.safeParse(input);
+    it("OPENAI_API_KEY alone → image generation on, with the OpenRouter default base URL; search off", () => {
+      const result = parse({ OPENAI_API_KEY: "key" });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(resolveImageGenConfig(result.data)).toEqual({
-          apiKey: "img-key",
+        expect(resolveImageGenConfig(result.data)).toEqual({ apiKey: "key", baseUrl: "https://openrouter.ai/api/v1" });
+        expect(resolveEmbeddingConfig(result.data)).toBeNull();
+      }
+    });
+
+    it("OPENAI_API_KEY + EMBEDDING_MODEL → search on, sharing the key and base URL", () => {
+      const result = parse({ OPENAI_API_KEY: "key", EMBEDDING_MODEL: "openai/text-embedding-3-small" });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(resolveEmbeddingConfig(result.data)).toEqual({
+          apiKey: "key",
           baseUrl: "https://openrouter.ai/api/v1",
+          model: "openai/text-embedding-3-small",
         });
+        expect(resolveImageGenConfig(result.data)).toEqual({ apiKey: "key", baseUrl: "https://openrouter.ai/api/v1" });
       }
     });
 
-    it("dedicated apiKey + baseUrl → resolves with the custom baseUrl", () => {
-      const input = { ...validBase, features: { imageGen: { apiKey: "img-key", baseUrl: "https://example.com/v1" } } };
-      const result = paprikaConfigSchema.safeParse(input);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(resolveImageGenConfig(result.data)).toEqual({
-          apiKey: "img-key",
-          baseUrl: "https://example.com/v1",
-        });
-      }
-    });
-
-    it("reuseEmbeddingsCreds=true with embeddings → resolves to embeddings creds", () => {
-      const input = { ...validBase, features: { embeddings, imageGen: { reuseEmbeddingsCreds: true } } };
-      const result = paprikaConfigSchema.safeParse(input);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(resolveImageGenConfig(result.data)).toEqual({
-          apiKey: "emb-key",
-          baseUrl: "https://openrouter.ai/api/v1",
-        });
-      }
-    });
-
-    it("reuseEmbeddingsCreds=true WITHOUT embeddings → validation error (hints embeddings)", () => {
-      const input = { ...validBase, features: { imageGen: { reuseEmbeddingsCreds: true } } };
-      const result = paprikaConfigSchema.safeParse(input);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(ConfigError.validation(result.error.issues).reason).toContain("features.embeddings");
-      }
-    });
-
-    it("empty imageGen block (neither key nor reuse) → validation error with IMAGE_GEN_API_KEY hint", () => {
-      const input = { ...validBase, features: { imageGen: {} } };
-      const result = paprikaConfigSchema.safeParse(input);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(ConfigError.validation(result.error.issues).reason).toContain("IMAGE_GEN_API_KEY");
-      }
-    });
-
-    it("both apiKey and reuseEmbeddingsCreds → validation error (mutually exclusive)", () => {
-      const input = { ...validBase, features: { embeddings, imageGen: { apiKey: "k", reuseEmbeddingsCreds: true } } };
-      const result = paprikaConfigSchema.safeParse(input);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(ConfigError.validation(result.error.issues).reason).toContain("not both");
-      }
-    });
-
-    it("baseUrl + reuseEmbeddingsCreds → validation error (baseUrl would be silently ignored)", () => {
-      const input = {
-        ...validBase,
-        features: { embeddings, imageGen: { reuseEmbeddingsCreds: true, baseUrl: "https://openrouter.ai/api/v1" } },
-      };
-      const result = paprikaConfigSchema.safeParse(input);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(ConfigError.validation(result.error.issues).reason).toContain("IMAGE_GEN_BASE_URL is ignored");
-      }
-    });
-
-    it("env routing: IMAGE_GEN_* vars populate features.imageGen", () => {
-      const merged = buildEnvOverrides({
-        ...BASE_ENV,
-        IMAGE_GEN_API_KEY: "env-img-key",
-        IMAGE_GEN_BASE_URL: "https://env.example/v1",
-        IMAGE_GEN_REUSE_EMBEDDINGS_CREDS: "false",
+    it("a non-OpenRouter base URL keeps search on but photo generation off", () => {
+      const result = parse({
+        OPENAI_API_KEY: "ollama",
+        OPENAI_BASE_URL: "http://localhost:11434/v1",
+        EMBEDDING_MODEL: "nomic",
       });
-      const result = paprikaConfigSchema.safeParse(merged);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(resolveImageGenConfig(result.data)).toEqual({
-          apiKey: "env-img-key",
-          baseUrl: "https://env.example/v1",
-        });
+        expect(resolveEmbeddingConfig(result.data)).toMatchObject({ baseUrl: "http://localhost:11434/v1" });
+        expect(resolveImageGenConfig(result.data)).toBeNull();
       }
     });
 
-    it("env routing: IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true coerces to boolean and reuses", () => {
-      const merged = buildEnvOverrides({
-        ...BASE_ENV,
-        OPENAI_API_KEY: "emb-key",
-        OPENAI_BASE_URL: "https://openrouter.ai/api/v1",
-        EMBEDDING_MODEL: "text-embedding-3-large",
-        IMAGE_GEN_REUSE_EMBEDDINGS_CREDS: "true",
-      });
-      const result = paprikaConfigSchema.safeParse(merged);
+    it("IMAGE_GEN_ENABLED=false turns image generation off but leaves search on", () => {
+      const result = parse({ OPENAI_API_KEY: "key", EMBEDDING_MODEL: "m", IMAGE_GEN_ENABLED: "false" });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(resolveImageGenConfig(result.data)).toEqual({
-          apiKey: "emb-key",
-          baseUrl: "https://openrouter.ai/api/v1",
-        });
+        expect(resolveImageGenConfig(result.data)).toBeNull();
+        expect(resolveEmbeddingConfig(result.data)).not.toBeNull();
+      }
+    });
+
+    it("EMBEDDING_MODEL without OPENAI_API_KEY is a validation error naming the missing key", () => {
+      const result = parse({ EMBEDDING_MODEL: "m" });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(ConfigError.validation(result.error.issues).reason).toContain(
+          "semantic search also needs OPENAI_API_KEY",
+        );
+      }
+    });
+
+    it("OPENAI_BASE_URL without OPENAI_API_KEY is a validation error", () => {
+      const result = parse({ OPENAI_BASE_URL: "https://example.com/v1" });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(ConfigError.validation(result.error.issues).reason).toContain("OPENAI_API_KEY");
       }
     });
   });

@@ -44,39 +44,33 @@ When `MCP_TRANSPORT=http`, see [http-transport.md](http-transport.md) and
 | `MCP_LOG_PRETTY`       | No       | `"auto"` | Pretty-print: `true`, `false`, or `"auto"` (pretty for stdio TTY, JSON for HTTP) |
 | `MCP_LOG_FILE`         | No       | —        | Override default log file path (stdio non-TTY only)                              |
 
-### Semantic search (optional)
+### AI features (optional)
 
-| Variable          | Required | Default | Description                 |
-| ----------------- | -------- | ------- | --------------------------- |
-| `OPENAI_API_KEY`  | No       | —       | Embedding provider API key  |
-| `OPENAI_BASE_URL` | No       | —       | Embedding provider base URL |
-| `EMBEDDING_MODEL` | No       | —       | Embedding model identifier  |
+Semantic search (`discover_recipes`) and recipe photo generation (`generate_recipe_photo`)
+share one set of OpenAI-compatible credentials.
 
-Set all three together to enable semantic search. If any are missing, the
-`discover_recipes` tool isn't registered and the server logs
-`Semantic search: disabled` on startup. [embedding-providers.md](embedding-providers.md)
-covers provider choices (Ollama, OpenAI, OpenRouter) with worked examples.
+| Variable            | Required | Default                        | Description                                                 |
+| ------------------- | -------- | ------------------------------ | ----------------------------------------------------------- |
+| `OPENAI_API_KEY`    | No       | —                              | API key for every AI feature                                |
+| `OPENAI_BASE_URL`   | No       | `https://openrouter.ai/api/v1` | OpenAI-compatible base URL, up to `/v1`                     |
+| `EMBEDDING_MODEL`   | No       | —                              | Embedding model; setting it turns on semantic search        |
+| `IMAGE_GEN_ENABLED` | No       | `true`                         | Set `false` to keep photo generation off while a key is set |
 
-### Recipe photo generation (optional)
+- **Semantic search** turns on when `OPENAI_API_KEY` and `EMBEDDING_MODEL` are both set.
+  Without them, `discover_recipes` answers that semantic search isn't configured, and
+  the server logs `semantic search disabled` on startup. [embedding-providers.md](embedding-providers.md)
+  covers provider choices (Ollama, OpenAI, OpenRouter) with worked examples.
+- **Photo generation** turns on when `OPENAI_API_KEY` is set and `OPENAI_BASE_URL` is
+  OpenRouter (the default); it only works with OpenRouter's image models. It bills per
+  image, so set `IMAGE_GEN_ENABLED=false` if you want the key for search only. When it's
+  off, `generate_recipe_photo` answers that it isn't configured. The image models are
+  served through OpenRouter's chat-completions API, and the **model is chosen per
+  `generate_recipe_photo` call**, not in config.
 
-| Variable                           | Required | Default                        | Description                                                   |
-| ---------------------------------- | -------- | ------------------------------ | ------------------------------------------------------------- |
-| `IMAGE_GEN_API_KEY`                | No       | —                              | OpenRouter API key dedicated to image generation              |
-| `IMAGE_GEN_BASE_URL`               | No       | `https://openrouter.ai/api/v1` | OpenRouter base URL (only used with a dedicated key)          |
-| `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS` | No       | `false`                        | Reuse the embedding (`OPENAI_*`) credentials instead of a key |
-
-Image generation powers the `generate_recipe_photo` tool (OpenRouter chat-completions image
-models). Enable it **one** of two ways:
-
-- Set `IMAGE_GEN_API_KEY` (and optionally `IMAGE_GEN_BASE_URL`) for a **dedicated**
-  key, which gives you an isolated OpenRouter billing line for photo generation; or
-- Set `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true` to **reuse** your embedding provider's
-  credentials (valid only when `features.embeddings` is configured and points at
-  OpenRouter).
-
-Setting both, or setting neither while the block exists, is a configuration error. The
-**model is chosen per `generate_recipe_photo` call**, not in config. If image generation isn't
-enabled, `generate_recipe_photo` isn't registered.
+Setting `EMBEDDING_MODEL` or `OPENAI_BASE_URL` without `OPENAI_API_KEY` is a
+configuration error. Releases before 2.0 used `IMAGE_GEN_API_KEY`, `IMAGE_GEN_BASE_URL`,
+and `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS` for photo generation; the server now stops at boot
+if any of them is set, with what to use instead.
 
 ### Duration format
 
@@ -145,16 +139,12 @@ PAPRIKA_EMAIL=you@example.com
 PAPRIKA_PASSWORD=your-password
 PAPRIKA_SYNC_INTERVAL=15m
 
-# Optional: enable semantic search
-OPENAI_BASE_URL=http://localhost:11434/v1
-OPENAI_API_KEY=ollama
-EMBEDDING_MODEL=nomic-embed-text
-
-# Optional: enable AI recipe-photo generation (generate_recipe_photo).
-# Either a dedicated OpenRouter key:
-IMAGE_GEN_API_KEY=sk-or-...
-# ...or reuse the embedding creds above (when they point at OpenRouter):
-# IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true
+# Optional: AI features, sharing one OpenRouter key
+OPENAI_API_KEY=sk-or-...
+# Semantic search (discover_recipes):
+EMBEDDING_MODEL=openai/text-embedding-3-small
+# Photo generation (generate_recipe_photo) is on whenever the key is set:
+# IMAGE_GEN_ENABLED=false
 ```
 
 The same variables work for HTTP; [quick-start-http.md](quick-start-http.md) shows the
