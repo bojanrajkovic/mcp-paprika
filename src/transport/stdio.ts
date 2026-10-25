@@ -75,7 +75,9 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   // the change types with a resource surface.
   const loop = config.sync.enabled
     ? runSyncLoop(async () => {
-        notifyFromResults(await kernel.syncOnce(), notifier);
+        const cycle = await kernel.syncOnce();
+        notifyFromResults(cycle.results, notifier);
+        return cycle.outcome;
       }, config.sync.interval)
     : null;
   if (loop !== null) {

@@ -421,18 +421,20 @@ export class PaprikaClient {
     return this.request("GET", `${API_BASE}/recipe/${uid}/`, RecipeSchema);
   }
 
-  getRecipes(uids: ReadonlyArray<string>): ResultAsync<Array<Recipe>, PaprikaClientError> {
-    // Each fetch is throttled by the bulkhead. Its execute() can only reject
-    // with something foreign (the queue is effectively unbounded), so the
-    // fromPromise + flatten keeps even that on the Result rail — the same
-    // double-Result shape as DiskCache._locked.
-    return ResultAsync.combine(
-      uids.map((uid) =>
-        ResultAsync.fromPromise(
-          this._recipesBulkhead.execute(() => this.getRecipe(uid)),
-          (e) => toClientError(e, `${API_BASE}/recipe/${uid}/`),
-        ).andThen((r) => r),
-      ),
+  /**
+   * Fetch many recipes, one independent result per UID (same order), each throttled
+   * by the recipe bulkhead. Independent on purpose: a rate-limited fetch fails only
+   * its own result, so the sync can keep every sibling that landed (#483).
+   */
+  fetchRecipes(uids: ReadonlyArray<string>): ReadonlyArray<ResultAsync<Recipe, PaprikaClientError>> {
+    // The bulkhead's execute() can only reject with something foreign (the queue is
+    // effectively unbounded), so the fromPromise + flatten keeps even that on the
+    // Result rail — the same double-Result shape as DiskCache._locked.
+    return uids.map((uid) =>
+      ResultAsync.fromPromise(
+        this._recipesBulkhead.execute(() => this.getRecipe(uid)),
+        (e) => toClientError(e, `${API_BASE}/recipe/${uid}/`),
+      ).andThen((r) => r),
     );
   }
 

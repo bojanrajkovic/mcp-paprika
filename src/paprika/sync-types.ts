@@ -9,12 +9,33 @@ import type { Recipe } from "../domains/recipe/types.js";
 import type { PaprikaClientError } from "./errors.js";
 
 /**
- * What a reconcile can fail with: the client's typed error on a fetch, or the
- * disk cache's on a put/remove. The driver only logs these (a `reference` /
- * `additive` err is a warning; a `core` err aborts the cycle),
- * so the union stays exactly the two producers' types, unnormalized.
+ * What a reconcile can fail with: the client's typed error on a fetch, the disk
+ * cache's on a put/remove, or a {@link PartialSyncError} when some of a batch
+ * landed. The driver only logs these (a `reference` / `additive` err is a warning;
+ * a `core` err aborts the cycle), so the union stays the producers' own types,
+ * unnormalized.
  */
-export type SyncError = CacheError | PaprikaClientError;
+export type SyncError = CacheError | PaprikaClientError | PartialSyncError;
+
+/**
+ * A reconcile that failed AFTER persisting part of its batch: `landed` items are
+ * durable, `failed` were not, and `cause` is the first failure. The kernel still
+ * aborts the cycle, but reports it as `core_partial` so the interval loop retries
+ * sooner — each partial pass makes progress, so the retries converge (#483).
+ */
+export class PartialSyncError extends Error {
+  readonly landed: number;
+  readonly failed: number;
+  override readonly cause: SyncError;
+
+  constructor(opts: { readonly landed: number; readonly failed: number; readonly cause: SyncError }) {
+    super(`sync partially applied: ${opts.landed.toString()} landed, ${opts.failed.toString()} failed`);
+    this.name = "PartialSyncError";
+    this.landed = opts.landed;
+    this.failed = opts.failed;
+    this.cause = opts.cause;
+  }
+}
 
 export type EntityChanges<T> = {
   readonly added: ReadonlyArray<T>;
