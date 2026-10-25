@@ -335,6 +335,51 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
+  describe("session rehydration across a restart", () => {
+    it("serves the old session id after a restart without a new initialize", async () => {
+      const first = await startHttp(makeConfig());
+      let sessionId: string;
+      try {
+        sessionId = await initializeSession(first);
+      } finally {
+        await first.shutdown();
+      }
+
+      const second = await startHttp(makeConfig());
+      try {
+        const list = await postJsonRpc(second, { jsonrpc: "2.0", id: 2, method: "tools/list" }, sessionId);
+        expect(list.status).toBe(200);
+        expect((list.result as { result?: { tools?: unknown[] } }).result?.tools?.length).toBeGreaterThan(0);
+        expect((await fetchHealth(second)).sessions).toBe(1);
+      } finally {
+        await second.shutdown();
+      }
+    });
+
+    it("doesn't revive a session the client deleted", async () => {
+      const first = await startHttp(makeConfig());
+      let sessionId: string;
+      try {
+        sessionId = await initializeSession(first);
+        const del = await fetch(`http://127.0.0.1:${first.port.toString()}/mcp`, {
+          method: "DELETE",
+          headers: { accept: "application/json, text/event-stream", "mcp-session-id": sessionId },
+        });
+        expect(del.status).toBe(200);
+      } finally {
+        await first.shutdown();
+      }
+
+      const second = await startHttp(makeConfig());
+      try {
+        const list = await postJsonRpc(second, { jsonrpc: "2.0", id: 2, method: "tools/list" }, sessionId);
+        expect(list.status).toBe(404);
+      } finally {
+        await second.shutdown();
+      }
+    });
+  });
+
   describe("stale session id returns 404", () => {
     it("returns 404 for a request with an unknown mcp-session-id", async () => {
       const handle = await startHttp(makeConfig());
