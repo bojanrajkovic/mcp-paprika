@@ -154,6 +154,13 @@ is read client-side by the shim and never reflected into the HTML by the server.
 Run `pnpm build:widgets` (or `pnpm dev:widgets` to rebuild on change) first so
 there is something to preview.
 
+`pnpm dev:preview` serves the same route without the rest of the server. It
+mounts only the preview router (`scripts/widget-preview.ts`), so it needs no
+Paprika credentials and no OAuth configuration; `pnpm dev` signs in to Paprika at
+startup and exits without credentials. Its index at `http://127.0.0.1:8899/`
+(`PORT` overrides the port) links every widget state it has a sample payload for
+(populated, empty, error, and data variants) in light and dark themes.
+
 ## Widget vendor runtime
 
 The shared ext-apps browser runtime is externalized, not inlined per widget
