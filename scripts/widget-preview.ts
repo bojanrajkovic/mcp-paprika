@@ -202,6 +202,14 @@ const GROCERY = {
   ],
 };
 const GROCERY_EMPTY = { uid: "grocery-empty", name: "New List", items: [] };
+// Every row already purchased — load this, then tap Clear (twice: the inline confirm, then Clear
+// again) to walk the real path to the "List's clear" all-cleared state, since that state is reached
+// by the clear interaction, not expressible as a static initial payload.
+const GROCERY_ALL_PURCHASED = {
+  uid: "grocery-brunch",
+  name: "Weekend Brunch",
+  items: GROCERY.items.map((item) => ({ ...item, purchased: true })),
+};
 
 // --- pantry ------------------------------------------------------------------
 const PANTRY = {
@@ -337,6 +345,9 @@ interface Variant {
   // stays undefined and the widget takes its error path with this as the message (a clean error
   // state — the object `payload` would instead be dumped as JSON by the shim's text-content mirror).
   readonly rawText?: string;
+  // Repeats `payload.items` this many times, CLIENT-SIDE in the shim — lets a stress-test variant
+  // stay a small URL (see the router's `scale=` doc).
+  readonly scale?: number;
 }
 interface WidgetSample {
   readonly name: string;
@@ -363,6 +374,8 @@ const WIDGETS: readonly WidgetSample[] = [
     variants: [
       { label: "Populated", payload: GROCERY },
       { label: "Empty", payload: GROCERY_EMPTY },
+      { label: "All purchased (tap Clear ×2 for “list’s clear”)", payload: GROCERY_ALL_PURCHASED },
+      { label: "Very large list (240 items, ×40)", payload: GROCERY, scale: 40 },
     ],
   },
   {
@@ -414,7 +427,7 @@ const WIDGETS: readonly WidgetSample[] = [
 const encode = (payload: unknown): string => encodeURIComponent(JSON.stringify(payload));
 
 const previewHref = (name: string, v: Variant, theme: "light" | "dark"): string => {
-  const base = `/widget-preview?widget=${name}&theme=${theme}`;
+  const base = `/widget-preview?widget=${name}&theme=${theme}${v.scale ? `&scale=${v.scale.toString()}` : ""}`;
   if (v.rawText !== undefined) return `${base}&payload=${encodeURIComponent(v.rawText)}`;
   return v.payload === undefined ? base : `${base}&payload=${encode(v.payload)}`;
 };

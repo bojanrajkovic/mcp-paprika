@@ -151,6 +151,10 @@ resolves the widget's ext-apps import to a fake host shim module instead of the
 real vendor (ADR-0025): the shim feeds `?payload=` to the widget's `ontoolresult`
 so you see it render, and logs the messages the widget would send back. `?payload=`
 is read client-side by the shim and never reflected into the HTML by the server.
+Two more query params exercise states a plain browser tab can't reach:
+`touch=1` reports a touch host in `getHostContext()`, so swipe-only affordances
+render, and `scale=<n>` repeats the payload's `items` array `n` times inside the
+shim, so a large-list stress test doesn't have to fit the whole list in the URL.
 Run `pnpm build:widgets` (or `pnpm dev:widgets` to rebuild on change) first so
 there is something to preview.
 
