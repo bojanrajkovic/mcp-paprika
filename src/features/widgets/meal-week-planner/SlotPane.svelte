@@ -12,6 +12,7 @@
   import Spinner from "../shared/Spinner.svelte";
   import StatusScreen from "../shared/StatusScreen.svelte";
   import { motion } from "../shared/motion.js";
+  import { createSwipeRecognizer } from "../shared/swipe-gesture.js";
 
   // The minimal meal shape a slot row renders (a structural subset of App's Meal).
   interface SlotMeal {
@@ -61,49 +62,46 @@
   // pan-y` leaves vertical scrolling fully native — the axis lock only decides what WE do
   // with the horizontal component, so no preventDefault fights. Mouse users page via the
   // day chips; the gesture is touch-only and additive (the chips remain the visible path).
+  // The gesture math (slop, axis lock, distance-or-flick commit) is the shared recognizer;
+  // this component owns only the TouchEvent wiring and the pane's own visuals.
   let dragX = $state(0);
   // True only for the spring-back after an uncommitted swipe — gates the CSS transition so
   // it can't smooth (and lag) the finger-tracking or fight the keyed fly-in.
   let springing = $state(false);
-  let startX = 0;
-  let startY = 0;
-  let startT = 0;
-  let axis: "x" | "y" | null = null;
-  let tracking = false;
   let springTimer: ReturnType<typeof setTimeout> | undefined;
+  const gesture = createSwipeRecognizer({
+    axis: "auto",
+    direction: "both",
+    resist: (raw) => raw * 0.55,
+    armPx: 56,
+    flick: { px: 0, velocityPxMs: 0.35 },
+  });
 
   function touchStart(e: TouchEvent) {
     const t = e.touches[0];
     if (e.touches.length !== 1 || !t) {
       // A second finger means this is a pinch/multi-touch gesture, not a page — abandon
       // any drag in progress so lifting a finger can't commit a spurious page turn.
-      tracking = false;
-      if (axis === "x" && dragX !== 0) springBack();
+      const wasEngaged = gesture.engaged;
+      gesture.cancel();
+      if (wasEngaged) springBack();
       return;
     }
-    startX = t.clientX;
-    startY = t.clientY;
-    startT = performance.now();
-    axis = null;
-    tracking = true;
+    gesture.start(t.clientX, t.clientY, performance.now());
     springing = false;
     clearTimeout(springTimer);
   }
   function touchMove(e: TouchEvent) {
     const t = e.touches[0];
-    if (!tracking || !t) return;
+    if (!gesture.active || !t) return;
     if (e.touches.length !== 1) {
-      tracking = false;
-      if (axis === "x" && dragX !== 0) springBack();
+      const wasEngaged = gesture.engaged;
+      gesture.cancel();
+      if (wasEngaged) springBack();
       return;
     }
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    if (axis === null) {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-    }
-    if (axis === "x") dragX = dx * 0.55;
+    gesture.move(t.clientX, t.clientY, performance.now());
+    dragX = gesture.dx;
   }
   function springBack() {
     springing = true;
@@ -113,13 +111,11 @@
     }, 200);
   }
   function touchEnd() {
-    if (!tracking) return;
-    tracking = false;
-    if (axis !== "x") return;
-    const elapsed = Math.max(1, performance.now() - startT);
-    const commit = Math.abs(dragX) > 56 || Math.abs(dragX) / elapsed > 0.35;
-    if (commit) {
-      const dir = dragX < 0 ? 1 : -1;
+    if (!gesture.active) return;
+    const { committed, wasEngaged, dx } = gesture.release();
+    if (!wasEngaged) return; // never left the y-axis (or a plain tap) — nothing to spring back
+    if (committed) {
+      const dir = dx < 0 ? 1 : -1;
       if (onSwipeDay(dir)) {
         // Same-flush reset: dragX clears in the same batch as the day change, so the new
         // keyed content never renders with the old drag offset.
@@ -132,8 +128,10 @@
     springBack();
   }
   function touchCancel() {
-    tracking = false;
-    if (axis === "x") springBack();
+    if (!gesture.active) return;
+    const wasEngaged = gesture.engaged;
+    gesture.cancel();
+    if (wasEngaged) springBack();
   }
 </script>
 

@@ -28,6 +28,7 @@
     PantryItemRow,
     PantryListStructured,
   } from "../shared/server-types.js";
+  import { createSwipeRecognizer } from "../shared/swipe-gesture.js";
 
   // A pantry row: the server's structured pantry item (B1 — a rename of its fields breaks this widget
   // at compile time) plus transient per-row flags. `inStock` drives which list the row lives in (the
@@ -457,17 +458,15 @@
   }
 
   // Swipe-left to mark out, on touch hosts only — the iOS-Mail affordance, with the physics that
-  // sell it: a slop gate so a vertical pan never twitches the row, a graded reveal that tracks the
-  // finger, an armed pop past the commit threshold (with a haptic tick where the host permits it),
-  // a flick shortcut, an eased settle when released early, and a sweep off the edge on commit. The
+  // sell it: a graded reveal that tracks the finger, an armed pop past the commit threshold (with
+  // a haptic tick where the host permits it), an eased settle when released early, and a sweep off
+  // the edge on commit. The gesture math (slop, drag tracking, distance-or-flick commit) is the
+  // shared recognizer; this action owns only the DOM wiring and the visual response. The
   // drag itself is direct manipulation, not authored motion; the settle/sweep durations go through
   // motion() (and the sweep delay too), so reduced motion commits and settles instantly. The Out
   // button is the pointer-host path; this is the touch path (the button is hidden there). A no-op
   // when `enabled` is false (pointer host).
-  const SWIPE_SLOP_PX = 8; // below this the gesture is undecided — vertical pans stay the browser's
   const SWIPE_ARM_PX = 80; // dragged past this, release commits
-  const FLICK_PX = 40; // a fast flick commits from here…
-  const FLICK_VX = 0.8; // …at this leftward velocity (px/ms)
   function swipe(
     node: HTMLElement,
     param: {
@@ -478,13 +477,14 @@
     },
   ) {
     let p = param;
-    let x0: number | null = null;
-    let engaged = false; // past the slop gate — this drag is ours, not a scroll
+    const gesture = createSwipeRecognizer({
+      axis: "x",
+      direction: "left",
+      resist: (raw) => Math.max(-120, Math.min(0, raw)),
+      armPx: SWIPE_ARM_PX,
+      flick: { px: 40, velocityPxMs: 0.8 },
+    });
     let armed = false;
-    let dx = 0;
-    let vx = 0;
-    let lastX = 0;
-    let lastT = 0;
     let suppressClick = false; // a drag's release also synthesizes a click — swallow that one
     let sweepTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -496,25 +496,14 @@
       // vibration (iOS Safari, permission-gated iframes), where the visual pop still carries it.
       if (on && typeof navigator.vibrate === "function") navigator.vibrate(10);
     };
-    // End the drag's transient state. Centralized so every exit path (commit, cancel, a capability
-    // flip mid-drag) leaves no row stuck in the dragging or armed state.
-    const endDrag = () => {
-      x0 = null;
-      engaged = false;
-      p.drag(false);
-      setArmed(false);
-    };
     const down = (e: PointerEvent) => {
       // One primary pointer owns the gesture: a second finger or a non-left button never restarts
-      // a drag mid-flight (x0 guard), and a synthetic pointer that can't be captured still tracks.
-      if (!p.enabled || x0 !== null || !e.isPrimary || e.button !== 0) return;
+      // a drag mid-flight, and a synthetic pointer that can't be captured still tracks.
+      if (!p.enabled || gesture.active || !e.isPrimary || e.button !== 0)
+        return;
       clearTimeout(sweepTimer);
       node.style.transition = "";
-      x0 = e.clientX;
-      lastX = e.clientX;
-      lastT = e.timeStamp;
-      dx = 0;
-      vx = 0;
+      gesture.start(e.clientX, e.clientY, e.timeStamp);
       try {
         node.setPointerCapture(e.pointerId);
       } catch {
@@ -522,27 +511,22 @@
       }
     };
     const move = (e: PointerEvent) => {
-      if (x0 === null) return;
+      if (!gesture.active) return;
       if (!p.enabled) {
         // host flipped to pointer mid-drag — abandon the gesture
         node.style.transform = "";
-        return endDrag();
+        gesture.cancel();
+        p.drag(false);
+        setArmed(false);
+        return;
       }
-      const raw = e.clientX - x0;
-      if (!engaged) {
-        if (Math.abs(raw) < SWIPE_SLOP_PX) return; // undecided: let touch-action own a vertical pan
-        engaged = true;
-        p.drag(true);
-      }
-      const dt = e.timeStamp - lastT;
-      if (dt > 0) vx = (e.clientX - lastX) / dt;
-      lastX = e.clientX;
-      lastT = e.timeStamp;
+      const wasEngaged = gesture.engaged;
+      gesture.move(e.clientX, e.clientY, e.timeStamp);
+      if (!wasEngaged && gesture.engaged) p.drag(true);
       // Resist past the commit threshold so the row can't be dragged fully off — enough to reveal
       // the action, not slide the whole row away. The row stays opaque; the action shows behind it.
-      dx = Math.max(-120, Math.min(0, raw));
-      node.style.transform = `translateX(${dx.toString()}px)`;
-      setArmed(dx < -SWIPE_ARM_PX);
+      node.style.transform = `translateX(${gesture.dx.toString()}px)`;
+      setArmed(gesture.dx < -SWIPE_ARM_PX);
     };
     const settleBack = () => {
       // Released early: settle home with weight instead of snapping. The inline transition is
@@ -554,17 +538,14 @@
       }, motion(200));
     };
     const up = () => {
-      if (x0 === null) return;
-      const wasEngaged = engaged;
-      const commit =
-        p.enabled &&
-        engaged &&
-        (dx < -SWIPE_ARM_PX || (dx < -FLICK_PX && vx < -FLICK_VX));
-      endDrag();
+      if (!gesture.active) return;
+      const { committed, wasEngaged } = gesture.release();
+      p.drag(false);
+      setArmed(false);
       // A release over a control (the row's hidden AT button) also fires a click; a real drag's
       // release must not double as an activation.
       suppressClick = wasEngaged;
-      if (commit) {
+      if (committed) {
         // Sweep the row off the edge, then commit — the reveal fills the slot as the row leaves,
         // and the row's exit slide takes the element from there; never snap it back.
         node.style.transition = `transform ${motion(130).toString()}ms cubic-bezier(0.25, 1, 0.5, 1)`;
@@ -587,9 +568,11 @@
     };
     const cancel = () => {
       // The browser took the gesture (a scroll won) — settle back, and never commit from a cancel.
-      if (x0 === null) return;
-      const wasEngaged = engaged;
-      endDrag();
+      if (!gesture.active) return;
+      const wasEngaged = gesture.engaged;
+      gesture.cancel();
+      p.drag(false);
+      setArmed(false);
       if (wasEngaged) settleBack();
       else node.style.transform = "";
     };

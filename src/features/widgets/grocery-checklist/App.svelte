@@ -26,6 +26,7 @@
     GroceryItemRow,
     GroceryListReadStructured,
   } from "../shared/server-types.js";
+  import { createSwipeRecognizer } from "../shared/swipe-gesture.js";
 
   // A checklist row: the server's structured grocery item (B1 — a rename of its fields breaks this
   // widget at compile time) plus transient per-row UI flags.
@@ -327,44 +328,57 @@
 
   // Swipe-right to mark purchased, on touch hosts only, additive to the tap (the checkbox stays live
   // either way — unlike pantry's swipe, this never replaces the primary affordance). Mirrors pantry's
-  // swipe action with the sign flipped: "complete" reads as a rightward gesture, "remove" as leftward.
+  // swipe with the sign flipped: "complete" reads as a rightward gesture, "remove" as leftward. The
+  // gesture math is the shared recognizer; this action owns only the DOM wiring.
   function swipe(
     node: HTMLElement,
     param: { enabled: boolean; commit: () => void },
   ) {
     let p = param;
-    let x0: number | null = null;
-    let dx = 0;
-    // Clear the in-progress drag's inline transform. Centralized so every exit path (commit, cancel,
-    // an enabled flip mid-drag) leaves no row stuck translated.
-    const reset = () => {
-      x0 = null;
-      node.style.transform = "";
-    };
+    const gesture = createSwipeRecognizer({
+      axis: "x",
+      direction: "right",
+      resist: (raw) => Math.max(0, Math.min(120, raw)),
+      armPx: 80,
+    });
     const down = (e: PointerEvent) => {
-      if (!p.enabled) return;
-      x0 = e.clientX;
-      dx = 0;
-      node.setPointerCapture(e.pointerId);
+      if (!p.enabled || gesture.active) return;
+      gesture.start(e.clientX, e.clientY, e.timeStamp);
+      try {
+        node.setPointerCapture(e.pointerId);
+      } catch {
+        // untrusted/synthetic pointers (tests) have no capturable id; bubbling still delivers moves
+      }
     };
     const move = (e: PointerEvent) => {
-      if (x0 === null) return;
-      if (!p.enabled) return reset(); // item got marked mid-drag — abandon the gesture
+      if (!gesture.active) return;
+      if (!p.enabled) {
+        // item got marked mid-drag — abandon the gesture
+        node.style.transform = "";
+        gesture.cancel();
+        return;
+      }
+      gesture.move(e.clientX, e.clientY, e.timeStamp);
       // Resist past the commit threshold so the row can't be dragged fully away — enough to reveal the
       // action, not slide the row off. The row stays opaque; the action shows behind it.
-      dx = Math.max(0, Math.min(120, e.clientX - x0));
-      node.style.transform = `translateX(${dx.toString()}px)`;
+      node.style.transform = `translateX(${gesture.dx.toString()}px)`;
     };
     const up = () => {
-      if (x0 === null) return;
-      const commit = p.enabled && dx > 80;
-      reset();
-      if (commit) p.commit();
+      if (!gesture.active) return;
+      const { committed } = gesture.release();
+      node.style.transform = "";
+      if (committed) p.commit();
+    };
+    const cancel = () => {
+      // The browser took the gesture (a scroll won) — never commit from a cancel.
+      if (!gesture.active) return;
+      gesture.cancel();
+      node.style.transform = "";
     };
     node.addEventListener("pointerdown", down);
     node.addEventListener("pointermove", move);
     node.addEventListener("pointerup", up);
-    node.addEventListener("pointercancel", up);
+    node.addEventListener("pointercancel", cancel);
     return {
       update(next: { enabled: boolean; commit: () => void }) {
         p = next;
@@ -373,7 +387,7 @@
         node.removeEventListener("pointerdown", down);
         node.removeEventListener("pointermove", move);
         node.removeEventListener("pointerup", up);
-        node.removeEventListener("pointercancel", up);
+        node.removeEventListener("pointercancel", cancel);
       },
     };
   }
