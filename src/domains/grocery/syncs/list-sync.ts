@@ -7,15 +7,11 @@ import { groceryListsEqual } from "../grocery-list/types.js";
 
 /**
  * Grocery-list sync — replace-all with pending-write filtering via
- * `syncReplaceAllEntity`. Carries `afterLoad: () => store.setLastSyncedAt()` — the
- * grocery-list-specific
- * side-effect that backs the `paprika://grocery-list/{uid}` resource's "Last synced"
- * header line.
+ * `syncReplaceAllEntity`.
  *
  * `core` tier — inside the outer try that aborts the cycle on failure; not one of
- * the additive (meals/menus/photos) best-effort blocks. Grocery lists have an MCP
- * resource surface, so this returns a `GroceryListSyncResult` to be emitted as
- * `sync:complete`.
+ * the additive (meals/menus/photos) best-effort blocks. Returns a
+ * `GroceryListSyncResult` so its changes are counted in the cycle's change-count metrics.
  */
 export function groceryListsSync(state: GroceryState): SyncContribution<GroceryState, "aisle" | "pantry"> {
   return {
@@ -29,7 +25,6 @@ export function groceryListsSync(state: GroceryState): SyncContribution<GroceryS
         equals: groceryListsEqual,
         label: "grocery lists",
         log: ctx.infra.log,
-        afterLoad: () => ctx.state.lists.store.setLastSyncedAt(),
       }).map((changes): GroceryListSyncResult => ({ changeType: "grocery-lists", changes }));
     },
     sweep: () => state.lists.store.sweepPending(),

@@ -6,10 +6,9 @@ import { photosEqual } from "../photo/types.js";
 
 /**
  * Photo sync — replace-all via `syncReplaceAllEntity`. `additive` tier (best-effort):
- * photos are a recipe-child read/write surface with no standalone resource (the recipe
- * resource inlines photo fields), so — exactly like meals — a photo-side failure must
- * not abort core sync. Emits NO `sync:complete` and adds NO SyncResult variant (returns
- * `void`).
+ * photos are a recipe-child read/write surface, so — exactly like meals — a photo-side
+ * failure must not abort core sync. Adds NO SyncResult variant (returns `void`), so photo
+ * changes aren't counted in the sync change metrics.
  */
 export function photosSync(state: RecipeState): SyncContribution<RecipeState, never> {
   return {

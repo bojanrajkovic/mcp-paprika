@@ -19,9 +19,9 @@ import { PartialSyncError } from "../../../paprika/sync-types.js";
  *
  * `core` tier — runs first and in dependency order; `markSynced()` mid-cycle keeps
  * recipe tools available even if a later core reconcile (category) fails. Returns a
- * `RecipeSyncResult` for the `sync:complete` notifier path AND emits `recipe-changed`/
- * `recipe-removed` on the kernel re-index seam for discover (the two consumers are
- * independent — see the emit comment).
+ * `RecipeSyncResult` (counted in the sync change metrics) AND emits `recipe-changed`/
+ * `recipe-removed` on the kernel re-index seam for discover (the two are independent —
+ * see the emit comment).
  */
 export function recipesSync(state: RecipeState): SyncContribution<RecipeState, never> {
   return {
@@ -145,7 +145,6 @@ export function recipesSync(state: RecipeState): SyncContribution<RecipeState, n
           // Recipe sync is complete; mark the store as synced now so recipe tools
           // remain available even if category or pantry sync subsequently fails.
           store.markSynced();
-          store.setLastSyncedAt();
 
           // Partition fetched recipes: added vs updated.
           const addedSet = new Set(filteredAdded);

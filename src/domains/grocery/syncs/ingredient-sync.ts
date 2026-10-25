@@ -20,9 +20,8 @@ import { pruneOrphanCache } from "../../../paprika/sync.js";
  * `warn`-level count so the drop is observable. (Historically the un-nullable schema
  * also threw on these rows, aborting the whole cycle before meals/menus could sync.)
  *
- * `core` tier — an `err` here aborts the cycle. Returns `void`
- * — the ingredient catalog has no
- * MCP resource surface and emits no `sync:complete`. NO `sweep` — the plain store
+ * `core` tier — an `err` here aborts the cycle. Returns `void`: ingredient changes
+ * aren't counted in the sync change metrics. NO `sweep` — the plain store
  * tracks no pending writes, so there is nothing to sweep; and so (unlike the
  * list/item sync factories) this one takes no `state` — its own store/cache are
  * reached through the `BootCtx` the kernel passes to `reconcile`.

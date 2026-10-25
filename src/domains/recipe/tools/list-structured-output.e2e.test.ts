@@ -15,7 +15,7 @@ import type { RecipeUid } from "../ids.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { callStructuredProbe } from "../../../../test/support/structured-output-probe.js";
-import { listRecipesOutputSchema, recipeToRow, searchRecipesOutputSchema } from "../recipe-markdown.js";
+import { listRecipesOutputSchema, recipeToRow, searchRecipesOutputSchema } from "../recipe-helpers.js";
 import { listCategoriesOutputSchema } from "./list-categories.js";
 
 // Rows spanning recipeRowSchema's axes: named + empty categories, set + null times.

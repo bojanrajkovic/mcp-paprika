@@ -39,8 +39,7 @@ export interface PantryState {
 
 /**
  * Pantry's write chokepoints (`ctx.writes`), invoked by its own update / stock /
- * delete / batch-add tools. No `resourceListChanged()` — pantry is a Data entity
- * with no MCP resource surface.
+ * delete / batch-add tools.
  */
 export interface PantryWrites {
   /**
@@ -80,8 +79,7 @@ register(
       // sibling-facing contract write grocery's move consumes via `ctx.deps.pantry`.
       //
       // The commit protocol (mark-first → cache → flush → clear-on-failure → store
-      // → notify) lives in src/entity/commit.ts; these bind pantry's slice. No
-      // resourceListChanged() — pantry has no MCP resource surface.
+      // → notify) lives in src/entity/commit.ts; these bind pantry's slice.
       const pantryFx = { finish: () => notifySyncBestEffort(infra.client, infra.log) };
       const commitPantryItem: PantryWrites["commitPantryItem"] = (saved) =>
         commitEntities(state, [deletedFlagOp(saved)], pantryFx);

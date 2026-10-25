@@ -316,7 +316,6 @@ describe("create_grocery_list tool", () => {
     expect(callArgs["deleted"]).toBe(false);
     expect(typeof callArgs["uid"]).toBe("string");
     expect(callArgs["uid"] as string).toMatch(/^[0-9A-F-]{36}$/);
-    expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
   });
 
   it("store contains the new list after creation", async () => {
@@ -402,7 +401,6 @@ describe("rename_grocery_list tool", () => {
     const callArgs = vi.mocked(kh.client().saveGroceryList).mock.calls[0]?.[0] as Record<string, unknown>;
     expect(callArgs["name"]).toBe("Costco Run");
     expect(callArgs["uid"]).toBe(list.uid);
-    expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
   });
 
   it("same name (exact case) is a no-op, does not call save", async () => {
@@ -496,7 +494,6 @@ describe("delete_grocery_list tool", () => {
     const callArgs = vi.mocked(kh.client().saveGroceryList).mock.calls[0]?.[0] as Record<string, unknown>;
     expect(callArgs["deleted"]).toBe(true);
     expect(callArgs["uid"]).toBe(list.uid);
-    expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
   });
 
   it("already-deleted UID returns idempotent message", async () => {

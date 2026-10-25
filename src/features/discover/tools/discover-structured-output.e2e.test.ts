@@ -17,7 +17,7 @@ import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes
 import { callStructuredProbe } from "../../../../test/support/structured-output-probe.js";
 import { listMealTypesOutputSchema } from "../../../domains/meal-type/tools/list-meal-types.js";
 import { listPantryItemsOutputSchema } from "../../../domains/pantry/pantry-helpers.js";
-import { recipeToRow } from "../../../domains/recipe/recipe-markdown.js";
+import { recipeToRow } from "../../../domains/recipe/recipe-helpers.js";
 import { discoverRecipesOutputSchema } from "./discover-recipes.js";
 
 describe("#320 catalog/discover structured output validates through the SDK (R1)", () => {

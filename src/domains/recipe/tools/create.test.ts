@@ -126,7 +126,6 @@ describe("create_recipe tool", () => {
 
     // The recipe is committed to the (real) store, and the Content resource-list fires.
     expect(kh.state().recipe.store.get(savedRecipe.uid)).toEqual(savedRecipe);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("silently drops an unknown category name, keeping only the resolved ones", async () => {

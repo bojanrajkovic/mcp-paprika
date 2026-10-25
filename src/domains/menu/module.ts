@@ -5,7 +5,6 @@ import type { Logger } from "pino";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { PaprikaClient } from "../../paprika/client.js";
-import type { Notifier } from "../../server/notifier.js";
 import type { MenuApi } from "./api.js";
 import type { MenuItem } from "./menu-item/types.js";
 import type { Menu } from "./types.js";
@@ -19,7 +18,6 @@ import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { MenuItemStore } from "./menu-item/store.js";
 import { menuItemDiskDescriptor } from "./menu-item/types.js";
-import { menuResource } from "./resources/menu-resource.js";
 import { MenuStore } from "./store.js";
 import { menuItemsSync } from "./syncs/menu-item-sync.js";
 import { menusSync } from "./syncs/menu-sync.js";
@@ -47,9 +45,8 @@ interface MenuEntitySlice<Store, Cache> {
 }
 
 /**
- * The menu module's state — TWO store/cache pairs (menus + menu-items), because the
- * menu and its inlined items are one Content domain: a child-item change invalidates
- * the parent `paprika://menu/{uid}` resource, so both fire `resourceListChanged()`.
+ * The menu module's state — TWO store/cache pairs (menus + menu-items): a menu and its
+ * inlined items are one domain.
  */
 export interface MenuState {
   readonly menus: MenuEntitySlice<MenuStore, DiskCache<Menu>>;
@@ -58,15 +55,13 @@ export interface MenuState {
 
 /**
  * Menu's write chokepoints (`ctx.writes`), invoked by its own menu/menu-item tools.
- * Menus AND menu-items both fire `resourceListChanged()` — menus have an MCP resource
- * surface and menu-items are inlined in it.
  */
 export interface MenuWrites {
-  /** Persist a saved menu locally, then nudge cloud sync. Content → fires resourceListChanged. */
+  /** Persist a saved menu locally, then nudge cloud sync. */
   commitMenu(saved: Readonly<Menu>): ResultAsync<void, CacheError>;
-  /** Persist a saved menuitem locally. Inlined in the menu resource → fires resourceListChanged. */
+  /** Persist a saved menuitem locally. */
   commitMenuItem(saved: Readonly<MenuItem>): ResultAsync<void, CacheError>;
-  /** Batch variant of commitMenuItem: one flush, one resourceListChanged, one notifySync. */
+  /** Batch variant of commitMenuItem: one flush, one notifySync. */
   commitMenuItemsBatch(items: ReadonlyArray<Readonly<MenuItem>>): ResultAsync<void, CacheError>;
 }
 
@@ -104,19 +99,15 @@ register(
     })
     .build((state, infra) => {
       const client: PaprikaClient = infra.client;
-      const notifier: Notifier = infra.notifier;
 
       // ---- Menu write chokepoints ----
-      // Assembled here (not in `.state`) because they close over `infra.client` and
-      // `infra.notifier`, keeping MenuState pure. All three are internal —
-      // menu's own tools reach them via `ctx.writes`; the read `api` is assembled below
-      // from the stores.
+      // Assembled here (not in `.state`) because they close over `infra.client`,
+      // keeping MenuState pure. All three are internal — menu's own tools reach them
+      // via `ctx.writes`; the read `api` is assembled below from the stores.
       //
       // The commit protocol (mark-first → cache → flush → clear-on-failure → store
       // → effects → notify) lives in src/entity/commit.ts; these bind menu's slices.
-      // Menus and menu-items both fire resourceListChanged() — Content domain.
       const menuFx = {
-        onCommitted: () => notifier.resourceListChanged(),
         finish: () => notifySyncBestEffort(client, infra.log),
       };
       const commitMenu: MenuWrites["commitMenu"] = (saved) =>
@@ -148,7 +139,6 @@ register(
           deleteMenuItemTool,
           moveMenuItemTool,
         ],
-        resources: [menuResource],
         // Order matters: menu before menu-item (children reference parent). Both
         // additive — a soft read surface must not abort core sync, so the kernel
         // runs each in its own best-effort try/catch.

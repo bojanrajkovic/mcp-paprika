@@ -54,9 +54,6 @@ describe("update_meal_type tool", () => {
     expect(saveMealTypes).toHaveBeenCalledOnce();
     const saved = saveMealTypes.mock.calls[0]![0] as ReadonlyArray<MealType>;
     expect(saved).toHaveLength(1);
-    // Menu resources render meal-type names from this catalog live, so the
-    // commit must tell subscribed clients to refresh.
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
     // The whole post-rename catalog (same shape list_meal_types produces) rides structuredContent.
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toEqual({

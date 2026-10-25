@@ -13,7 +13,6 @@ type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
   readonly equals: (a: T, b: T) => boolean;
   readonly label: string;
   readonly log: Logger;
-  readonly afterLoad?: () => void;
 };
 
 /**
@@ -78,7 +77,6 @@ export function syncReplaceAllEntity<T extends { uid: UID }, UID extends string>
 
       return pruneOrphanCache(opts.cache, cachedUids, effectiveUids, opts.log, opts.label).andThen((removedUids) => {
         opts.store.load(effective);
-        opts.afterLoad?.();
         return ResultAsync.combine(effective.map((item) => opts.cache.put(item))).map(() => {
           // Observation-based clearing: walk rawIncoming (not effective) so pending-upsert
           // UIDs that were spliced out still get checked against the snapshot.

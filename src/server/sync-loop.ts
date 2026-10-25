@@ -1,8 +1,6 @@
 import { scheduler } from "node:timers/promises";
 
 import type { SyncOutcome } from "../kernel/registry.js";
-import type { AnySyncResult } from "../paprika/sync-types.js";
-import type { Notifier } from "./notifier.js";
 
 /**
  * The background sync interval driver. The kernel exposes only `syncOnce()`; this
@@ -92,30 +90,4 @@ export function nextSyncPace(
     return { pace: { kind: "converging", misses: pace.misses + 1 }, delayMs: fastMs };
   }
   return { pace: { kind: "steady" }, delayMs: intervalMs };
-}
-
-/**
- * Fan out a resource-list notification for a completed sync cycle's results.
- * Fires `resourceListChanged()` once per qualifying result: Content entities with
- * an MCP resource surface (recipes, grocery lists + items, menus + items). Pantry
- * is excluded — it has no resource surface. `resourceListChanged()` is idempotent
- * fire-and-forget, so N calls in one cycle collapse client-side. The kernel returns
- * `[]` for an aborted/un-flushed cycle, so a failed cycle fans out nothing.
- */
-export function notifyFromResults(results: ReadonlyArray<AnySyncResult>, notifier: Notifier): void {
-  for (const result of results) {
-    if (
-      result.changeType !== "recipes" &&
-      result.changeType !== "grocery-lists" &&
-      result.changeType !== "grocery-items" &&
-      result.changeType !== "menus" &&
-      result.changeType !== "menu-items"
-    ) {
-      continue;
-    }
-    const { added, updated, removedUids } = result.changes;
-    if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
-      notifier.resourceListChanged();
-    }
-  }
 }

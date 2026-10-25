@@ -10,7 +10,7 @@
  * (zod + branded-id leaves only): the kernel-heavy tool files (`cook.ts`, `search.ts`, the recipe/
  * pantry `list.ts`) and the catalog-importing `meal/tools/helpers.ts` would drag the Node-typed
  * server graph into the DOM-lib `svelte-check` and fail it, so their output schemas live in these
- * leaves (`recipe-markdown.ts`, `pantry-helpers.ts`, `meal-schema.ts`) instead.
+ * leaves (`recipe-helpers.ts`, `pantry-helpers.ts`, `meal-schema.ts`) instead.
  *
  * These are the parse TARGET, not a validator. The widgets discriminate the host payload by shape and
  * spot-check only the arrays they iterate (a malicious host owns the iframe — full re-validation is
@@ -24,7 +24,7 @@ export type {
   RecipeReadStructured,
   RecipeRow,
   RecipeSearchStructured,
-} from "../../../domains/recipe/recipe-markdown.js";
+} from "../../../domains/recipe/recipe-helpers.js";
 
 export type { GroceryItemRow, GroceryListReadStructured } from "../../../domains/grocery/grocery-helpers.js";
 
