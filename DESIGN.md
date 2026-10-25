@@ -2,13 +2,16 @@
 name: mcp-paprika
 description: The warm, editorial visual system for the two HTML surfaces of the Paprika MCP Connector — the in-host widgets and the OAuth consent screen.
 colors:
-  paprika: "oklch(0.543 0.174 30)"
-  paprika-ink: "oklch(0.99 0.012 40)"
+  brand: "oklch(0.543 0.174 30)"
+  brand-ink: "oklch(0.99 0.012 40)"
+  accent: "oklch(0.543 0.174 30)"
+  accent-ink: "oklch(0.99 0.012 40)"
   fresh-green: "oklch(0.58 0.13 150)"
   fresh-green-ink: "oklch(0.99 0.02 150)"
   warn-amber: "oklch(0.66 0.12 75)"
   warn-amber-bg: "oklch(0.95 0.05 82)"
   alert-red: "oklch(0.56 0.215 29)"
+  alert-red-ink: "oklch(0.99 0.02 29)"
   alert-red-bg: "oklch(0.955 0.042 27)"
   paper: "oklch(0.99 0.004 75)"
   card: "oklch(0.995 0.004 75)"
@@ -54,8 +57,8 @@ spacing:
   xl: "22px"
 components:
   button-primary:
-    backgroundColor: "{colors.paprika}"
-    textColor: "{colors.paprika-ink}"
+    backgroundColor: "{colors.brand}"
+    textColor: "{colors.brand-ink}"
     rounded: "{rounded.md}"
     padding: "11px 14px"
     typography: "{typography.body}"
@@ -72,7 +75,7 @@ components:
     padding: "5px 11px"
   pill-accent:
     backgroundColor: "transparent"
-    textColor: "{colors.paprika}"
+    textColor: "{colors.accent}"
     rounded: "{rounded.pill}"
     padding: "4px 12px"
   pill-danger:
@@ -94,8 +97,8 @@ components:
     rounded: "{rounded.md}"
     padding: "9px 12px"
   brand-tile:
-    backgroundColor: "{colors.paprika}"
-    textColor: "{colors.paprika-ink}"
+    backgroundColor: "{colors.brand}"
+    textColor: "{colors.brand-ink}"
     rounded: "{rounded.sm}"
     size: "22px"
 ---
@@ -127,23 +130,27 @@ A rationed, food-warm palette: one brand identity color, three semantic signals,
 
 ### Primary
 
-- **Paprika** (`oklch(0.543 0.174 30)` light / `oklch(0.7 0.155 33)` dark, `#C0392B`): The connector's one identity color, and the single interactive accent on both surfaces — the header "P" tile, focus rings, the **Restock** pill, and the toast's **Undo** on the widgets; the brand dot and the **Allow** button on the consent screen. An earthy, brick-like red. It nods to the Paprika app it bridges without claiming that brand. Used sparingly, as identity and action, never as decoration.
+- **Paprika** (`oklch(0.543 0.174 30)` light / `oklch(0.7 0.155 33)` dark, `#C0392B`): The connector's one identity color. An earthy, brick-like red. It nods to the Paprika app it bridges without claiming that brand. Used sparingly, as identity and action, never as decoration. Two token pairs carry it:
+  - **`brand` / `brand-ink`** — the identity, used only as a fill behind its own ink: the header "P" tile on the widgets; the brand dot and the **Allow** button on the consent screen.
+  - **`accent` / `accent-ink`** — the widgets' interactive accent: focus rings, the **Restock** pill, rating dots, filled action buttons, and the toast's **Undo**.
+
+  The two pairs hold the same paprika value. They are separate tokens because they have different jobs: the accent appears as text, thin rings, and small dots, where legibility constrains it, while the brand appears only as a fill. Splitting them lets the accent be tuned for contrast without moving the mark. The consent page is a separate, light-only surface that paints its dot and Allow button with one `--paprika-red` token, the brand value.
 
 ### Secondary — Semantic signals
 
-- **Fresh Green** (`oklch(0.58 0.13 150)` light / `oklch(0.74 0.14 150)` dark): The _done / fresh_ state — a checked grocery item's box and tick, an in-stock pantry item. A completed action reads positive, never as a red "done."
+- **Fresh Green** (`oklch(0.58 0.13 150)` light / `oklch(0.74 0.14 150)` dark): The _done / fresh_ state — a checked grocery item's box and tick, an in-stock pantry item. A completed action reads positive, never as a red "done." Its ink (`fresh-green-ink`, `oklch(0.99 0.02 150)` light / `oklch(0.16 0.03 150)` dark) is the tick on the green fill: near-white on the light-green box, near-black on the brighter dark-green box, so the check stays legible either way.
 - **Warn Amber** (`oklch(0.66 0.12 75)`, surface `oklch(0.95 0.05 82)`): _Expiring soon_ — the pantry's expiry badge before it lapses.
-- **Alert Red** (`oklch(0.56 0.215 29)` light / `oklch(0.7 0.2 29)` dark, surface `oklch(0.955 0.042 27)`): _Danger / expired_ — the destructive-action confirm, the inline error toast, an expired pantry badge, the swipe-to-remove reveal. A vivid fire-engine red, deliberately more saturated than the earthy brick brand, so an alert never reads as the brand.
+- **Alert Red** (`oklch(0.56 0.215 29)` light / `oklch(0.7 0.2 29)` dark, surface `oklch(0.955 0.042 27)`): _Danger / expired_ — the destructive-action confirm, the inline error toast, an expired pantry badge, the swipe-to-remove reveal. A vivid fire-engine red, deliberately more saturated than the earthy brick brand, so an alert never reads as the brand. Its ink (`alert-red-ink`, `oklch(0.99 0.02 29)` light / `oklch(0.2 0.04 29)` dark) is the text on a danger fill, such as the pantry swipe-to-remove reveal.
 
 ### Neutral — Warm paper
 
 - **Paper** (`oklch(0.99 0.004 75)` light / `oklch(0.22 0.008 72)` dark): The base background. Warm, near-white in light; warm charcoal in dark.
 - **Card** (`oklch(0.995 0.004 75)`): The one raised surface — the consent screen's card, lifted a hair above the page.
 - **Ink** (`oklch(0.27 0.012 72)` light / `oklch(0.95 0.005 75)` dark): Primary text.
-- **Muted** (`oklch(0.52 0.012 72)`): Secondary text — quantities, sub-labels, resting pill text.
-- **Faint** (`oklch(0.64 0.01 72)`): Tertiary text and the strikethrough on a done row.
+- **Muted** (`oklch(0.52 0.012 72)` light / `oklch(0.72 0.01 72)` dark): Secondary text — quantities, sub-labels, resting pill text.
+- **Faint** (`oklch(0.64 0.01 72)` light / `oklch(0.58 0.01 72)` dark): Tertiary text, and the struck-through name on a pantry out-of-stock row. Muted and faint **swap relative lightness** across the theme flip: on light, faint sits above muted; on dark, muted lifts above faint. Secondary text keeps its legibility and tertiary text keeps receding in both themes.
 - **Line** (`oklch(0.91 0.007 72)` light / `oklch(0.31 0.01 72)` dark): Hairline dividers and borders — 1px, never a heavy stroke.
-- **Hover** (`oklch(0.96 0.006 72)`): The hover wash and the neutral toast surface.
+- **Hover** (`oklch(0.96 0.006 72)` light / `oklch(0.26 0.012 72)` dark): The hover wash and the neutral toast surface.
 
 The widget surface themes to the host (light/dark, lightness shifts while hue holds); the consent screen is light-only by design.
 
@@ -194,15 +201,17 @@ This system is flat by default. Surfaces sit directly on the warm paper, separat
 
 Every component leads with its character, then its exact shape, color, and state treatment. Buttons and rows are the load-bearing primitives; the brand mark and the destination anchor are the signature pieces.
 
+On the widget surface these are not per-widget re-implementations. The toolkit lives once in `src/features/widgets/shared/*` — `WidgetShell` (the sole home of the theme tokens, the focus ring, and the CSS reduced-motion block), `GroupedList` / `ItemRow`, `PillButton`, `RatingDots`, `Toast`, `StatusScreen`, `BrandMark`, `Spinner`, `RecipeThumb` — and every widget composes it. A widget consumes the shared component and lets `WidgetShell`'s tokens cascade. It adds a local control only for a genuinely divergent affordance (grocery's checkbox, pantry's swipe drawer), and never re-declares a palette token. The token tables and component snippets in this file and `.impeccable/design.json` mirror that shared source; keep the three in step when a shared value changes.
+
 ### Buttons
 
 The surface has two button families: the consent screen's full-width action buttons, and the widgets' compact action pills.
 
 - **Shape:** Action buttons are gently rounded (10px). Pills are fully round (999px).
-- **Primary (consent Allow):** Paprika fill (`paprika`) with light ink (`paprika-ink`), weight 600, padding 11px 14px, radius 10px. The single emphatic control on the trust surface.
+- **Primary (consent Allow):** Paprika fill (`brand`) with light ink (`brand-ink`), weight 600, padding 11px 14px, radius 10px. The single emphatic control on the trust surface.
 - **Ghost (consent Deny):** Transparent with ink text and a 1px `line-2` border, same size as Primary. Deny is given equal visual weight to Allow — the screen does not steer.
-- **Pills (widget actions):** 12px/600 text, padding ~5px 11px, fully round, 1px `line` border, transparent fill. Variants: **neutral** (muted → ink on hover, hover wash — grocery's Clear/Keep), **accent** (`paprika` outline + text — pantry's Restock), **danger** (muted → alert-red on hover — pantry's Out), **danger-strong** (alert-red outline + text at rest — grocery's clear-confirm).
-- **Focus:** A 2px `paprika` focus ring, offset 2px — defined once in `WidgetShell` (`:focus-visible`) and inherited by every focusable control; always visible on keyboard focus, never suppressed. Full-bleed rows use an inset offset (`-2px`) so the ring isn't clipped at the row's edge.
+- **Pills (widget actions):** 12px/600 text, padding ~5px 11px, fully round, 1px `line` border, transparent fill. The shared `PillButton` carries five variants: **neutral** (muted → ink on hover, hover wash — grocery's Clear/Keep), **accent** (`accent` outline + text — pantry's Restock), **accent-fill** (muted at rest, fills `accent` with `accent-ink` on hover — the meal planner's empty-slot Plan call-to-action), **danger** (muted → alert-red on hover — pantry's Out), **danger-strong** (alert-red outline + text at rest — grocery's clear-confirm). On coarse (touch) pointers every pill grows to a **44px min-height** tap target with its label centered; fine pointers keep the compact pill.
+- **Focus:** A 2px `accent` focus ring, offset 2px — defined once in `WidgetShell` (`:focus-visible`) and inherited by every focusable control; always visible on keyboard focus, never suppressed. Full-bleed rows use an inset offset (`-2px`) so the ring isn't clipped at the row's edge.
 - **Adaptive outline border:** A button or control outline that sits on a non-base surface (an expanded detail strip, which uses the `hover` background) borders with `1px solid color-mix(in oklch, var(--ink) 22%, transparent)` — a percentage of the theme's own ink — not the fixed `line` token. `line` is tuned for separators on the base surface and washes out against the darker `hover` fill, especially in dark mode; mixing from ink keeps the outline legible on either surface, light or dark. Prefer it over `line` for control outlines off the base surface.
 
 ### Chips / Badges
@@ -220,27 +229,31 @@ The surface has two button families: the consent screen's full-width action butt
 
 ### List Rows
 
-- **Style:** Full-width rows on `paper`, padding 11px 16px — never boxed cards, and **no per-row divider**. The ingredient name leads; a ` · quantity` follows in muted tabular figures (the separator is a real space on both sides of the `·`, so a done strike-through runs straight through it).
-- **Done state:** The name strikes through and dims to `faint` (a `color-mix` line color, never a harsh strike); a grocery checkbox (6px-radius, 2px border) fills with `fresh-green` and shows a green tick; an in-flight write shows a small `fresh-green` spinner.
+- **Style:** Full-width rows on `paper`, padding 11px 16px — never boxed cards, and **no per-row divider**. The ingredient name leads; a ` · quantity` follows in muted tabular figures (the separator is a real space on both sides of the `·`, so a strike-through, where a row uses one, runs straight through it).
+- **Done state:** The whole row body dims to ~38% opacity. The filled checkbox already signals done, so the shared `ItemRow` recedes the row with a single fade: no per-element color math and no strike-through. A grocery checkbox (6px-radius, 2px border) fills with `fresh-green` and shows a green tick; an in-flight write shows a small `fresh-green` spinner.
 - **Grouped by aisle:** Each category is bracketed by a **full-width hairline separator** above its sticky, uppercase 12px `muted` heading (with a count as flavor text beside it); rows within a group flow without internal lines. One separator per category, not a line per row. The heading and its count baseline-align.
+
+### Status Screen
+
+The shared loading / empty / error state (`StatusScreen`): a centered stack of an optional decorative emoji `icon` (30px, `aria-hidden`), a `title` (weight 600, `ink`), and a `desc` (13px, `muted`, capped at 34ch). It covers a bare "Loading…" (desc only) through a full empty state (icon + title + desc), with an `inline` variant that sits in-flow inside a scroll region. It is a `role="status"` live region (`aria-live="polite"`), so a screen reader announces a phase change (loading → error → content). It is the one home for a widget's empty and loading states: a taught empty state, not "nothing here," and never a bare spinner floating in the content well.
 
 ### Rating Dots (signature)
 
-A quieter, on-brand alternative to star glyphs: five small (~5px) dots, right-aligned on a browse row, filled to the recipe's 0–5 rating in `paprika`; unfilled dots are the same color at 0.2 opacity. Rating reads as a compact density mark rather than a literal row of stars. The group carries an accessible name ("Rated N of 5"); the dots themselves are decorative.
+A quieter, on-brand alternative to star glyphs: five small (~5px) dots, right-aligned on a browse row, filled to the recipe's 0–5 rating in `accent`; unfilled dots are the same color at 0.2 opacity. Rating reads as a compact density mark rather than a literal row of stars. The group carries an accessible name ("Rated N of 5"); the dots themselves are decorative.
 
 ### Placeholder Tile (signature)
 
-A 48px rounded (8px) color tile standing in for a recipe photo until real thumbnails exist. Its hue is derived deterministically from the recipe name's character codes, mapped into the **food range** — hue 38–130 (ambers through greens) — with lightness and chroma fixed per theme (L ~0.7 light / ~0.32 dark, C 0.06). The reserved ranges keep it from colliding with meaning: **hue 22–35** is the paprika/brand red (never a tile), and **hue 130+** trends to the success green. The result is a palette of food-adjacent hues that read as intentional, not as a default gray. Any widget generating color-coded placeholder tiles follows this range.
+A 48px rounded (10px) color tile standing in for a recipe photo until real thumbnails exist. Its hue is derived deterministically from the recipe name's character codes, mapped into the **food range** — hue 38–130 (ambers through greens) — with lightness and chroma fixed per theme (L ~0.7 light / ~0.32 dark, C 0.06). The reserved ranges keep it from colliding with meaning: **hue 22–35** is the paprika/brand red (never a tile), and **hue 130+** trends to the success green. The result is a palette of food-adjacent hues that read as intentional, not as a default gray. Any widget generating color-coded placeholder tiles follows this range.
 
 ### Toast
 
 - **Style:** A floating status strip at the top of the widget, radius 10px, padding 9px 12px, with the floating-toast shadow.
-- **Variants:** **info** is the neutral `hover` surface with ink text; **error** is the `alert-red` surface with alert-red text. An optional action (the pantry Undo) renders in `paprika`.
+- **Variants:** **info** is the neutral `hover` surface with ink text; **error** is the `alert-red` surface with alert-red text. An optional action (the pantry Undo) renders in `accent`. An error toast is a `role="alert"` live region (assertive); an info toast is `role="status"` (polite).
 - **Motion:** A 0.2s ease-out entrance, fully disabled under `prefers-reduced-motion`.
 
 ### Brand Mark (signature)
 
-The connector's identity on the widget surface: a 22px paprika-red tile (6px radius) carrying a bold "P" in light ink, beside the widget title (17px/650). The tile is decorative — `aria-hidden`, the title carries the accessible name. It gives every widget a persistent, on-brand header without a logo image.
+The connector's identity on the widget surface: a 22px paprika-red tile (`brand`, 6px radius) carrying a bold "P" in light ink (`brand-ink`), beside the widget title (17px/650). The tile is decorative — `aria-hidden`, the title carries the accessible name. It gives every widget a persistent, on-brand header without a logo image.
 
 ### Destination Anchor (signature)
 

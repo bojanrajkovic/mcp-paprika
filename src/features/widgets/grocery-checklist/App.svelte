@@ -343,6 +343,7 @@
       class:err={item._error}
       role="checkbox"
       aria-checked={item.purchased}
+      aria-busy={item._busy}
       onclick={() => onRow(item)}
       animate:flip={{ duration: motion(220) }}
     >

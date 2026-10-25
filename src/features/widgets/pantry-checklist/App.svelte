@@ -492,8 +492,8 @@
     align-items: center;
     justify-content: flex-end;
     padding-right: 22px;
-    background: oklch(0.56 0.215 29);
-    color: oklch(0.99 0.02 29);
+    background: var(--danger);
+    color: var(--danger-ink);
     font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.02em;

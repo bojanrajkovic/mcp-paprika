@@ -2,6 +2,8 @@
   // The shared loading / error / empty screen. `icon` (an emoji), `title`, and `desc` are each
   // optional, so it covers a bare "Loading…" (desc only) through a full empty state (icon + title +
   // desc). `inline` is the in-flow variant (the pantry "nothing in stock" block inside the scroll).
+  // It is a `role=status` live region, so a phase change (loading → error → content) is announced to a
+  // screen reader; the emoji `icon` is decorative (`aria-hidden`), the title/desc carry the message.
   let {
     icon,
     title,
@@ -15,8 +17,8 @@
   } = $props();
 </script>
 
-<div class="empty" class:inline>
-  {#if icon}<div class="big">{icon}</div>{/if}
+<div class="empty" class:inline role="status" aria-live="polite">
+  {#if icon}<div class="big" aria-hidden="true">{icon}</div>{/if}
   {#if title}<p class="t">{title}</p>{/if}
   {#if desc}<p class="d">{desc}</p>{/if}
 </div>

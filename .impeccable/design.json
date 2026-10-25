@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-06-21T00:00:00Z",
+  "generatedAt": "2026-10-25T00:00:00Z",
   "title": "Design System: mcp-paprika",
   "extensions": {
     "colorMeta": {
-      "paprika": {
+      "brand": {
         "role": "primary",
-        "displayName": "Paprika",
+        "displayName": "Paprika (brand)",
         "canonical": "oklch(0.543 0.174 30)",
         "dark": "oklch(0.7 0.155 33)",
         "hex": "#C0392B",
@@ -21,10 +21,44 @@
           "oklch(0.92 0.04 30)"
         ]
       },
-      "paprika-ink": {
+      "accent": {
         "role": "primary",
-        "displayName": "Paprika Ink",
+        "displayName": "Paprika (accent)",
+        "canonical": "oklch(0.543 0.174 30)",
+        "dark": "oklch(0.7 0.155 33)",
+        "hex": "#C0392B",
+        "tonalRamp": [
+          "oklch(0.15 0.06 30)",
+          "oklch(0.25 0.10 30)",
+          "oklch(0.35 0.14 30)",
+          "oklch(0.45 0.17 30)",
+          "oklch(0.543 0.174 30)",
+          "oklch(0.66 0.15 30)",
+          "oklch(0.78 0.11 30)",
+          "oklch(0.92 0.04 30)"
+        ]
+      },
+      "brand-ink": {
+        "role": "primary",
+        "displayName": "Brand Ink",
         "canonical": "oklch(0.99 0.012 40)",
+        "dark": "oklch(0.22 0.03 33)",
+        "tonalRamp": [
+          "oklch(0.20 0.03 35)",
+          "oklch(0.35 0.03 37)",
+          "oklch(0.50 0.025 38)",
+          "oklch(0.66 0.02 39)",
+          "oklch(0.80 0.015 40)",
+          "oklch(0.90 0.013 40)",
+          "oklch(0.95 0.012 40)",
+          "oklch(0.99 0.012 40)"
+        ]
+      },
+      "accent-ink": {
+        "role": "primary",
+        "displayName": "Accent Ink",
+        "canonical": "oklch(0.99 0.012 40)",
+        "dark": "oklch(0.22 0.03 33)",
         "tonalRamp": [
           "oklch(0.20 0.03 35)",
           "oklch(0.35 0.03 37)",
@@ -56,6 +90,7 @@
         "role": "secondary",
         "displayName": "Fresh Green Ink",
         "canonical": "oklch(0.99 0.02 150)",
+        "dark": "oklch(0.16 0.03 150)",
         "tonalRamp": [
           "oklch(0.16 0.03 150)",
           "oklch(0.30 0.04 150)",
@@ -113,6 +148,23 @@
           "oklch(0.68 0.19 29)",
           "oklch(0.82 0.11 28)",
           "oklch(0.955 0.042 27)"
+        ]
+      },
+      "alert-red-ink": {
+        "role": "secondary",
+        "displayName": "Alert Red Ink",
+        "canonical": "oklch(0.99 0.02 29)",
+        "dark": "oklch(0.2 0.04 29)",
+        "hex": "#FFF7F4",
+        "tonalRamp": [
+          "oklch(0.16 0.04 29)",
+          "oklch(0.3 0.05 29)",
+          "oklch(0.45 0.05 29)",
+          "oklch(0.6 0.045 29)",
+          "oklch(0.75 0.04 29)",
+          "oklch(0.88 0.03 29)",
+          "oklch(0.94 0.025 29)",
+          "oklch(0.99 0.02 29)"
         ]
       },
       "alert-red-bg": {
@@ -182,6 +234,7 @@
         "role": "neutral",
         "displayName": "Muted",
         "canonical": "oklch(0.52 0.012 72)",
+        "dark": "oklch(0.72 0.01 72)",
         "tonalRamp": [
           "oklch(0.22 0.008 72)",
           "oklch(0.31 0.01 72)",
@@ -197,6 +250,7 @@
         "role": "neutral",
         "displayName": "Faint",
         "canonical": "oklch(0.64 0.01 72)",
+        "dark": "oklch(0.58 0.01 72)",
         "tonalRamp": [
           "oklch(0.22 0.008 72)",
           "oklch(0.31 0.01 72)",
@@ -246,7 +300,10 @@
         "displayName": "Title",
         "purpose": "Widget header name and consent client name. The most prominent type on a surface."
       },
-      "body": { "displayName": "Body", "purpose": "Row labels, grant copy, descriptions. The reading default." },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Row labels, grant copy, descriptions. The reading default."
+      },
       "label": {
         "displayName": "Label",
         "purpose": "Aisle/group headers and consent field labels — uppercase, quietly tracked."
@@ -341,8 +398,8 @@
       "kind": "custom",
       "refersTo": "list-row",
       "description": "An aisle-grouped checklist row with the ingredient·quantity body and a checked green box — the done state.",
-      "html": "<div class=\"ds-row\"><span class=\"ds-box\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.5 8.5l3 3 6-6.5\"/></svg></span><span class=\"ds-body\"><span class=\"ds-name\">Garlic<span class=\"ds-qty\"> · 1 head</span></span></span></div>",
-      "css": ".ds-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; background: oklch(0.99 0.004 75); } .ds-box { flex: none; width: 20px; height: 20px; border-radius: 6px; border: 2px solid oklch(0.58 0.13 150); background: oklch(0.58 0.13 150); display: grid; place-items: center; } .ds-box svg { width: 12px; height: 12px; fill: none; stroke: oklch(0.99 0.02 150); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; } .ds-body { flex: 1; min-width: 0; } .ds-name { color: oklch(0.64 0.01 72); text-decoration: line-through; text-decoration-color: color-mix(in oklch, oklch(0.64 0.01 72) 60%, transparent); } .ds-qty { color: oklch(0.64 0.01 72); font-variant-numeric: tabular-nums; }"
+      "html": "<div class=\"ds-row\"><span class=\"ds-box\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.5 8.5l3 3 6-6.5\"/></svg></span><span class=\"ds-body ds-done\"><span class=\"ds-name\">Garlic<span class=\"ds-qty\"> · 1 head</span></span></span></div>",
+      "css": ".ds-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; background: oklch(0.99 0.004 75); } .ds-box { flex: none; width: 20px; height: 20px; border-radius: 6px; border: 2px solid oklch(0.58 0.13 150); background: oklch(0.58 0.13 150); display: grid; place-items: center; } .ds-box svg { width: 12px; height: 12px; fill: none; stroke: oklch(0.99 0.02 150); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; } .ds-body { flex: 1; min-width: 0; color: oklch(0.27 0.012 72); } .ds-body.ds-done { opacity: 0.38; } .ds-qty { color: oklch(0.52 0.012 72); font-variant-numeric: tabular-nums; }"
     },
     {
       "name": "Aisle Header",
@@ -367,6 +424,20 @@
       "description": "The connector's identity in a widget header — a paprika-red tile with a bold P beside the title.",
       "html": "<div class=\"ds-brand\"><span class=\"ds-tile\" aria-hidden=\"true\">P</span><h1>Pantry</h1></div>",
       "css": ".ds-brand { display: flex; align-items: center; gap: 8px; } .ds-tile { flex: none; width: 22px; height: 22px; border-radius: 6px; background: oklch(0.543 0.174 30); color: oklch(0.99 0.012 40); display: grid; place-items: center; font-weight: 800; font-size: 14px; } .ds-brand h1 { margin: 0; font: 650 17px system-ui, -apple-system, sans-serif; letter-spacing: -0.01em; color: oklch(0.27 0.012 72); }"
+    },
+    {
+      "name": "Rating Dots",
+      "kind": "custom",
+      "description": "The signature 0–5 rating indicator — five small accent dots, the first N lit; a compact density mark rather than star glyphs, right-aligned at the trailing edge of a browse/menu row. The group carries an accessible name; the dots are decorative.",
+      "html": "<span class=\"ds-dots\" role=\"img\" aria-label=\"Rated 3 of 5\"><span class=\"ds-dot ds-on\"></span><span class=\"ds-dot ds-on\"></span><span class=\"ds-dot ds-on\"></span><span class=\"ds-dot\"></span><span class=\"ds-dot\"></span></span>",
+      "css": ".ds-dots { display: flex; gap: 2px; margin-left: auto; flex: none; } .ds-dot { width: 5px; height: 5px; border-radius: 50%; background: oklch(0.543 0.174 30); opacity: 0.2; } .ds-dot.ds-on { opacity: 1; }"
+    },
+    {
+      "name": "Status Screen",
+      "kind": "custom",
+      "description": "The shared loading / empty / error state — a centered decorative icon, title, and desc in a role=status live region so a phase change is announced. The one home for a widget's empty and loading states; a taught empty state, never a bare spinner in the content well.",
+      "html": "<div class=\"ds-status\" role=\"status\" aria-live=\"polite\"><div class=\"ds-status-icon\" aria-hidden=\"true\">🧺</div><p class=\"ds-status-title\">Nothing in stock</p><p class=\"ds-status-desc\">Items you mark in stock show up here.</p></div>",
+      "css": ".ds-status { display: grid; place-content: center; justify-items: center; text-align: center; gap: 6px; padding: 40px 24px; color: oklch(0.52 0.012 72); } .ds-status-icon { font-size: 30px; } .ds-status-title { color: oklch(0.27 0.012 72); font-weight: 600; margin: 0; } .ds-status-desc { font-size: 13px; max-width: 34ch; margin: 0; }"
     },
     {
       "name": "Destination Anchor",

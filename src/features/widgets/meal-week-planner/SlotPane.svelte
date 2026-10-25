@@ -61,6 +61,7 @@
                 class="ms-name"
                 onclick={() => onOpenRecipe(meal)}
                 disabled={loadingUid === meal.uid}
+                aria-busy={loadingUid === meal.uid}
               >
                 <span class="ms-text">{meal.name}</span>
                 {#if loadingUid === meal.uid}

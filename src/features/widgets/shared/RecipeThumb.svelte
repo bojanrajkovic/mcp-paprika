@@ -77,7 +77,7 @@
     flex: none;
     width: var(--thumb-size);
     height: var(--thumb-size);
-    border-radius: 8px;
+    border-radius: 10px;
     overflow: hidden;
   }
   .thumbimg {

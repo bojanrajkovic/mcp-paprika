@@ -607,10 +607,7 @@
     aria-valuemin={1}
     aria-valuemax={progressMax}
   >
-    <div
-      class="progress-fill"
-      style:width={`${((now / progressMax) * 100).toString()}%`}
-    ></div>
+    <div class="progress-fill" style:--p={Math.min(1, now / progressMax)}></div>
   </div>
 {/snippet}
 
@@ -675,7 +672,7 @@
     flex: none;
     width: 42px;
     height: 42px;
-    border-radius: 9px;
+    border-radius: 10px;
     object-fit: cover;
     border: 1px solid color-mix(in oklch, var(--ink) 12%, transparent);
   }
@@ -859,7 +856,7 @@
     color: var(--ink);
     background: var(--hover);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 8px 10px;
   }
   .reanchor-actions {
@@ -909,9 +906,15 @@
   }
   .progress-fill {
     height: 100%;
+    width: 100%;
     background: var(--accent);
-    border-radius: 999px;
-    transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* Scale from the left instead of animating width (a layout property) so it composites on the
+       GPU. The `.progress` track's overflow:hidden + radius rounds the bar's outer ends; the fill's
+       leading edge is square mid-progress, since a radius on a scaled element would distort. Reduced-motion is
+       handled by WidgetShell's global transition-duration reset. */
+    transform-origin: left;
+    transform: scaleX(var(--p, 0));
+    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .kn {
     margin: 12px 0 0;
@@ -1056,7 +1059,7 @@
     max-width: 260px;
     max-height: 190px;
     object-fit: cover;
-    border-radius: 16px;
+    border-radius: 14px;
     border: 1px solid color-mix(in oklch, var(--ink) 12%, transparent);
   }
   .done-title {
