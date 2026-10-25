@@ -1,13 +1,14 @@
 <script lang="ts">
   import type { App } from "@modelcontextprotocol/ext-apps";
 
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
 
   import PillButton from "../shared/PillButton.svelte";
   import StatusScreen from "../shared/StatusScreen.svelte";
   import Toast from "../shared/Toast.svelte";
   import WidgetShell from "../shared/WidgetShell.svelte";
   import { groupConsecutive } from "../shared/group.js";
+  import { viewTransition } from "../shared/view-transition.js";
   import {
     blobDataUri,
     callTool,
@@ -261,31 +262,11 @@
   // hard-swapping — the header, footer, and progress bar hold their place (their own
   // view-transition-names) while the screen body slides directionally. `dir` sets the slide via a
   // root data-attr the global `::view-transition` rules key on. Gated: it degrades to an instant
-  // mutation where the API is missing OR the user prefers reduced motion. The DOM update runs inside
-  // the transition callback; `tick()` flushes Svelte's render so the API captures the new frame. A
-  // new transition skips a running one, so only the latest one may clear the direction attribute.
-  const canViewTransition =
-    typeof document !== "undefined" &&
-    "startViewTransition" in document &&
-    !reduced;
-
-  let navSeq = 0;
+  // mutation where the API is missing OR the user prefers reduced motion. `dir` drives the slide via the `data-cook-vt` root attr the shared helper
+  // sets for the transition's duration; the gate, `tick()` flush, and attr cleanup live in
+  // `shared/view-transition.ts` (shared with the recipe-browser's browse ↔ detail morph).
   function nav(update: () => void, dir: "fwd" | "back" = "fwd"): void {
-    if (!canViewTransition) {
-      update();
-      return;
-    }
-    const seq = ++navSeq;
-    document.documentElement.dataset["cookVt"] = dir;
-    const clear = (): void => {
-      if (seq === navSeq) delete document.documentElement.dataset["cookVt"];
-    };
-    void document
-      .startViewTransition(async () => {
-        update();
-        await tick();
-      })
-      .finished.then(clear, clear);
+    viewTransition(update, ["cookVt", dir]);
   }
 
   function startCooking() {

@@ -9,10 +9,11 @@
  *
  * The root `GET /` adds a dev-only INDEX: a card per widget with one-click "Light"/"Dark" links per
  * STATE (populated / empty / error / data variants), each carrying a baked sample `?payload=` below.
- * Only states expressible by the INITIAL structured result are previewable here — the shim no-ops
- * `callServerTool`, so states reached through a tool round-trip (add-item re-reads, a recipe-detail
- * tap, week navigation, an elicitation confirm) can't be reproduced offline and are called out in the
- * index footer. The samples match each widget's structured-output shape (`shared/server-types.ts`);
+ * The INITIAL structured result plus a `read_recipe` round-trip are previewable here — the shim
+ * answers `read_recipe` with a canned detail (so the browse -> detail swap is exercisable) but
+ * no-ops every other `callServerTool`, so states reached through those round-trips (add-item
+ * re-reads, week navigation, an elicitation confirm) can't be reproduced offline and are called out
+ * in the index footer. The samples match each widget's structured-output shape (`shared/server-types.ts`);
  * they are display fixtures, not validated — the widgets discriminate the payload by shape.
  *
  * Run it with `pnpm dev:preview` (port 8899, override with `PORT`), then open `http://127.0.0.1:8899/`
@@ -338,6 +339,7 @@ const BROWSE_DISCOVER = {
   items: [R_BENEDICT, R_STEAK, R_CHICKEN],
 };
 const BROWSE_EMPTY = { context: { source: "list" }, total: 0, items: [] };
+const BROWSE_SEARCH_EMPTY = { context: { source: "search", query: "durian soufflé" }, total: 0, items: [] };
 
 // ---------------------------------------------------------------------------
 
@@ -414,12 +416,14 @@ const WIDGETS: readonly WidgetSample[] = [
   {
     name: "recipe-browser",
     title: "Recipe browser",
-    blurb: "Your library with a category filter and rating/alpha sort; the header + sort adapt to the source.",
+    blurb:
+      "Your library with a category filter and rating/alpha sort; the header + sort adapt to the source. Type a no-match query in the search box to reach the filtered-empty state.",
     variants: [
       { label: "Library (list)", payload: BROWSE_LIST },
       { label: "Search results", payload: BROWSE_SEARCH },
       { label: "Discover", payload: BROWSE_DISCOVER },
-      { label: "Empty", payload: BROWSE_EMPTY },
+      { label: "Empty library (first run)", payload: BROWSE_EMPTY },
+      { label: "No search results", payload: BROWSE_SEARCH_EMPTY },
     ],
   },
   {
@@ -484,8 +488,8 @@ const renderIndex = (): string => {
   </header>
   <div class="grid">${cards}</div>
   <footer>
-    <p><b>Previewable here</b> = anything the initial result expresses (populated / empty / error / data variants) plus local-only interactions: the cooking flow &amp; done screen, grocery/pantry check-off &amp; swipe, the recipe-browser filter/sort/search box.</p>
-    <p><b>Not previewable</b> (needs a live host — <code>callServerTool</code> no-ops here): add-item / clear / move-to-pantry re-reads, pantry restock, a recipe-detail or menu-item tap (<code>read_recipe</code>), meal-week prev/next (re-fetch), and elicitation confirms.</p>
+    <p><b>Previewable here</b> = anything the initial result expresses (populated / empty / error / data variants); local-only interactions (the cooking flow &amp; done screen, grocery/pantry check-off &amp; swipe, the recipe-browser filter/sort/search box); and a recipe tap — <code>read_recipe</code> returns a canned detail, so the browse&nbsp;&rarr;&nbsp;detail swap (with the recipe-browser's View Transition) opens in all three. The recipe-browser detail matches the tapped row; menu &amp; meal-planner show generic sample content (the shim only resolves the recipe-browser's payload shape).</p>
+    <p><b>Not previewable</b> (needs a live host — <code>callServerTool</code> no-ops these): add-item / clear / move-to-pantry re-reads, pantry restock, meal-week prev/next (re-fetch), and elicitation confirms.</p>
     <p><b>Reduced motion:</b> DevTools → ⋮ → More tools → Rendering → emulate <code>prefers-reduced-motion: reduce</code>, then reload — widgets should look identical, just without entrances. Cover photos show as placeholder tiles (the shim can't proxy <code>ui://</code> reads).</p>
   </footer>
 </body></html>`;

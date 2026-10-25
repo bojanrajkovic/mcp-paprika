@@ -235,7 +235,7 @@ The surface has two button families: the consent screen's full-width action butt
 
 ### Status Screen
 
-The shared loading / empty / error state (`StatusScreen`): a centered stack of an optional decorative emoji `icon` (30px, `aria-hidden`), a `title` (weight 600, `ink`), and a `desc` (13px, `muted`, capped at 34ch). It covers a bare "Loading…" (desc only) through a full empty state (icon + title + desc), with an `inline` variant that sits in-flow inside a scroll region. It is a `role="status"` live region (`aria-live="polite"`), so a screen reader announces a phase change (loading → error → content). It is the one home for a widget's empty and loading states: a taught empty state, not "nothing here," and never a bare spinner floating in the content well.
+The shared loading / empty / error state (`StatusScreen`): a centered stack of an optional decorative emoji `icon` (30px, `aria-hidden`), a `title` (weight 600, `ink`), and a `desc` (13px, `muted`, capped at 34ch). It covers a bare "Loading…" (desc only) through a full empty state (icon + title + desc), with an `inline` variant that sits in-flow inside a scroll region. An optional trailing call-to-action renders after the desc (the recipe browser's "Clear filters"), and `animate` fades the block in for an empty state that appears reactively, such as a filter emptying the list. It is a `role="status"` live region (`aria-live="polite"`), so a screen reader announces a phase change (loading → error → content). It is the one home for a widget's empty and loading states: a taught empty state, not "nothing here," and never a bare spinner floating in the content well.
 
 ### Rating Dots (signature)
 
