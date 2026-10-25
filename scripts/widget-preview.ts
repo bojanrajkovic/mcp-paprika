@@ -8,23 +8,26 @@
  * own.
  *
  * The root `GET /` adds a dev-only INDEX: a card per widget with one-click "Light"/"Dark" links per
- * STATE (populated / empty / error / data variants), each carrying a baked sample `?payload=` below.
- * The INITIAL structured result plus a `read_recipe` round-trip are previewable here — the shim
- * answers `read_recipe` with a canned detail (so the browse -> detail swap is exercisable) but
- * no-ops every other `callServerTool`, so states reached through those round-trips (add-item
- * re-reads, week navigation, an elicitation confirm) can't be reproduced offline and are called out
- * in the index footer. The samples match each widget's structured-output shape (`shared/server-types.ts`);
- * they are display fixtures, not validated — the widgets discriminate the payload by shape.
+ * STATE (populated / empty / error / data variants), each carrying a baked sample payload below. The
+ * shim answers every `callServerTool` a widget makes from a per-page, stateful mini-store seeded from
+ * that payload — mutated in place by the handlers, so a re-read after mark/clear/move/add
+ * reflects the action — which makes every round-trip a widget drives previewable here: the initial
+ * result, add-item re-reads, clear/move-to-pantry (with an `elicitation=1` variant popping a native
+ * `confirm()` in place of the host's dialog), meal-week navigation, and a recipe tap from any of the
+ * three widgets that link one. The samples match each widget's structured-output shape
+ * (`shared/server-types.ts`); they are display fixtures, not validated — the widgets discriminate the
+ * payload by shape.
  *
  * Run it with `pnpm dev:preview` (port 8899, override with `PORT`), then open `http://127.0.0.1:8899/`
- * for the index, or hit `…/widget-preview?widget=<name>&payload=<json>&theme=<light|dark>` directly.
+ * for the index, or hit `…/widget-preview?widget=<name>&theme=<light|dark>#payload=<json>` directly.
  * Build the widgets first (`pnpm build:widgets`, or `pnpm dev:widgets` to rebuild on change) — the
  * route reads `dist/widgets` per request, so a browser refresh picks up the latest build with no
  * restart.
  *
- * The `?payload=` query is untrusted but never reflected: the shim reads it client-side and the widget
- * JSON-parses it under its own try/catch (see the router's header). This server exists for local
- * iteration only; it is not part of the production build.
+ * The payload rides the URL fragment (`#payload=`, never sent in the HTTP request) — untrusted but
+ * never reflected either way: the shim reads it client-side and the widget JSON-parses it under its
+ * own try/catch (see the router's header). `?payload=` remains a small hand-typed fallback, still
+ * size-bounded. This server exists for local iteration only; it is not part of the production build.
  */
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
@@ -350,9 +353,8 @@ interface Variant {
   // stays undefined and the widget takes its error path with this as the message (a clean error
   // state — the object `payload` would instead be dumped as JSON by the shim's text-content mirror).
   readonly rawText?: string;
-  // Repeats `payload.items` this many times, CLIENT-SIDE in the shim — lets a stress-test variant
-  // stay a small URL (see the router's `scale=` doc).
-  readonly scale?: number;
+  // Adds `&elicitation=1` to the link, so the shim's native confirm() stands in for the server gate.
+  readonly elicitation?: boolean;
 }
 interface WidgetSample {
   readonly name: string;
@@ -360,6 +362,18 @@ interface WidgetSample {
   readonly blurb: string;
   readonly variants: readonly Variant[];
 }
+
+// Pre-scale a payload's items (unique-suffixed uids) so stress variants carry REAL rows whose
+// uids the shim's mini-store lookups can resolve.
+const scaleItems = <T extends { readonly items: readonly { readonly uid: string }[] }>(
+  payload: T,
+  copies: number,
+): T => ({
+  ...payload,
+  items: Array.from({ length: copies }, (_, copy) =>
+    payload.items.map((item) => ({ ...item, uid: `${item.uid}-${copy}` })),
+  ).flat(),
+});
 
 const WIDGETS: readonly WidgetSample[] = [
   {
@@ -380,7 +394,12 @@ const WIDGETS: readonly WidgetSample[] = [
       { label: "Populated", payload: GROCERY },
       { label: "Empty", payload: GROCERY_EMPTY },
       { label: "All purchased (tap Clear ×2 for “list’s clear”)", payload: GROCERY_ALL_PURCHASED },
-      { label: "Very large list (240 items, ×40)", payload: GROCERY, scale: 40 },
+      {
+        label: "All purchased + server confirm (elicitation)",
+        payload: GROCERY_ALL_PURCHASED,
+        elicitation: true,
+      },
+      { label: "Very large list (240 items)", payload: scaleItems(GROCERY, 40) },
     ],
   },
   {
@@ -391,8 +410,9 @@ const WIDGETS: readonly WidgetSample[] = [
     variants: [
       { label: "Stocked + expiring", payload: PANTRY },
       { label: "All out of stock (drawer auto-opens)", payload: PANTRY_ALL_OUT },
+      { label: "Stocked + server confirm on drawer clear (elicitation)", payload: PANTRY, elicitation: true },
       { label: "Empty", payload: PANTRY_EMPTY },
-      { label: "Very large pantry (150 items, ×30)", payload: PANTRY, scale: 30 },
+      { label: "Very large pantry (150 items)", payload: scaleItems(PANTRY, 30) },
     ],
   },
   {
@@ -437,9 +457,9 @@ const WIDGETS: readonly WidgetSample[] = [
 const encode = (payload: unknown): string => encodeURIComponent(JSON.stringify(payload));
 
 const previewHref = (name: string, v: Variant, theme: "light" | "dark"): string => {
-  const base = `/widget-preview?widget=${name}&theme=${theme}${v.scale ? `&scale=${v.scale.toString()}` : ""}`;
-  if (v.rawText !== undefined) return `${base}&payload=${encodeURIComponent(v.rawText)}`;
-  return v.payload === undefined ? base : `${base}&payload=${encode(v.payload)}`;
+  const base = `/widget-preview?widget=${name}&theme=${theme}${v.elicitation ? "&elicitation=1" : ""}`;
+  if (v.rawText !== undefined) return `${base}#payload=${encodeURIComponent(v.rawText)}`;
+  return v.payload === undefined ? base : `${base}#payload=${encode(v.payload)}`;
 };
 
 const renderIndex = (): string => {
@@ -488,8 +508,8 @@ const renderIndex = (): string => {
   </header>
   <div class="grid">${cards}</div>
   <footer>
-    <p><b>Previewable here</b> = anything the initial result expresses (populated / empty / error / data variants); local-only interactions (the cooking flow &amp; done screen, grocery/pantry check-off &amp; swipe, the recipe-browser filter/sort/search box); and a recipe tap — <code>read_recipe</code> returns a canned detail, so the browse&nbsp;&rarr;&nbsp;detail swap (with the recipe-browser's View Transition) opens in all three. The recipe-browser detail matches the tapped row; menu &amp; meal-planner show generic sample content (the shim only resolves the recipe-browser's payload shape).</p>
-    <p><b>Not previewable</b> (needs a live host — <code>callServerTool</code> no-ops these): add-item / clear / move-to-pantry re-reads, pantry restock, meal-week prev/next (re-fetch), and elicitation confirms.</p>
+    <p><b>Previewable here</b> = anything the initial result expresses (populated / empty / error / data variants); local-only interactions (the cooking flow &amp; done screen, grocery/pantry check-off &amp; swipe, the recipe-browser filter/sort/search box); and every round-trip a widget drives through the shim's stateful mini-store — mark/clear/move-to-pantry with the re-read that follows (including items marked earlier in the same session), the re-add echo, meal-week prev/next navigation and its mid-week realign, an elicitation confirm <em>and</em> its decline via the native <code>confirm()</code> dialog (the "elicitation" variants), and a recipe tap from any of the three linking widgets — <code>read_recipe</code> returns the tapped row's own name (menu rows also carry servings/time from their nested recipe), so the browse&nbsp;&rarr;&nbsp;detail swap (with the recipe-browser's View Transition) opens correctly everywhere.</p>
+    <p><b>Not previewable</b> (needs a live host): the error toasts a <em>failing</em> round-trip triggers — the shim never errs, so a network-failure state can't be reproduced offline.</p>
     <p><b>Reduced motion:</b> DevTools → ⋮ → More tools → Rendering → emulate <code>prefers-reduced-motion: reduce</code>, then reload — widgets should look identical, just without entrances. Cover photos show as placeholder tiles (the shim can't proxy <code>ui://</code> reads).</p>
   </footer>
 </body></html>`;

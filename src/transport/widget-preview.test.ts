@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useTempDir } from "../../test/support/disk-caches.js";
 import { SERVER_CAPS_KEY } from "../features/widgets/shared/server-caps-key.js";
@@ -26,6 +26,18 @@ function decodeShim(body: string): string {
   return b64 !== undefined ? Buffer.from(b64, "base64").toString("utf8") : "";
 }
 
+// The shape a shim tool result satisfies (a subset of ext-apps' real result type — this test never
+// imports ext-apps as a value, only this local structural interface).
+interface ShimToolResult {
+  readonly content: readonly { readonly type: string; readonly text?: string }[];
+  readonly structuredContent?: Record<string, unknown>;
+}
+interface PreviewApp {
+  ontoolresult?: (result: ShimToolResult) => void;
+  connect(): Promise<void>;
+  callServerTool(req: { readonly name: string; readonly arguments?: Record<string, unknown> }): Promise<ShimToolResult>;
+}
+
 describe("widget-preview route", () => {
   const tmp = useTempDir("mcp-paprika-widget-preview-");
 
@@ -34,6 +46,7 @@ describe("widget-preview route", () => {
     await writeFile(join(tmp.dir(), "demo.html"), FIXTURE_HTML, "utf8");
   });
   afterEach(async () => {
+    vi.unstubAllGlobals();
     await tmp.teardown();
   });
 
@@ -94,5 +107,319 @@ describe("widget-preview route", () => {
 
     expect((await router.request("/widget-preview?widget=missing")).status).toBe(404);
     expect((await router.request("/widget-preview")).status).toBe(400);
+  });
+
+  // Serve the fixture, decode the import map's data: URL, import it as a real ES module.
+  // `/* @vite-ignore */` is REQUIRED: it stops Vite from trying to transform/resolve the dynamic
+  // specifier, so Node's native ESM loader handles the data: URL.
+  async function loadShim(dir: string): Promise<{ App: new () => PreviewApp }> {
+    const router = buildWidgetPreviewRouter(SILENT_LOG, { dir });
+    const body = await (await router.request("/widget-preview?widget=demo")).text();
+    const b64 = Buffer.from(decodeShim(body)).toString("base64");
+    return import(/* @vite-ignore */ `data:text/javascript;base64,${b64}`);
+  }
+
+  // Per-test App factory: the constructor reads location + writes window[SERVER_CAPS_KEY], so stub
+  // BOTH before constructing; the constructor also parses the payload straight into the mini-store, so
+  // callServerTool works with no connect() call first.
+  function makeApp(
+    mod: { App: new () => PreviewApp },
+    payload: unknown,
+    opts: { viaQuery?: boolean; elicitation?: boolean } = {},
+  ): PreviewApp {
+    const encoded = encodeURIComponent(JSON.stringify(payload));
+    vi.stubGlobal("window", globalThis);
+    vi.stubGlobal("location", {
+      search: `?widget=x${opts.elicitation ? "&elicitation=1" : ""}${opts.viaQuery ? `&payload=${encoded}` : ""}`,
+      hash: opts.viaQuery ? "" : `#payload=${encoded}`,
+    });
+    return new mod.App();
+  }
+
+  // Pull the `items` rows off a result's structured content, or [] when absent — avoids an unsafe
+  // optional-chain-then-index on every call site that just wants the uid list.
+  function rowsOf(result: ShimToolResult): { readonly uid: string }[] {
+    const items = result.structuredContent?.["items"];
+    return Array.isArray(items) ? (items as { readonly uid: string }[]) : [];
+  }
+
+  it("reads the payload from the fragment, preferring it over the query, with query-only as a fallback", async () => {
+    const mod = await loadShim(tmp.dir());
+    const payload = { uid: "g-list", name: "Test", items: [] };
+    const encoded = encodeURIComponent(JSON.stringify(payload));
+
+    // Fragment wins when both are present.
+    vi.stubGlobal("window", globalThis);
+    vi.stubGlobal("location", { search: "?widget=x&payload=stale", hash: `#payload=${encoded}` });
+    const fromFragment = new mod.App();
+    const fragmentResults: ShimToolResult[] = [];
+    fromFragment.ontoolresult = (r) => fragmentResults.push(r);
+    await fromFragment.connect();
+    expect(fragmentResults).toEqual([
+      { content: [{ type: "text", text: JSON.stringify(payload) }], structuredContent: payload },
+    ]);
+
+    // Query-only still works (the hand-typed fallback).
+    const fromQuery = makeApp(mod, payload, { viaQuery: true });
+    const queryResults: ShimToolResult[] = [];
+    fromQuery.ontoolresult = (r) => queryResults.push(r);
+    await fromQuery.connect();
+    expect(queryResults).toEqual([
+      { content: [{ type: "text", text: JSON.stringify(payload) }], structuredContent: payload },
+    ]);
+  });
+
+  it("re-dates read_meal_plan's meals into the requested window, falling back to the payload's own week", async () => {
+    const mod = await loadShim(tmp.dir());
+    const payload = {
+      weekStart: "2026-06-29",
+      meals: [
+        {
+          uid: "w1",
+          date: "2026-06-29",
+          name: "Pancakes",
+          recipeUid: null,
+          typeUid: "mt1",
+          typeName: "Breakfast",
+          scale: null,
+        },
+        {
+          uid: "w2",
+          date: "2026-07-01",
+          name: "Roast Chicken",
+          recipeUid: "r2",
+          typeUid: "mt2",
+          typeName: "Dinner",
+          scale: null,
+        },
+      ],
+      mealTypes: [{ uid: "mt1", name: "Breakfast" }],
+    };
+    const app = makeApp(mod, payload);
+
+    const shifted = await app.callServerTool({
+      name: "read_meal_plan",
+      arguments: { startDate: "2026-07-06", days: 7 },
+    });
+    expect(shifted.structuredContent).toMatchObject({
+      weekStart: "2026-07-06",
+      meals: [
+        { uid: "w1", date: "2026-07-06" },
+        { uid: "w2", date: "2026-07-08" },
+      ],
+    });
+
+    const noStart = await app.callServerTool({ name: "read_meal_plan", arguments: {} });
+    expect(noStart.structuredContent).toMatchObject({
+      weekStart: "2026-06-29",
+      meals: [
+        { uid: "w1", date: "2026-06-29" },
+        { uid: "w2", date: "2026-07-01" },
+      ],
+    });
+  });
+
+  it("echoes add_grocery_items rows with fresh uids and normalized defaults, visible on the next read", async () => {
+    const mod = await loadShim(tmp.dir());
+    const payload = { uid: "g-list", name: "Test", items: [] };
+    const app = makeApp(mod, payload);
+
+    const add = await app.callServerTool({
+      name: "add_grocery_items",
+      arguments: { listUid: "g-list", items: [{ ingredient: "Lemons", aisle: "" }] },
+    });
+    expect(add.structuredContent).toMatchObject({
+      listUid: "g-list",
+      skipped: [],
+      items: [{ ingredient: "Lemons", quantity: null, aisle: null, purchased: false }],
+    });
+    const addedUid = rowsOf(add)[0]?.uid;
+    expect(addedUid).toMatch(/^preview-add-\d+$/);
+
+    const read = await app.callServerTool({ name: "read_grocery_list", arguments: { lookup: { uid: "g-list" } } });
+    expect(rowsOf(read).map((i) => i.uid)).toContain(addedUid);
+  });
+
+  it("clears an item marked purchased earlier in the same session, not just the initially-purchased ones", async () => {
+    const mod = await loadShim(tmp.dir());
+    const payload = {
+      uid: "g-list",
+      name: "Test",
+      items: [
+        { uid: "i1", ingredient: "Eggs", quantity: null, aisle: null, purchased: false },
+        { uid: "i2", ingredient: "Milk", quantity: null, aisle: null, purchased: true },
+        { uid: "i3", ingredient: "Bread", quantity: null, aisle: null, purchased: false },
+      ],
+    };
+    const app = makeApp(mod, payload);
+
+    await app.callServerTool({ name: "mark_grocery_item_purchased", arguments: { uid: "i1" } });
+    await app.callServerTool({ name: "clear_purchased_grocery_items", arguments: { listUid: "g-list" } });
+    const read = await app.callServerTool({ name: "read_grocery_list", arguments: { lookup: { uid: "g-list" } } });
+    expect(rowsOf(read).map((i) => i.uid)).toEqual(["i3"]);
+  });
+
+  it("declines clear_purchased_grocery_items on confirm() cancel, leaving items unchanged", async () => {
+    const mod = await loadShim(tmp.dir());
+    const payload = {
+      uid: "g-list",
+      name: "Test",
+      items: [{ uid: "i1", ingredient: "Eggs", quantity: null, aisle: null, purchased: true }],
+    };
+    const app = makeApp(mod, payload, { elicitation: true });
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmSpy);
+
+    const clear = await app.callServerTool({ name: "clear_purchased_grocery_items", arguments: { listUid: "g-list" } });
+    expect(clear).toEqual({ content: [] });
+
+    const read = await app.callServerTool({ name: "read_grocery_list", arguments: { lookup: { uid: "g-list" } } });
+    expect(read.structuredContent?.["items"]).toEqual(payload.items);
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears on confirm() accept, and proceeds without calling confirm when elicitation isn't flagged", async () => {
+    const mod = await loadShim(tmp.dir());
+    const payload = {
+      uid: "g-list",
+      name: "Test",
+      items: [{ uid: "i1", ingredient: "Eggs", quantity: null, aisle: null, purchased: true }],
+    };
+
+    const acceptApp = makeApp(mod, payload, { elicitation: true });
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
+    await acceptApp.callServerTool({ name: "clear_purchased_grocery_items", arguments: { listUid: "g-list" } });
+    const acceptRead = await acceptApp.callServerTool({
+      name: "read_grocery_list",
+      arguments: { lookup: { uid: "g-list" } },
+    });
+    expect(acceptRead.structuredContent?.["items"]).toEqual([]);
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals(); // simulate a host with no confirm() global at all
+    const noFlagApp = makeApp(mod, payload);
+    await noFlagApp.callServerTool({ name: "clear_purchased_grocery_items", arguments: { listUid: "g-list" } });
+    const noFlagRead = await noFlagApp.callServerTool({
+      name: "read_grocery_list",
+      arguments: { lookup: { uid: "g-list" } },
+    });
+    expect(noFlagRead.structuredContent?.["items"]).toEqual([]);
+  });
+
+  it("flips pantry inStock and clears only items with inStock !== false", async () => {
+    const mod = await loadShim(tmp.dir());
+    const payload = {
+      items: [
+        { uid: "p1", ingredient: "Flour", quantity: null, aisle: null, inStock: true, expirationDate: null },
+        { uid: "p2", ingredient: "Butter", quantity: null, aisle: null, inStock: false, expirationDate: null },
+      ],
+    };
+    const app = makeApp(mod, payload);
+
+    await app.callServerTool({ name: "mark_pantry_item_out_of_stock", arguments: { uid: "p1" } });
+    await app.callServerTool({ name: "restock_pantry_item", arguments: { uid: "p2" } });
+    const afterFlip = await app.callServerTool({ name: "list_pantry_items", arguments: {} });
+    expect(afterFlip.structuredContent).toMatchObject({
+      items: [
+        { uid: "p1", inStock: false },
+        { uid: "p2", inStock: true },
+      ],
+    });
+
+    await app.callServerTool({ name: "clear_out_of_stock_pantry_items", arguments: {} });
+    const afterClear = await app.callServerTool({ name: "list_pantry_items", arguments: {} });
+    expect(rowsOf(afterClear).map((i) => i.uid)).toEqual(["p2"]);
+  });
+
+  it("resolves read_recipe from all three payload shapes, with canned defaults for an unmatched uid", async () => {
+    const mod = await loadShim(tmp.dir());
+
+    const browse = makeApp(mod, {
+      items: [{ uid: "r1", name: "Eggs Benedict", servings: "2", totalTime: "30 min", photoResourceUri: "ui://photo" }],
+    });
+    const browseHit = await browse.callServerTool({ name: "read_recipe", arguments: { lookup: { uid: "r1" } } });
+    expect(browseHit.structuredContent).toMatchObject({
+      uid: "r1",
+      name: "Eggs Benedict",
+      servings: "2",
+      totalTime: "30 min",
+      photoResourceUri: "ui://photo",
+    });
+
+    const menu = makeApp(mod, {
+      items: [
+        {
+          uid: "m1",
+          name: "Eggs Benedict (menu label)",
+          recipeUid: "r1",
+          recipe: { servings: "2", totalTime: "30 min", photoResourceUri: "ui://photo" },
+        },
+      ],
+    });
+    const menuHit = await menu.callServerTool({ name: "read_recipe", arguments: { lookup: { uid: "r1" } } });
+    expect(menuHit.structuredContent).toMatchObject({
+      uid: "r1",
+      name: "Eggs Benedict (menu label)",
+      servings: "2",
+      totalTime: "30 min",
+      photoResourceUri: "ui://photo",
+    });
+
+    const week = makeApp(mod, {
+      weekStart: "2026-06-29",
+      meals: [
+        {
+          uid: "w1",
+          date: "2026-06-29",
+          name: "Roast Chicken",
+          recipeUid: "r2",
+          typeUid: "mt1",
+          typeName: "Dinner",
+          scale: null,
+        },
+      ],
+      mealTypes: [],
+    });
+    const weekHit = await week.callServerTool({ name: "read_recipe", arguments: { lookup: { uid: "r2" } } });
+    expect(weekHit.structuredContent).toMatchObject({ uid: "r2", name: "Roast Chicken", servings: "", totalTime: "" });
+
+    const missing = await browse.callServerTool({ name: "read_recipe", arguments: { lookup: { uid: "nope" } } });
+    expect(missing.structuredContent).toMatchObject({
+      uid: "nope",
+      name: "Sample Recipe",
+      servings: "",
+      totalTime: "",
+    });
+  });
+
+  it("no-ops an unknown tool, and a payload-less App answers every tool without throwing", async () => {
+    const mod = await loadShim(tmp.dir());
+    const app = makeApp(mod, { uid: "g-list", name: "Test", items: [] });
+    const unknown = await app.callServerTool({ name: "record_widget_timing", arguments: {} });
+    expect(unknown).toEqual({ content: [] });
+
+    vi.stubGlobal("window", globalThis);
+    vi.stubGlobal("location", { search: "?widget=x", hash: "" });
+    const empty = new mod.App();
+    const names = [
+      "read_grocery_list",
+      "list_pantry_items",
+      "read_meal_plan",
+      "read_recipe",
+      "mark_grocery_item_purchased",
+      "add_grocery_items",
+      "delete_grocery_item",
+      "clear_purchased_grocery_items",
+      "move_grocery_items_to_pantry",
+      "mark_pantry_item_out_of_stock",
+      "restock_pantry_item",
+      "clear_out_of_stock_pantry_items",
+      "record_widget_timing",
+      "unknown_tool",
+    ];
+    for (const name of names) {
+      await expect(empty.callServerTool({ name, arguments: {} })).resolves.toBeDefined();
+    }
   });
 });
