@@ -763,7 +763,7 @@
     gap: 12px;
     padding: 11px 16px;
     background: var(--bg);
-    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
     transition: box-shadow 0.15s;
   }
   .item.busy {

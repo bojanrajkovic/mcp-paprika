@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { createSwipeRecognizer, SWIPE_SLOP_PX } from "./swipe-gesture.js";
+import { createSwipeRecognizer, FLICK_STALE_MS, SWIPE_SLOP_PX } from "./swipe-gesture.js";
 
 const clampLeft = (raw: number) => Math.max(-120, Math.min(0, raw));
 const clampRight = (raw: number) => Math.max(0, Math.min(120, raw));
@@ -120,6 +120,19 @@ describe("createSwipeRecognizer — flick commit", () => {
     r.start(0, 0, 0);
     r.move(-50, 0, 10); // 50px in 10ms = 5px/ms, well past the flick velocity
     expect(r.release().committed).toBe(true);
+  });
+
+  it("does not flick-commit when the drag paused before release", () => {
+    const r = createSwipeRecognizer({
+      axis: "x",
+      direction: "left",
+      resist: clampLeft,
+      armPx: 80,
+      flick: { px: 40, velocityPxMs: 0.8 },
+    });
+    r.start(0, 0, 0);
+    r.move(-50, 0, 10); // a fast move…
+    expect(r.release(10 + FLICK_STALE_MS + 1).committed).toBe(false); // …then a hold before lifting
   });
 
   it("does not flick-commit below the flick distance floor", () => {

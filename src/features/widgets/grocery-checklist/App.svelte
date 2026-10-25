@@ -636,7 +636,7 @@
     padding: 11px 16px;
     text-align: left;
     background: var(--bg);
-    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
     transition:
       background 0.13s,
       transform 0.1s cubic-bezier(0.25, 1, 0.5, 1);

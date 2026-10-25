@@ -110,9 +110,9 @@
       springing = false;
     }, 200);
   }
-  function touchEnd() {
+  function touchEnd(e: TouchEvent) {
     if (!gesture.active) return;
-    const { committed, wasEngaged, dx } = gesture.release();
+    const { committed, wasEngaged, dx } = gesture.release(e.timeStamp);
     if (!wasEngaged) return; // never left the y-axis (or a plain tap) — nothing to spring back
     if (committed) {
       const dir = dx < 0 ? 1 : -1;
@@ -222,7 +222,7 @@
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
     /* Vertical scrolling stays native; only the horizontal component reaches the swipe
        pager's touch handlers. */
-    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
   }
   /* While a week re-fetch is in flight the pane dims — the "working on it" cue the locked
      nav arrows alone don't give. Pure opacity: cheap, and zeroed by reduced motion. */

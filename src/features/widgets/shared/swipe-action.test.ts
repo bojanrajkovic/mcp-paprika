@@ -208,6 +208,45 @@ describe("createSwipeAction — click suppression", () => {
   });
 });
 
+describe("createSwipeAction — release edge cases", () => {
+  it("does not commit when the row was disabled before the release", () => {
+    const commit = vi.fn();
+    const swipe = createSwipeAction(leftConfig);
+    const node = fakeNode();
+    const action = swipe(node as unknown as HTMLElement, fakeParams({ commit }));
+    node.listeners.get("pointerdown")!(pointerEvent({ clientX: 0, timeStamp: 0 }) as unknown as Event);
+    node.listeners.get("pointermove")!(pointerEvent({ clientX: -90, timeStamp: 10 }) as unknown as Event);
+    action.update(fakeParams({ commit, enabled: false }));
+    node.listeners.get("pointerup")!(pointerEvent({ clientX: -90, timeStamp: 10 }) as unknown as Event);
+    vi.advanceTimersByTime(200);
+    expect(commit).not.toHaveBeenCalled();
+    expect(node.style.transform).toBe("");
+  });
+
+  it("clears the inline transition once the commit lands", () => {
+    const swipe = createSwipeAction(rightConfig);
+    const node = fakeNode();
+    swipe(node as unknown as HTMLElement, fakeParams());
+    node.listeners.get("pointerdown")!(pointerEvent({ clientX: 0, timeStamp: 0 }) as unknown as Event);
+    node.listeners.get("pointermove")!(pointerEvent({ clientX: 90, timeStamp: 10 }) as unknown as Event);
+    node.listeners.get("pointerup")!(pointerEvent({ clientX: 90, timeStamp: 10 }) as unknown as Event);
+    vi.advanceTimersByTime(130);
+    expect(node.style.transition).toBe("");
+  });
+
+  it("does not swallow a click that arrives long after the drag", () => {
+    const swipe = createSwipeAction(leftConfig);
+    const node = fakeNode();
+    swipe(node as unknown as HTMLElement, fakeParams());
+    node.listeners.get("pointerdown")!(pointerEvent({ clientX: 0, timeStamp: 0 }) as unknown as Event);
+    node.listeners.get("pointermove")!(pointerEvent({ clientX: -30, timeStamp: 10 }) as unknown as Event);
+    node.listeners.get("pointerup")!(pointerEvent({ clientX: -30, timeStamp: 10 }) as unknown as Event);
+    const preventDefault = vi.fn();
+    node.listeners.get("click")!({ preventDefault, stopPropagation: vi.fn(), timeStamp: 5000 } as unknown as Event);
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+});
+
 describe("createSwipeAction — cancel never commits", () => {
   it("settles back on a pointercancel without calling commit", () => {
     const commit = vi.fn();

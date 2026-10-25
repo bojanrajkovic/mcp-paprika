@@ -2,25 +2,25 @@
  * The touch-gesture recognizer CORE shared by the pantry's swipe-to-remove, the grocery
  * checklist's swipe-to-check, and the meal-week-planner's day pager. It owns the
  * slop gate, the optional dominant-axis lock, drag tracking, the distance-or-flick commit
- * decision, and cancel/abandon discipline — the mechanics that were hand-rolled three times and
- * drifted (PR #29's review caught the pager missing a guard the pantry version already had).
+ * decision, and cancel/abandon discipline, so a platform quirk is handled once for all three.
  *
  * Deliberately DOM- and framework-agnostic: pantry/grocery drive it from `PointerEvent`, the
  * pager from `TouchEvent` (it needs `touches.length` for its multi-touch check) — forcing one
- * event model onto all three would be a bigger change than the ticket asks for. A caller feeds
+ * event model onto all three isn't worth the churn. A caller feeds
  * raw `(x, y, t)` samples from whichever event it has; the DOM wiring (pointer capture, which
  * pointer/touch owns the gesture, `touchend` vs `pointerup`) and the gesture RESPONSE (row
  * reveal, armed pop + haptic, sweep-off, day-pane translate, spring-back) stay per-widget.
  *
- * `direction`/`resist`/`armPx`/`flick` differ per caller by design (the ticket's own example:
- * 56px/0.35 vs 80px/0.8) — `SWIPE_SLOP_PX` is the one constant genuinely identical across all
- * three today. Two deliberate consolidations onto the already-hardened pantry algorithm ride
- * along: velocity is always the RECENT (last-sample) rate rather than the pager's old
- * elapsed-average, and `cancel()` never commits — a caller that previously routed a cancel event
- * through its commit path (grocery's `pointercancel`) is fixed by construction.
+ * `direction`/`resist`/`armPx`/`flick` differ per caller by design (the pager's 56px/0.35 vs the
+ * pantry's 80px/0.8) — `SWIPE_SLOP_PX` is the one constant identical across all three. Velocity is
+ * the RECENT (last-sample) rate, not an elapsed average, and it goes stale: a drag that pauses for
+ * more than `FLICK_STALE_MS` before release is not a flick. `cancel()` never commits, so a cancel
+ * event can't reach a commit path.
  */
 
 export const SWIPE_SLOP_PX = 8;
+/** A move sample older than this at release no longer counts toward a flick. */
+export const FLICK_STALE_MS = 100;
 
 export interface SwipeConfig {
   /** "x": ignore vertical movement entirely (a row swipe; CSS `touch-action: pan-y` already owns
@@ -54,7 +54,8 @@ export interface SwipeRecognizer {
   readonly dx: number;
   start(x: number, y: number, t: number): void;
   move(x: number, y: number, t: number): void;
-  release(): SwipeRelease;
+  /** `t` is the release timestamp; with it, a drag that paused before release can't flick-commit. */
+  release(t?: number): SwipeRelease;
   /** Resets with no commit — the one path for a `pointercancel`/`touchcancel` and a multi-touch
    *  abort alike. */
   cancel(): void;
@@ -128,8 +129,9 @@ export function createSwipeRecognizer(config: SwipeConfig): SwipeRecognizer {
       lastT = t;
       dx = config.resist(rawDx);
     },
-    release() {
+    release(t) {
       const wasEngaged = engaged;
+      if (t !== undefined && t - lastT > FLICK_STALE_MS) vx = 0;
       const committed =
         engaged &&
         signOk(dx) &&

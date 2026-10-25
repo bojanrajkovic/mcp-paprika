@@ -48,6 +48,9 @@ export function createSwipeAction(config: SwipeActionConfig) {
     const gesture = createSwipeRecognizer(config);
     let armed = false;
     let suppressClick = false; // a drag's release also synthesizes a click — swallow that one
+    // The synthetic click follows the release at once; a flag older than this is stale (the browser
+    // didn't synthesize one) and must not eat the row's next real activation.
+    let suppressUntil = 0;
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     // True from a committed release until commit() actually fires. gesture.release() resets
     // gesture.active synchronously, well before the eased commit transform finishes and commit()
@@ -69,6 +72,7 @@ export function createSwipeAction(config: SwipeActionConfig) {
       if (!p.enabled || gesture.active || committing || !e.isPrimary || e.button !== 0) return;
       clearTimeout(settleTimer);
       node.style.transition = "";
+      suppressClick = false;
       gesture.start(e.clientX, e.clientY, e.timeStamp);
       try {
         node.setPointerCapture(e.pointerId);
@@ -103,15 +107,19 @@ export function createSwipeAction(config: SwipeActionConfig) {
         node.style.transition = "";
       }, motion(200));
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
       if (!gesture.active) return;
-      const { committed, wasEngaged } = gesture.release();
+      const release = gesture.release(e.timeStamp);
+      const wasEngaged = release.wasEngaged;
+      // The row can be disabled between its last move and the release (it was just marked).
+      const committed = release.committed && p.enabled;
       p.drag(false);
       setArmed(false);
       if (config.suppressClick) {
         // A release over a control (a hidden/visible action button) also fires a click; a real
         // drag's release must not double as an activation.
         suppressClick = wasEngaged;
+        suppressUntil = e.timeStamp + 500;
       }
       if (committed) {
         // Ease to the commit transform, then commit — the visual settles (or exits) before the
@@ -121,6 +129,7 @@ export function createSwipeAction(config: SwipeActionConfig) {
         committing = true;
         settleTimer = setTimeout(() => {
           committing = false;
+          node.style.transition = ""; // a row that stays mounted keeps its own CSS transitions
           p.commit();
         }, motion(130));
       } else if (wasEngaged) {
@@ -130,7 +139,7 @@ export function createSwipeAction(config: SwipeActionConfig) {
       }
     };
     const click = (e: MouseEvent) => {
-      if (suppressClick) {
+      if (suppressClick && !(e.timeStamp > suppressUntil)) {
         e.preventDefault();
         e.stopPropagation();
       }
