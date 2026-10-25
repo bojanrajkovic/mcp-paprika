@@ -39,9 +39,20 @@ import { buildWidgetPreviewRouter } from "../src/transport/widget-preview.js";
 // Sample payloads — representative structured-output results per widget STATE,
 // so the index can render each with a click. Shapes mirror `shared/server-types.ts`;
 // UIDs are readable placeholders (never validated at render time), photos are null
-// (the preview shim can't proxy `ui://` reads), and dates sit around mid-2026 so the
-// pantry/meal-week relative-date states show.
+// (the preview shim can't proxy `ui://` reads), and the pantry/meal-week dates are relative to
+// the day the server starts, so the expiry badges and the week navigation always have a live
+// "today" to work against.
 // ---------------------------------------------------------------------------
+
+// A local YYYY-MM-DD date `offset` days from today.
+const isoDay = (offset: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  const pad = (n: number): string => n.toString().padStart(2, "0");
+  return `${d.getFullYear().toString()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+// Offset from today to this week's Monday.
+const MONDAY = -((new Date().getDay() + 6) % 7);
 
 const recipeRow = (
   uid: string,
@@ -240,7 +251,7 @@ const PANTRY = {
       quantity: "1 pint",
       aisle: "Dairy & Eggs",
       inStock: true,
-      expirationDate: "2026-07-04",
+      expirationDate: isoDay(3),
     },
     {
       uid: "p4",
@@ -248,7 +259,7 @@ const PANTRY = {
       quantity: "1 tub",
       aisle: "Dairy & Eggs",
       inStock: true,
-      expirationDate: "2026-06-20",
+      expirationDate: isoDay(-10),
     },
     { uid: "p5", ingredient: "Egg yolks", quantity: null, aisle: "Dairy & Eggs", inStock: false, expirationDate: null },
   ],
@@ -292,11 +303,11 @@ const MENU_EMPTY = { uid: "menu-empty", name: "Blank Menu", days: 3, notes: "", 
 
 // --- meal-week ---------------------------------------------------------------
 const WEEK = {
-  weekStart: "2026-06-29",
+  weekStart: isoDay(MONDAY),
   meals: [
     {
       uid: "w1",
-      date: "2026-06-29",
+      date: isoDay(MONDAY),
       name: "Overnight oats",
       recipeUid: null,
       typeUid: "mt-breakfast",
@@ -305,7 +316,7 @@ const WEEK = {
     },
     {
       uid: "w2",
-      date: "2026-07-01",
+      date: isoDay(MONDAY + 2),
       name: "Eggs Benedict",
       recipeUid: "recipe-eggs-benedict",
       typeUid: "mt-breakfast",
@@ -314,7 +325,7 @@ const WEEK = {
     },
     {
       uid: "w3",
-      date: "2026-07-01",
+      date: isoDay(MONDAY + 2),
       name: "Roast chicken",
       recipeUid: "recipe-roast-chicken",
       typeUid: "mt-dinner",
@@ -323,7 +334,7 @@ const WEEK = {
     },
     {
       uid: "w4",
-      date: "2026-07-03",
+      date: isoDay(MONDAY + 4),
       name: "Buttermilk pancakes",
       recipeUid: null,
       typeUid: "mt-breakfast",
@@ -333,7 +344,7 @@ const WEEK = {
   ],
   mealTypes: MEAL_TYPES,
 };
-const WEEK_EMPTY = { weekStart: "2026-06-29", meals: [], mealTypes: MEAL_TYPES };
+const WEEK_EMPTY = { weekStart: isoDay(MONDAY), meals: [], mealTypes: MEAL_TYPES };
 
 // --- recipe-browser ----------------------------------------------------------
 const BROWSE_LIST = { context: { source: "list" }, total: 4, items: LIBRARY };
