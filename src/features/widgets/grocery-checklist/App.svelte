@@ -26,7 +26,7 @@
     GroceryItemRow,
     GroceryListReadStructured,
   } from "../shared/server-types.js";
-  import { createSwipeRecognizer } from "../shared/swipe-gesture.js";
+  import { createSwipeAction } from "../shared/swipe-action.js";
 
   // A checklist row: the server's structured grocery item (B1 — a rename of its fields breaks this
   // widget at compile time) plus transient per-row UI flags.
@@ -64,6 +64,10 @@
   // which replaces its button — grocery's checkbox stays fully live either way). Detected the same
   // way pantry does: the host's declared capability, falling back to a coarse-pointer media query.
   let touchDevice = $state(false);
+  // The row past the commit threshold (the reveal's armed pop), mirroring pantry's armedUid.
+  let armedUid = $state<string | null>(null);
+  // The row mid-drag (the lift shadow), mirroring pantry's draggingUid.
+  let draggingUid = $state<string | null>(null);
 
   const DEBOUNCE_MS = 300;
   const lastTap = new Map<string, number>(); // uid -> performance.now(), for the per-row flap-guard
@@ -327,70 +331,22 @@
   }
 
   // Swipe-right to mark purchased, on touch hosts only, additive to the tap (the checkbox stays live
-  // either way — unlike pantry's swipe, this never replaces the primary affordance). Mirrors pantry's
-  // swipe with the sign flipped: "complete" reads as a rightward gesture, "remove" as leftward. The
-  // gesture math is the shared recognizer; this action owns only the DOM wiring.
-  function swipe(
-    node: HTMLElement,
-    param: { enabled: boolean; commit: () => void },
-  ) {
-    let p = param;
-    const gesture = createSwipeRecognizer({
-      axis: "x",
-      direction: "right",
-      resist: (raw) => Math.max(0, Math.min(120, raw)),
-      armPx: 80,
-    });
-    const down = (e: PointerEvent) => {
-      if (!p.enabled || gesture.active) return;
-      gesture.start(e.clientX, e.clientY, e.timeStamp);
-      try {
-        node.setPointerCapture(e.pointerId);
-      } catch {
-        // untrusted/synthetic pointers (tests) have no capturable id; bubbling still delivers moves
-      }
-    };
-    const move = (e: PointerEvent) => {
-      if (!gesture.active) return;
-      if (!p.enabled) {
-        // item got marked mid-drag — abandon the gesture
-        node.style.transform = "";
-        gesture.cancel();
-        return;
-      }
-      gesture.move(e.clientX, e.clientY, e.timeStamp);
-      // Resist past the commit threshold so the row can't be dragged fully away — enough to reveal the
-      // action, not slide the row off. The row stays opaque; the action shows behind it.
-      node.style.transform = `translateX(${gesture.dx.toString()}px)`;
-    };
-    const up = () => {
-      if (!gesture.active) return;
-      const { committed } = gesture.release();
-      node.style.transform = "";
-      if (committed) p.commit();
-    };
-    const cancel = () => {
-      // The browser took the gesture (a scroll won) — never commit from a cancel.
-      if (!gesture.active) return;
-      gesture.cancel();
-      node.style.transform = "";
-    };
-    node.addEventListener("pointerdown", down);
-    node.addEventListener("pointermove", move);
-    node.addEventListener("pointerup", up);
-    node.addEventListener("pointercancel", cancel);
-    return {
-      update(next: { enabled: boolean; commit: () => void }) {
-        p = next;
-      },
-      destroy() {
-        node.removeEventListener("pointerdown", down);
-        node.removeEventListener("pointermove", move);
-        node.removeEventListener("pointerup", up);
-        node.removeEventListener("pointercancel", cancel);
-      },
-    };
-  }
+  // either way — unlike pantry's swipe, this never replaces the primary affordance). createSwipeAction
+  // is the pointer wiring + physics pantry's swipe-to-remove shares (armed pop + haptic, drag shadow,
+  // flick shortcut, weighted settle); only the direction, the 0..120 resistance
+  // clamp, and the commit transform are grocery-specific. commitTransform is "" (ease back to rest)
+  // rather than pantry's exit translate: the row stays in the list and sinks in place via
+  // animate:flip, so there's nothing to sweep toward. suppressClick is omitted too — the row IS the
+  // button, and onRow's tapThrottled debounce already no-ops a synthetic click landing right after
+  // commit() calls the same handler.
+  const swipe = createSwipeAction({
+    axis: "x",
+    direction: "right",
+    resist: (raw) => Math.max(0, Math.min(120, raw)),
+    armPx: 80,
+    flick: { px: 40, velocityPxMs: 0.8 },
+    commitTransform: "",
+  });
 </script>
 
 <WidgetShell dark={theme === "dark"}>
@@ -483,13 +439,20 @@
     <div class="row-wrap" animate:flip={{ duration: motion(220) }}>
       {#if touchDevice && !item.purchased}
         <!-- Revealed behind the row as it swipes right (mirrors pantry's iOS-Mail-style reveal). -->
-        <div class="swipe-mark" aria-hidden="true">Purchased</div>
+        <div
+          class="swipe-mark"
+          class:armed={armedUid === item.uid}
+          aria-hidden="true"
+        >
+          <span class="swipe-label">Purchased</span>
+        </div>
       {/if}
       <button
         class="row"
         class:done={item.purchased}
         class:busy={item._busy}
         class:err={item._error}
+        class:dragging={draggingUid === item.uid}
         role="checkbox"
         aria-checked={item.purchased}
         aria-busy={item._busy}
@@ -497,6 +460,12 @@
         use:swipe={{
           enabled: touchDevice && !item.purchased,
           commit: () => onRow(item),
+          drag: (on) => {
+            draggingUid = on ? item.uid : null;
+          },
+          arm: (on) => {
+            armedUid = on ? item.uid : null;
+          },
         }}
       >
         <span class="box">
@@ -642,6 +611,20 @@
     font-weight: 700;
     letter-spacing: 0.02em;
   }
+  /* The label pops as the drag crosses the commit threshold — "release does it now". CSS-driven,
+     so WidgetShell's reduced-motion block collapses the pop to an instant state change. Mirrors
+     pantry's swipe-action label pop. */
+  .swipe-label {
+    display: inline-block;
+    opacity: 0.85;
+    transition:
+      transform 0.12s cubic-bezier(0.25, 1, 0.5, 1),
+      opacity 0.12s;
+  }
+  .swipe-mark.armed .swipe-label {
+    transform: scale(1.08);
+    opacity: 1;
+  }
 
   .row {
     position: relative;
@@ -687,6 +670,14 @@
     18% {
       background: var(--danger-bg);
     }
+  }
+  /* Mid-drag the row genuinely floats above the reveal, so it earns the one shadow: a soft cast
+     off its leading (left) edge onto the uncovered action — mirrors pantry's rightward-cast
+     shadow, since this row drags right instead of left. will-change only while dragging, never
+     at rest. */
+  .row.dragging {
+    will-change: transform;
+    box-shadow: -12px 0 16px -10px oklch(0 0 0 / 0.22);
   }
 
   .box {
