@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { okAsync, ResultAsync } from "neverthrow";
+import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError, DiskCacheDescriptor } from "../cache/disk-cache.js";
@@ -9,12 +9,9 @@ import type { OAuthClient, OAuthToken } from "./types.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { OAuthClientSchema, OAuthTokenSchema } from "./types.js";
 
-/** `tryPut`'s outcome: buffered (caller owes a `flush()`), or rejected at the cap. */
-export type TryPutOutcome = { readonly ok: true } | { readonly ok: false; readonly currentCount: number };
-
 /**
- * The OAuth client cache, with an atomic registration cap on top of the generic
- * `DiskCache`. OAuth clients aren't a Paprika entity, so this subclass lives with the
+ * The OAuth client cache. Registration is capped through the generic
+ * `DiskCache.tryPut`. OAuth clients aren't a Paprika entity, so this subclass lives with the
  * auth module (its sole owner) rather than in `cache/` — the same co-location rule
  * that puts `RecipeDiskCache` in `domains/recipe/disk.ts`.
  */
@@ -25,33 +22,6 @@ export class OAuthClientDiskCache extends DiskCache<OAuthClient> {
       parse: (raw) => OAuthClientSchema.parse(raw),
       getKey: (c) => c.clientId,
       ...(opts.log !== undefined ? { log: opts.log } : {}),
-    });
-  }
-
-  /**
-   * Atomically counts the current OAuth-client population and puts `client`
-   * only if it fits under `maxClients`. Both the count and the put happen
-   * inside the same mutex acquisition, so concurrent callers can't both
-   * observe count=49, both pass the check, and both write — the race window
-   * that a separate count-then-put would leave open.
-   *
-   * Returns:
-   * - `{ ok: true }` if the client was buffered (caller still owes a `flush()`).
-   * - `{ ok: false, currentCount }` if the cap is already reached; nothing
-   *   was written.
-   *
-   * Re-puts of an existing `clientId` skip the count check — they replace
-   * an entry rather than adding one.
-   */
-  tryPut(client: OAuthClient, maxClients: number): ResultAsync<TryPutOutcome, CacheError> {
-    return this._locked<TryPutOutcome>("tryPut", () => {
-      const alreadyKnown = this._knownKeys.has(client.clientId);
-      const currentCount = this._knownKeys.size;
-      if (!alreadyKnown && currentCount >= maxClients) {
-        return okAsync<TryPutOutcome, CacheError>({ ok: false, currentCount });
-      }
-      this._putInner(client);
-      return okAsync<TryPutOutcome, CacheError>({ ok: true });
     });
   }
 }

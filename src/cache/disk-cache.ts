@@ -112,6 +112,9 @@ export interface DiskCacheDescriptor<T> {
   readonly getKey: (item: T) => string;
 }
 
+/** `tryPut`'s outcome: buffered (caller owes a `flush()`), or rejected at the cap. */
+export type TryPutOutcome = { readonly ok: true } | { readonly ok: false; readonly currentCount: number };
+
 export class DiskCache<T> {
   protected readonly _subdir: string;
   protected readonly _parse: (raw: unknown) => T;
@@ -229,6 +232,24 @@ export class DiskCache<T> {
     return this._locked("put", () => {
       this._putInner(item);
       return okAsync<void, CacheError>(undefined);
+    });
+  }
+
+  /**
+   * Put `item` only if the population fits under `max`. The count and the put happen
+   * under one mutex hold, so concurrent callers can't both see `max - 1`, both pass,
+   * and both write. A re-put of a known key replaces rather than adds, so it skips
+   * the check. The caller still owes a `flush()`.
+   */
+  tryPut(item: T, max: number): ResultAsync<TryPutOutcome, CacheError> {
+    return this._locked<TryPutOutcome>("tryPut", () => {
+      const alreadyKnown = this._knownKeys.has(this._getKey(item));
+      const currentCount = this._knownKeys.size;
+      if (!alreadyKnown && currentCount >= max) {
+        return okAsync<TryPutOutcome, CacheError>({ ok: false, currentCount });
+      }
+      this._putInner(item);
+      return okAsync<TryPutOutcome, CacheError>({ ok: true });
     });
   }
 
