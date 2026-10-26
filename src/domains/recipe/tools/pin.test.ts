@@ -34,7 +34,6 @@ describe("pin_recipe tool", () => {
     await kh.callTool("pin_recipe", { uid: recipe.uid });
 
     expect(kh.state().recipe.store.get(recipe.uid)?.isPinned).toBe(true);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("carries structuredContent with the pinned recipe's machine fields", async () => {
@@ -113,7 +112,6 @@ describe("unpin_recipe tool", () => {
     await kh.callTool("unpin_recipe", { uid: recipe.uid });
 
     expect(kh.state().recipe.store.get(recipe.uid)?.isPinned).toBe(false);
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("carries structuredContent with the unpinned recipe's machine fields", async () => {

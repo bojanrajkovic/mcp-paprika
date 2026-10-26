@@ -21,7 +21,7 @@ import { SILENT_LOG } from "../utils/log.js";
 import { buildAuthContext } from "./build.js";
 import { buildAuthCaches } from "./disk.js";
 
-const msw = useMswServer([], { onUnhandledRequest: "bypass" });
+const msw = useMswServer([], { onUnhandledFrame: "bypass" });
 const xdg = useXdgIsolation("mcp-paprika-build-auth");
 
 beforeEach(async () => {

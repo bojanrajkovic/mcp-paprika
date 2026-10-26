@@ -8,7 +8,7 @@ import type { Recipe } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeReadOutputSchema, recipeToReadStructured, resolveCategoryRefs } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured, resolveCategoryRefs } from "../recipe-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // Strict (exported for direct Zod-validation tests). The `categories` field left

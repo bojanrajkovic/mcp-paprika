@@ -4,6 +4,7 @@ import { gunzipSync } from "node:zlib";
 import { BrokenCircuitError } from "cockatiel";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import { ResultAsync } from "neverthrow";
 import pino from "pino";
 import type { Logger } from "pino";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -492,8 +493,8 @@ describe("PaprikaClient", () => {
     // Non-retryable statuses (400, 403, 404) not retried
   });
 
-  describe("getRecipes() fetches multiple recipes with concurrency limiting", () => {
-    it("returns Recipe[] with one entry per provided UID, in same order", async () => {
+  describe("fetchRecipes() fetches each recipe independently, with concurrency limiting", () => {
+    it("returns one result per provided UID, in the same order", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
           return HttpResponse.json({ result: makeSnakeCaseRecipe(params["uid"] as string) });
@@ -501,23 +502,19 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const recipes = (await client.getRecipes(["uid-1", "uid-2", "uid-3"]))._unsafeUnwrap();
+      const recipes = (await ResultAsync.combine(client.fetchRecipes(["uid-1", "uid-2", "uid-3"])))._unsafeUnwrap();
 
-      expect(recipes).toHaveLength(3);
-      expect(recipes[0]!.name).toBe("Recipe uid-1");
-      expect(recipes[1]!.name).toBe("Recipe uid-2");
-      expect(recipes[2]!.name).toBe("Recipe uid-3");
+      expect(recipes.map((r) => r.name)).toEqual(["Recipe uid-1", "Recipe uid-2", "Recipe uid-3"]);
     });
 
-    it("getRecipes([]) returns [] with zero HTTP requests", async () => {
+    it("fetchRecipes([]) returns no results and makes zero HTTP requests", () => {
       // Deliberately NOT registering any handler — if a request is made, MSW returns 500
       const client = new PaprikaClient("test@example.com", "password");
-      const recipes = (await client.getRecipes([]))._unsafeUnwrap();
 
-      expect(recipes).toStrictEqual([]);
+      expect(client.fetchRecipes([])).toStrictEqual([]);
     });
 
-    it("at most 5 getRecipe() calls execute simultaneously", async () => {
+    it("at most 5 recipe fetches execute simultaneously", async () => {
       let inFlight = 0;
       let peakInFlight = 0;
 
@@ -533,12 +530,12 @@ describe("PaprikaClient", () => {
 
       const uids = Array.from({ length: 10 }, (_, i) => `uid-${i.toString()}`);
       const client = new PaprikaClient("test@example.com", "password");
-      await client.getRecipes(uids);
+      await Promise.all(client.fetchRecipes(uids));
 
       expect(peakInFlight).toBeLessThanOrEqual(5);
     });
 
-    it("a single recipe fetch error errs the entire getRecipes()", async () => {
+    it("a failed fetch errs only its own result; siblings still resolve ok", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/good-uid/`, () => {
           return HttpResponse.json({ result: makeSnakeCaseRecipe("good-uid") });
@@ -549,9 +546,10 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
+      const [good, bad] = await Promise.all(client.fetchRecipes(["good-uid", "bad-uid"]));
 
-      const error = (await client.getRecipes(["good-uid", "bad-uid"]))._unsafeUnwrapErr();
-      expect(error).toBeInstanceOf(PaprikaAPIError);
+      expect(good?._unsafeUnwrap().name).toBe("Recipe good-uid");
+      expect(bad?._unsafeUnwrapErr()).toBeInstanceOf(PaprikaAPIError);
     });
   });
 

@@ -3,7 +3,7 @@ import type { Result } from "neverthrow";
 import type { HasSynced } from "../../kernel/registry.js";
 import type { CategoryUid, RecipeUid } from "./ids.js";
 import type { Photo } from "./photo/types.js";
-import type { RecipeRow } from "./recipe-markdown.js";
+import type { RecipeRow } from "./recipe-helpers.js";
 import type { Recipe } from "./types.js";
 
 /**
@@ -50,17 +50,18 @@ export interface RecipeApi extends HasSynced {
    * The `RecipeUid`s of every (non-trashed) recipe filed under a category. Recipe
    * owns categories, so this membership query lives here; meal's `search_meal_history`
    * "class" filter calls it. Mirrors the live
-   * `store.getAll().filter(r => r.categories.includes(uid)).map(r => r.uid)` set.
+   * `store.getActive().filter(r => r.categories.includes(uid)).map(r => r.uid)` set.
    */
   recipesInCategory(categoryUid: CategoryUid): ReadonlyArray<RecipeUid>;
   /**
    * Every non-trashed recipe. The bulk enumeration discover's cold-start index
    * rebuild walks; recipe owns recipes, so it exposes this read rather than handing
-   * out the store. Mirrors `store.getAll()` (excludes trashed).
+   * out the store. Mirrors `store.getActive()`. Named distinctly from a plain
+   * `getAll` so the trash exclusion is honest in the name, not a silent filter.
    */
-  getAll(): ReadonlyArray<Recipe>;
-  /** The non-trashed recipe count — discover's `index.size < recipes.size * 0.9` rebuild guard. */
-  size(): number;
+  getActive(): ReadonlyArray<Recipe>;
+  /** The non-trashed recipe count — discover's `index.size < recipes.activeSize() * 0.9` rebuild guard. */
+  activeSize(): number;
   /**
    * Project recipes into their list-row payloads, resolving each recipe's category
    * names through recipe's own category store. Discover's `discover_recipes` uses it

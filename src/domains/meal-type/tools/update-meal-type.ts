@@ -7,7 +7,7 @@ import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
-import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../ids.js";
 import { mealTypeStartGuard } from "./guards.js";
 import { buildMealTypeRows, listMealTypesOutputSchema } from "./list-meal-types.js";
@@ -37,10 +37,7 @@ export const updateMealTypeTool = defineTool(
         .regex(/^#[0-9A-Fa-f]{6}$/, "Color must be a 6-digit hex code like #4A90D9")
         .optional()
         .describe("New display color as a 6-digit hex code, e.g. #4A90D9 (omit to leave unchanged)"),
-      position: z
-        .number()
-        .int()
-        .min(1)
+      position: integer({ min: 1 })
         .optional()
         .describe("New 1-based position in the meal-type order (omit to leave unchanged)"),
     },

@@ -5,7 +5,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
 import { menuReadOutputSchema, menuToReadStructured, resolveRecipeRows } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -25,7 +25,7 @@ export const createMenuTool = defineTool(
       "Optionally set the day span (default 1) and free-text notes.",
     inputSchema: {
       name: z.string().min(1).describe("Menu name (required)"),
-      days: z.number().int().positive().optional().default(1).describe("Day span of the menu (>= 1, default 1)"),
+      days: integer({ min: 1 }).optional().default(1).describe("Day span of the menu (>= 1, default 1)"),
       notes: z.string().optional().default("").describe("Optional free-text notes for the menu"),
     },
     outputSchema: menuReadOutputSchema,

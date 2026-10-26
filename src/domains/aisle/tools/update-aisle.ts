@@ -7,7 +7,7 @@ import type { Aisle } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
-import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { AisleUidSchema } from "../ids.js";
 import { aisleStartGuard } from "./guards.js";
 import { buildAisleRows, listAislesOutputSchema } from "./list-aisles.js";
@@ -31,10 +31,7 @@ export const updateAisleTool = defineTool(
     inputSchema: {
       uid: AisleUidSchema.describe("UID of the aisle to update (from list_aisles)"),
       name: z.string().min(1).optional().describe("New display name (omit to leave unchanged)"),
-      position: z
-        .number()
-        .int()
-        .min(1)
+      position: integer({ min: 1 })
         .optional()
         .describe("New 1-based position in the aisle order (omit to leave unchanged)"),
     },

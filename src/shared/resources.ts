@@ -10,7 +10,7 @@ const RESOURCES_READ_METHOD = "resources/read";
 
 /** Which resource family served the read — the registration name; custom-prefixed (no semconv equivalent). */
 const ATTR_RESOURCE_KIND = "mcp_paprika.resource.kind";
-/** The exact URI read — SPAN-ONLY (per-entity, high-cardinality); tells a ui://widget read from a paprika://…/photo one. */
+/** The exact URI read — SPAN-ONLY (per-entity, high-cardinality); tells a ui://widget read from a ui://recipe/{uid}/photo one. */
 const ATTR_RESOURCE_URI = "mcp_paprika.resource.uri";
 /** Served payload size in bytes — the server-side transfer-size proxy (a ~500 KB widget HTML vs a small read). */
 const ATTR_RESOURCE_BYTES = "mcp_paprika.resource.bytes";

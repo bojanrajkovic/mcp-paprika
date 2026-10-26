@@ -16,6 +16,7 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { AuthCache } from "./disk.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
+import { clientIpSource } from "../transport/client-ip.js";
 import { unwrapAtBoot } from "../utils/errors.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
@@ -98,7 +99,7 @@ export async function buildAuthContext(
     publicUrl: config.oauth.publicUrl,
     clientId: config.oauth.clientId,
     clientSecret: config.oauth.clientSecret,
-    trustProxy: config.oauth.trustProxy,
+    clientIp: clientIpSource(config.oauth.trustProxy, config.oauth.clientIpHeader),
     allowlist: config.oauth.allowlist,
     redirectAllowlist,
   };

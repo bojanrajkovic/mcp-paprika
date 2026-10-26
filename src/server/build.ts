@@ -1,15 +1,16 @@
 import { createRequire } from "node:module";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Logger } from "pino";
+import pino, { type Logger } from "pino";
 
 import type { PaprikaConfig } from "../utils/config.js";
 import type { Notifier } from "./notifier.js";
 
 import { PaprikaClient } from "../paprika/client.js";
+import { setDiagLogTarget } from "../telemetry/scope.js";
 import { BRANDING, iconSvgDataUri } from "../utils/branding.js";
 import { unwrapAtBoot } from "../utils/errors.js";
-import { createLogger } from "../utils/log.js";
+import { createLogger, type LoggerOptions, resolvePrimaryDestination } from "../utils/log.js";
 import { getCacheDir } from "../utils/xdg.js";
 
 const SERVER_NAME = "mcp-paprika";
@@ -23,7 +24,7 @@ const SERVER_VERSION = _pkg.version;
 const SERVER_INSTRUCTIONS = `mcp-paprika bridges your Paprika recipe library: recipes, the pantry, grocery lists, meal planning, and menus. Tools read as plain commands in verb_entity order (read_recipe, list_pantry_items, update_grocery_item), so most acts are guessable from the name.
 
 Orientation:
-- Recipes, grocery lists, and menus are exposed both as tools (which you call) and as paprika://… resources the user can attach. The read_* tools fetch one by UID on your own, without waiting for an attach.
+- Recipes, grocery lists, and menus are read with the read_* tools (read_recipe, read_grocery_list, read_menu), which fetch one by UID directly.
 - Finding recipes: search_recipes matches by name / ingredient / description and also filters by an ingredient list and by max prep / cook / total time — pass any one of those. discover_recipes (present only when semantic search is configured) handles natural-language queries.
 - Open-ended edits vs. named acts: the update_* tools change free-form content fields only. The acts a user names have their own verbs — rate_recipe, favorite_recipe / unfavorite_recipe, pin_recipe / unpin_recipe, categorize_recipe, mark_grocery_item_purchased, mark_pantry_item_out_of_stock / restock_pantry_item, reschedule_meal, move_menu_item. Trying to set one of those through update_* is rejected; reach for the verb.
 - Recipe trash is the one reversible delete, spoken in steps: trash_recipe moves a recipe to the trash, restore_recipe brings it back, and purge_recipe permanently removes one already trashed. Deleting anything else (grocery items, pantry items, menu items, lists, aisles, meal types) is immediate and permanent.
@@ -44,14 +45,21 @@ export async function buildInfraBase(
   config: PaprikaConfig,
   notifier: Notifier,
 ): Promise<{ log: Logger; client: PaprikaClient; cacheDir: string }> {
-  const log = createLogger({
+  const logOptions: LoggerOptions = {
     transport: config.transport,
     notifier,
     level: config.logging.level,
     notifyLevel: config.logging.notifyLevel,
     pretty: config.logging.pretty,
     ...(config.logging.file !== undefined ? { file: config.logging.file } : {}),
-  });
+  };
+  // Resolved once and shared: under stdio a second resolve would open a second
+  // handle on the same log file.
+  const primary = resolvePrimaryDestination(logOptions);
+  const log = createLogger(logOptions, primary);
+  // OTel diag lines follow the app logs to the same stream and level, through a bare
+  // logger so the app logger's notifier fan-out never forwards them to MCP clients.
+  setDiagLogTarget(pino({ base: null, level: logOptions.level }, primary));
   log.info({ transport: config.transport }, "mcp-paprika starting");
 
   log.info("authenticating with paprika");

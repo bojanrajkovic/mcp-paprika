@@ -4,8 +4,8 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, structuredResult } from "../../../shared/tools.js";
-import { listRecipesOutputSchema, recipeToRow } from "../recipe-markdown.js";
+import { errorResult, integer, structuredResult } from "../../../shared/tools.js";
+import { listRecipesOutputSchema, recipeToRow } from "../recipe-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
@@ -21,7 +21,7 @@ export const listRecipesTool = defineTool(
     description:
       "List all recipes with pagination. Returns recipe summaries sorted alphabetically. Use offset/limit to paginate through the full library. Response includes total recipe count.",
     inputSchema: {
-      offset: z.number().int().nonnegative().optional().default(0).describe("Number of recipes to skip (default: 0)"),
+      offset: integer({ min: 0 }).optional().default(0).describe("Number of recipes to skip (default: 0)"),
       limit: z
         .number()
         .int()
@@ -39,7 +39,7 @@ export const listRecipesTool = defineTool(
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
     return async (args) => {
-      const all = ctx.state.recipe.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
+      const all = ctx.state.recipe.store.getActive().sort((a, b) => a.name.localeCompare(b.name));
       const total = all.length;
       const page = all.slice(args.offset, args.offset + args.limit);
 

@@ -49,7 +49,6 @@ function makeStubNotifier(resolveWith: "resolve" | "reject" = "resolve"): {
     spy.mockRejectedValue(new Error("notifier failed"));
   }
   const notifier: Notifier = {
-    resourceListChanged: vi.fn(),
     loggingMessage: spy as Notifier["loggingMessage"],
   };
   return { notifier, spy };

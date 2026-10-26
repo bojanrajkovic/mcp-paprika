@@ -1,9 +1,11 @@
-import { okAsync, ResultAsync } from "neverthrow";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 
 import type { SyncContribution } from "../../../kernel/registry.js";
-import type { RecipeSyncResult } from "../../../paprika/sync-types.js";
+import type { RecipeSyncResult, SyncError } from "../../../paprika/sync-types.js";
 import type { RecipeState } from "../module.js";
 import type { Recipe } from "../types.js";
+
+import { PartialSyncError } from "../../../paprika/sync-types.js";
 
 /**
  * Recipe sync — the bespoke DIFF-AND-FETCH reconcile. NOT `syncReplaceAllEntity`:
@@ -11,13 +13,15 @@ import type { Recipe } from "../types.js";
  * classifies the canonical list against the local uid→hash index and only the
  * added/changed UIDs are fetched. Pending-write filtering (#57) and
  * observation-clearing-by-hash (#92) protect in-flight writes from being rolled
- * back by a concurrent sync cycle.
+ * back by a concurrent sync cycle. Each fetched recipe lands on its own, so a
+ * rate-limited cold start keeps (and flushes) what it got and errs with a
+ * `PartialSyncError` the loop retries sooner (#483).
  *
  * `core` tier — runs first and in dependency order; `markSynced()` mid-cycle keeps
  * recipe tools available even if a later core reconcile (category) fails. Returns a
- * `RecipeSyncResult` for the `sync:complete` notifier path AND emits `recipe-changed`/
- * `recipe-removed` on the kernel re-index seam for discover (the two consumers are
- * independent — see the emit comment).
+ * `RecipeSyncResult` (counted in the sync change metrics) AND emits `recipe-changed`/
+ * `recipe-removed` on the kernel re-index seam for discover (the two are independent —
+ * see the emit comment).
  */
 export function recipesSync(state: RecipeState): SyncContribution<RecipeState, never> {
   return {
@@ -57,33 +61,59 @@ export function recipesSync(state: RecipeState): SyncContribution<RecipeState, n
           });
         })
         .andThen((acc) => {
-          // Fetch recipes if any exist
           const uidsToFetch = [...acc.filteredAdded, ...acc.filteredChanged];
           if (uidsToFetch.length === 0) {
             return okAsync({ ...acc, fetchedRecipes: [] as Array<Recipe> });
           }
           log.debug({ count: uidsToFetch.length }, "fetching recipes");
-          return client.getRecipes(uidsToFetch).map((fetchedRecipes) => {
-            log.debug({ count: fetchedRecipes.length }, "fetched recipes");
-            return { ...acc, fetchedRecipes };
-          });
-        })
-        .andThen((acc) =>
-          // Write fetched recipes to cache and store, mirroring each recipe into
-          // the store as ITS put lands (the puts run concurrently; a failed put
-          // leaves its recipe out of both, and the cycle aborts). The per-recipe
-          // tie is load-bearing: `cache.put` eagerly advances the uid→hash index,
-          // so a put that succeeded while a SIBLING failed would otherwise leave
-          // the index current but the store stale — and the next cycle's diff,
-          // trusting the index, would never re-fetch it (Codex P1, PR #270).
-          ResultAsync.combine(
-            acc.fetchedRecipes.map((recipe) =>
+          // Each recipe lands on its own — fetch, cache put, then store set — and the
+          // batch settles without short-circuiting, so one rate-limited fetch can't
+          // discard its siblings (#483). The put→set tie is load-bearing: `cache.put`
+          // eagerly advances the uid→hash index, so a put that landed with its store
+          // set skipped would leave the index current but the store stale — and the
+          // next cycle's diff, trusting the index, would never re-fetch it (Codex P1,
+          // PR #270).
+          const landings = client.fetchRecipes(uidsToFetch).map((fetch) =>
+            fetch.andThen((recipe) =>
               cache.put(recipe).map(() => {
                 store.set(recipe);
+                return recipe;
               }),
             ),
-          ).map(() => acc),
-        )
+          );
+          return ResultAsync.fromSafePromise(Promise.all(landings)).andThen((settled) => {
+            const fetchedRecipes: Array<Recipe> = [];
+            const failures: Array<SyncError> = [];
+            for (const landing of settled) {
+              landing.match(
+                (recipe) => {
+                  fetchedRecipes.push(recipe);
+                },
+                (error) => {
+                  failures.push(error);
+                },
+              );
+            }
+            log.debug({ count: fetchedRecipes.length }, "fetched recipes");
+
+            const [firstFailure] = failures;
+            if (firstFailure === undefined) return okAsync({ ...acc, fetchedRecipes });
+            if (fetchedRecipes.length === 0) return errAsync(firstFailure);
+
+            // Partial progress: index what landed and flush it now, because the kernel
+            // skips its own flush for an aborted cycle. The next cycle's diff then asks
+            // only for what's still missing — even after a restart.
+            log.warn({ landed: fetchedRecipes.length, failed: failures.length }, "recipe fetch partially failed");
+            ctx.infra.indexEvents.emit({ type: "recipe-changed", recipes: fetchedRecipes });
+            return cache
+              .flush()
+              .andThen(() =>
+                errAsync(
+                  new PartialSyncError({ landed: fetchedRecipes.length, failed: failures.length, cause: firstFailure }),
+                ),
+              );
+          });
+        })
         .andThen((acc) =>
           // Remove deleted recipes, deleting each from the store as ITS cache
           // remove lands — the same per-UID tie as the puts above: `cache.remove`
@@ -115,7 +145,6 @@ export function recipesSync(state: RecipeState): SyncContribution<RecipeState, n
           // Recipe sync is complete; mark the store as synced now so recipe tools
           // remain available even if category or pantry sync subsequently fails.
           store.markSynced();
-          store.setLastSyncedAt();
 
           // Partition fetched recipes: added vs updated.
           const addedSet = new Set(filteredAdded);

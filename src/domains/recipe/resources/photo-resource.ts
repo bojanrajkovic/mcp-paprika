@@ -11,7 +11,6 @@ import { fetchImageBytes } from "../../../shared/photo-fetch.js";
 import { resourceNotFound } from "../../../shared/resources.js";
 import { MAX_PHOTO_DIMENSION, resizePhotoJpeg } from "../photo-helpers.js";
 import { PhotoByteCache } from "../photo/byte-cache.js";
-import { recipePhotoResourceUri } from "../recipe-markdown.js";
 
 /** Per-session resized-bytes cache cap (see {@link PhotoByteCache}). */
 const PHOTO_BYTE_CACHE_MAX = 64;
@@ -100,16 +99,6 @@ export const recipePhotoResource = defineResource<RecipeState, never>(
     // One cache per session registration: regenerable bytes, evict-oldest on overflow.
     const cache = new PhotoByteCache(PHOTO_BYTE_CACHE_MAX);
 
-    // Bare template carries the `list` (one entry per recipe that has a photo, the
-    // primary URI); the catch-all alias routes sized/indexed reads to the same handler.
-    const list = async () => ({
-      resources: ctx.state.recipe.store
-        .getAll()
-        .map((recipe) => ({ recipe, uri: recipePhotoResourceUri(recipe) }))
-        .filter((r): r is { recipe: Recipe; uri: string } => r.uri !== null)
-        .map(({ recipe, uri }) => ({ uri, name: `${recipe.name} photo`, mimeType: "image/jpeg" })),
-    });
-
     const read = async (uri: URL, variables: Variables): Promise<ReadResourceResult> => {
       const uid = variables["uid"] as RecipeUid;
 
@@ -179,6 +168,7 @@ export const recipePhotoResource = defineResource<RecipeState, never>(
       return blobResult(uri, resized);
     };
 
-    return { list, read };
+    // No `list`: widgets fetch a photo by URI, and nothing browses or attaches them.
+    return { read };
   },
 );

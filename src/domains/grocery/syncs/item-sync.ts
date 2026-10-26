@@ -7,14 +7,11 @@ import { groceryItemsEqual } from "../grocery-item/types.js";
 
 /**
  * Grocery-item sync — replace-all with pending-write filtering via
- * `syncReplaceAllEntity`. No `afterLoad` (unlike grocery lists): only the parent
- * grocery-list store carries `lastSyncedAt`.
+ * `syncReplaceAllEntity`.
  *
  * `core` tier — runs after grocery lists (children reference parent), inside the
- * outer try that aborts the cycle on failure. Grocery items are inlined in the
- * `paprika://grocery-list/{uid}` resource, so this returns a `GroceryItemSyncResult`
- * to be emitted as `sync:complete` (a child-item change invalidates the parent
- * resource).
+ * outer try that aborts the cycle on failure. Returns a `GroceryItemSyncResult` so
+ * its changes are counted in the cycle's change-count metrics.
  */
 export function groceryItemsSync(state: GroceryState): SyncContribution<GroceryState, "aisle" | "pantry"> {
   return {

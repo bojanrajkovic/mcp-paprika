@@ -56,17 +56,17 @@ spec:
             - name: MCP_OIDC_PRESET
               value: google
             # Leave false unless a trusted reverse proxy (nginx, Tailscale
-            # Funnel, Cloudflare) sanitizes X-Forwarded-For before this pod.
-            # Setting true without a sanitizing proxy lets clients spoof IPs
-            # and bypass DCR rate limiting. See docs/configuration.md § "Trust proxy".
+            # Funnel, Cloudflare) sits in front of this pod. Setting true without
+            # one lets clients spoof IPs and bypass DCR rate limiting. Behind
+            # Cloudflare, also set MCP_CLIENT_IP_HEADER=cf-connecting-ip.
+            # See docs/oauth-configuration.md § "Trust proxy".
             - name: MCP_TRUST_PROXY
               value: "false"
-            # Let AI photo generation (generate_recipe_photo) reuse the embeddings
-            # provider's API key + base URL instead of a separate IMAGE_GEN_API_KEY.
-            # Requires features.embeddings to be configured (creds live in the Secret).
-            # See docs/configuration.md § image generation.
-            - name: IMAGE_GEN_REUSE_EMBEDDINGS_CREDS
-              value: "true"
+            # AI photo generation (generate_recipe_photo) is on whenever
+            # OPENAI_API_KEY (in the Secret) is set. Uncomment to keep it off.
+            # See docs/configuration.md § AI features.
+            # - name: IMAGE_GEN_ENABLED
+            #   value: "false"
             # OpenTelemetry: traces + metrics export over OTLP/HTTP to the cluster
             # collector (Grafana Alloy). The image's --import preload makes the OTel
             # ESM loader hook effective here. See docs/telemetry.md.

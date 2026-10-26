@@ -61,3 +61,7 @@ A `/oauth/callback` allowlist denial redirects back with a generic `error_descri
 ### Auth owns its persistence; `cache/` must not depend on `auth/`
 
 `disk.ts` holds the auth cache layer — `OAuthClientDiskCache` (the atomic DCR registration cap), the `oauthTokens` descriptor, and `buildAuthCaches` (the narrow `AuthCache` the HTTP transport stands up). They subclass/compose the generic `DiskCache` from `../cache/`, co-located here because auth is their sole owner — the same rule that keeps `RecipeDiskCache` in `domains/recipe/disk.ts`. The dependency runs one way (`auth/` → `cache/`), so `cache/` stays a generic primitive importing nothing from `auth/`. Don't move these back into `cache/` or import an OAuth schema there: it reintroduces the `auth ⇄ cache` cycle this split removed.
+
+### Compare subjects only through `subjectMatches`
+
+An HTTP session belongs to the subject whose token opened it (`src/transport/session-rehydration.ts`, `session-store.ts`). `bearerAuth` stashes the verified `AuthInfo` on the Hono context; `requestSubject` (`subject.ts`) reads the `sub` back out, and `subjectMatches` decides whether that request may use a session. Don't compare `sub` values by hand elsewhere: if subject representation changes, `subject.ts` is the one place it has to land. Under `MCP_DEV_AUTH_BYPASS` both sides are `undefined`, and `undefined` matches only `undefined`, so a bypass session can never be ridden by a real token or the reverse.

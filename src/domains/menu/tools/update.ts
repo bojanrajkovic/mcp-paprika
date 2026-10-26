@@ -9,6 +9,7 @@ import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
   errorResult,
+  integer,
   resolveLookup,
   resolveOrPick,
   structuredResult,
@@ -42,7 +43,7 @@ export const updateMenuTool = defineTool(
         textExample: "Thanksgiving Dinner",
       }),
       name: z.string().min(1).optional().describe("New menu name"),
-      days: z.number().int().positive().optional().describe("New day span (>= 1)"),
+      days: integer({ min: 1 }).optional().describe("New day span (>= 1)"),
       notes: z.string().optional().describe("New free-text notes"),
     },
     outputSchema: menuReadOutputSchema,

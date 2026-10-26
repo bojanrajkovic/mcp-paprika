@@ -51,7 +51,7 @@ interface IMockPaprikaClient {
   authenticate(): ResultAsync<void, PaprikaClientError>;
   listRecipes(): ResultAsync<Array<RecipeEntry>, PaprikaClientError>;
   getRecipe(uid: string): ResultAsync<Recipe, PaprikaClientError>;
-  getRecipes(uids: ReadonlyArray<string>): ResultAsync<Array<Recipe>, PaprikaClientError>;
+  fetchRecipes(uids: ReadonlyArray<string>): ReadonlyArray<ResultAsync<Recipe, PaprikaClientError>>;
   listCategories(): ResultAsync<Array<Category>, PaprikaClientError>;
   listAisles(): ResultAsync<Array<Aisle>, PaprikaClientError>;
   listPantry(): ResultAsync<Array<PantryItem>, PaprikaClientError>;
@@ -134,8 +134,8 @@ class MockPaprikaClient implements IMockPaprikaClient {
     return okAsync(this.mockRecipe);
   }
 
-  getRecipes(_uids: ReadonlyArray<string>): ResultAsync<Array<Recipe>, PaprikaClientError> {
-    return okAsync([this.mockRecipe]);
+  fetchRecipes(uids: ReadonlyArray<string>): ReadonlyArray<ResultAsync<Recipe, PaprikaClientError>> {
+    return uids.map(() => okAsync(this.mockRecipe));
   }
 
   listCategories(): ResultAsync<Array<Category>, PaprikaClientError> {
@@ -211,12 +211,12 @@ async function main(): Promise<void> {
     pretty: true,
   }).child({ component: "e2e" });
 
-  // Force features OFF regardless of ambient env: OPENAI_API_KEY / IMAGE_GEN_API_KEY
+  // Force features OFF regardless of ambient env: OPENAI_API_KEY
   // would otherwise enable embeddings/image-gen and make discover + generate_recipe_photo
   // try to hit the network. Dropping the `features` key (it is optional) leaves
   // `config.features?.…` undefined, so both feature modules build null components and
   // their tools register-but-decline. The test isolates XDG_CONFIG_HOME so no real
-  // config.json bleeds in; env still supplies the (mock-satisfied) Paprika credentials.
+  // .env bleeds in; env still supplies the (mock-satisfied) Paprika credentials.
   const { features: _features, ...config } = loadConfig().match(
     (c) => c,
     (err) => {

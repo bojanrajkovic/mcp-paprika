@@ -19,27 +19,23 @@
  *   server.use(...oidcStub.handlers);
  *
  * @example  Unhandled-request bypass (e.g. HTTP e2e tests that only intercept some routes)
- *   const server = useMswServer({ onUnhandledRequest: "bypass" });
+ *   const server = useMswServer({ onUnhandledFrame: "bypass" });
  */
 
-import type { HttpHandler } from "msw";
+import type { HttpHandler, UnhandledFrameHandle } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll } from "vitest";
 
 export type UseMswServerOptions = {
   /**
-   * MSW `onUnhandledRequest` policy. Defaults to "error" (MSW default) so
+   * MSW `onUnhandledFrame` policy. Defaults to "error" (MSW default) so
    * unexpected requests surface immediately as test failures. Set to "bypass"
    * when the test intentionally lets some requests through to real network
    * (or when another layer handles unmatched routes). A callback may be passed
    * for host-scoped policies (e.g. `failLoudOnUpstream` — error on real upstream
    * hosts, bypass the in-process localhost server the test drives).
    */
-  readonly onUnhandledRequest?:
-    | "error"
-    | "warn"
-    | "bypass"
-    | ((request: Request, print: { warning: () => void; error: () => void }) => void);
+  readonly onUnhandledFrame?: UnhandledFrameHandle;
   /**
    * Optional callback run in `afterEach` alongside `server.resetHandlers()`.
    * Useful for calling `oidcStub.resetOverrides()` in tests that share a
@@ -50,7 +46,7 @@ export type UseMswServerOptions = {
 
 /**
  * Creates an MSW `setupServer()` instance and wires it into vitest's lifecycle:
- * - `beforeAll` — starts the server (with optional `onUnhandledRequest` policy)
+ * - `beforeAll` — starts the server (with optional `onUnhandledFrame` policy)
  * - `afterEach`  — resets handlers (and calls `onReset` if provided)
  * - `afterAll`   — stops the server
  *
@@ -61,11 +57,11 @@ export function useMswServer(
   initialHandlers: ReadonlyArray<HttpHandler> = [],
   options: UseMswServerOptions = {},
 ): ReturnType<typeof setupServer> {
-  const { onUnhandledRequest, onReset } = options;
+  const { onUnhandledFrame, onReset } = options;
   const server = setupServer(...initialHandlers);
 
   beforeAll(() => {
-    server.listen(onUnhandledRequest !== undefined ? { onUnhandledRequest } : undefined);
+    server.listen(onUnhandledFrame !== undefined ? { onUnhandledFrame } : undefined);
   });
 
   afterEach(() => {

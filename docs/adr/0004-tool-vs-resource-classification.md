@@ -1,6 +1,6 @@
 # ADR-0004: Classify every entity as Content, Data, or Reference to decide its MCP surface
 
-**Status:** Accepted (2026-06-01, backfilled)
+**Status:** Superseded in part (2026-10-24) by [ADR-0026](0026-drop-user-attached-resource-surface.md) — the resource-classification decision below (Content entities get a `paprika://` resource; a `read_X` tool is not redundant with that resource) is retired: the MCP surface is now tools + widgets, with no user-attached resource surface. The Data (tools-only) and Reference (list + managed lifecycle) guidance still stands. Originally Accepted (2026-06-01, backfilled).
 **Amended:** 2026-06-04 ([#224](https://github.com/bojanrajkovic/mcp-paprika/issues/224)) — meal types gain an auto-create write path; see the amendment under Rejected alternatives.
 **Amended:** 2026-06-06 ([#245](https://github.com/bojanrajkovic/mcp-paprika/issues/245)) — the sole-surface premise is now general, and Reference-class entities carry a managed lifecycle; see [ADR-0017](0017-reference-catalog-management-tools.md).
 

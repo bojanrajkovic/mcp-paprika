@@ -11,6 +11,7 @@ import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
   errorResult,
+  integer,
   resolveLookup,
   resolveOrPick,
   structuredResult,
@@ -28,11 +29,9 @@ import { menuStartGuard } from "./guards.js";
 // stored custom name on a recipe-linked item would never render. The z.union of
 // two `.strict()` objects rejects extra keys (including supplying BOTH recipe_uid
 // and name) at the Zod boundary, surfacing the constraint structurally.
-const menuItemDay = z
-  .number()
-  .int()
-  .positive()
-  .describe("1-indexed day within the menu. Days beyond the menu's current span auto-extend the menu.");
+const menuItemDay = integer({ min: 1 }).describe(
+  "1-indexed day within the menu. Days beyond the menu's current span auto-extend the menu.",
+);
 const menuItemType = mealTypeSpecSchema.describe(
   'Meal type. Pick exactly one shape: {"name": "Dinner"} | {"uid": "<MealType UID>"} | {"builtin": 2}.',
 );

@@ -50,7 +50,7 @@ export function contentHash(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
-import { mkdir, readFile, rename, cp, open } from "node:fs/promises";
+import { cp, mkdir, open, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 
 import { trace } from "@opentelemetry/api";

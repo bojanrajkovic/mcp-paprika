@@ -52,7 +52,7 @@ describe("restore_recipe tool", () => {
     expect(kh.client().saveRecipe).toHaveBeenCalledOnce();
   });
 
-  it("already-active no-op: local store already agrees, no save, no notification", async () => {
+  it("already-active no-op: local store already agrees, no save", async () => {
     const live = makeRecipe({ name: "Active Recipe", inTrash: false });
     vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(live));
     kh.seed({ recipes: [live] }); // store holds it as active — exact match, reconcile is a no-op
@@ -61,8 +61,6 @@ describe("restore_recipe tool", () => {
 
     expect(getJson(result)).toMatchObject({ uid: live.uid, name: "Active Recipe" });
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
-    // hash + inTrash match the local store → reconcile is a no-op → no notification
-    expect(kh.resourceListChanged()).not.toHaveBeenCalled();
     // The already-active no-op is a SUCCESS carrying the live recipe, not an error.
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toMatchObject({ uid: live.uid, name: "Active Recipe" });
@@ -83,7 +81,6 @@ describe("restore_recipe tool", () => {
     expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
     // Local store healed to authoritative truth.
     expect(kh.state().recipe.store.get(uid)?.inTrash).toBe(false);
-    expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
   });
 
   it("not-found: a 404 with no local copy returns not-found, no save", async () => {
@@ -112,7 +109,6 @@ describe("restore_recipe tool", () => {
 
     expect(text).toContain("No recipe found");
     expect(kh.state().recipe.store.get(uid)).toBeUndefined(); // phantom dropped
-    expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
@@ -129,8 +125,6 @@ describe("restore_recipe tool", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
-    // unknown truth — leave local state untouched
-    expect(kh.resourceListChanged()).not.toHaveBeenCalled();
   });
 
   it("cold-start guard: an unsynced store returns the cold-start message without fetching", async () => {

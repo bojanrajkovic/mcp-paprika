@@ -1,11 +1,6 @@
 import { context, type Histogram, SpanStatusCode } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
-import {
-  BasicTracerProvider,
-  InMemorySpanExporter,
-  type ReadableSpan,
-  SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import { InMemorySpanExporter, type ReadableSpan, SimpleSpanProcessor, TracerProvider } from "@opentelemetry/sdk-trace";
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,7 +11,7 @@ import { startOperation, traceResultAsync } from "./trace-result.js";
 // `fn` must parent under the helper's span.
 const contextManager = new AsyncLocalStorageContextManager();
 const exporter = new InMemorySpanExporter();
-const provider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] });
+const provider = new TracerProvider({ spanProcessors: [new SimpleSpanProcessor({ exporter })] });
 const tracer = provider.getTracer("trace-result-test");
 
 beforeAll(() => {

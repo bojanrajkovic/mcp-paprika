@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { structuredResult } from "../../../shared/tools.js";
+import { integer, structuredResult } from "../../../shared/tools.js";
 import { CategoryUidSchema } from "../ids.js";
 import { categoryStartGuard } from "./guards.js";
 
@@ -16,7 +16,7 @@ export const listCategoriesOutputSchema = z.object({
     z.object({
       uid: CategoryUidSchema,
       name: z.string(),
-      recipeCount: z.number().int().nonnegative(),
+      recipeCount: integer({ min: 0 }),
       parentUid: CategoryUidSchema.nullable().describe("Parent category UID, or null for a top-level category."),
     }),
   ),
@@ -30,14 +30,14 @@ export const listCategoriesOutputSchema = z.object({
  */
 export function buildCategoryRows(state: RecipeState): z.infer<typeof listCategoriesOutputSchema>["items"] {
   const categories = state.category.store.getAll();
-  const recipes = state.recipe.store.getAll();
+  const recipes = state.recipe.store.getActive();
 
   // Initialize every category with count 0 so categories with no recipes still appear.
   const countMap = new Map<string, number>();
   for (const category of categories) {
     countMap.set(category.uid, 0);
   }
-  // Increment for each non-trashed recipe's categories (getAll() excludes trashed).
+  // Increment for each non-trashed recipe's categories (getActive() excludes trashed).
   for (const recipe of recipes) {
     for (const uid of recipe.categories) {
       countMap.set(uid, (countMap.get(uid) ?? 0) + 1);

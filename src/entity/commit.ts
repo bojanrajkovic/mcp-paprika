@@ -12,7 +12,7 @@ import type { EntityStore } from "./store.js";
  *     → cache.flush() (exactly once per cache)
  *     → on any failure: clearPending(every marked UID), surface the error
  *     → store set/delete
- *     → onCommitted?() (resourceListChanged / index events — caller-composed)
+ *     → onCommitted?() (index events — caller-composed)
  *     → finish() (the single notifySync nudge)
  *
  * The pending mark shields a just-written UID from a sync cycle that reads a
@@ -83,7 +83,7 @@ export const deletedFlagOp = <T extends { readonly uid: UID; readonly deleted: b
 
 /** The per-commit side effects, supplied by the owning domain. */
 export interface CommitEffects {
-  /** Post-apply, pre-`finish` effects (`resourceListChanged()`, index events). Never runs on the failure path. */
+  /** Post-apply, pre-`finish` effects (index events). Never runs on the failure path. */
   readonly onCommitted?: () => void;
   /** The tail nudge, exactly once per commit: `() => notifySyncBestEffort(client, log)`. */
   readonly finish: () => ResultAsyncType<void, never>;

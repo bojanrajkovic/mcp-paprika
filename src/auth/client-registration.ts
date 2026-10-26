@@ -12,7 +12,11 @@
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
-import { InvalidClientMetadataError, InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import {
+  InvalidClientMetadataError,
+  InvalidRequestError,
+  type OAuthError,
+} from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { errAsync, type ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
@@ -22,7 +26,7 @@ import type { OAuthMetadataValidationError } from "./errors.js";
 import type { OAuthClient } from "./types.js";
 
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
-import { OAuthClientNotFoundError, OAuthTokenError, unwrapOAuth } from "./errors.js";
+import { cacheUnavailable, OAuthClientNotFoundError, unwrapOAuth } from "./errors.js";
 import { dcrRegistrations } from "./telemetry.js";
 import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 
@@ -96,13 +100,12 @@ export class DiskClientRegistrationStore {
     private readonly _maxClients: number = Number.POSITIVE_INFINITY,
   ) {}
 
-  /**
-   * Map a cache failure to the wire-safe `server_error`, logging the real
-   * failure for the operator first.
-   */
-  private _registryUnavailable(e: CacheError): ReturnType<typeof OAuthTokenError.serverError> {
-    this.log.error({ err: e.cause, context: e.context }, "client registry cache failure");
-    return OAuthTokenError.serverError("client registry unavailable");
+  /** Map a cache failure to the wire-safe `server_error` — see {@link cacheUnavailable}. */
+  private _registryUnavailable(e: CacheError): OAuthError {
+    return cacheUnavailable(this.log, e, {
+      logMessage: "client registry cache failure",
+      wireMessage: "client registry unavailable",
+    });
   }
 
   /**

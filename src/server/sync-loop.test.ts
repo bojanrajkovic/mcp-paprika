@@ -1,77 +1,68 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AnySyncResult } from "../paprika/sync-types.js";
-
-import { makeStubNotifier } from "../../test/support/tool-test-utils.js";
-import { notifyFromResults, runSyncLoop } from "./sync-loop.js";
+import {
+  BOOT_PACE,
+  MAX_CONVERGING_MISSES,
+  nextSyncPace,
+  PARTIAL_RETRY_MS,
+  runSyncLoop,
+  type SyncPace,
+} from "./sync-loop.js";
 
 // ---------------------------------------------------------------------------
-// notifyFromResults
+// nextSyncPace
 // ---------------------------------------------------------------------------
 
-describe("notifyFromResults", () => {
-  it("fires resourceListChanged once per qualifying result", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
+describe("nextSyncPace", () => {
+  const INTERVAL = 15 * 60_000;
+  const steady: SyncPace = { kind: "steady" };
 
-    const results = [
-      { changeType: "recipes", changes: { added: [{}], updated: [], removedUids: [] } },
-      { changeType: "grocery-lists", changes: { added: [], updated: [{}], removedUids: [] } },
-      { changeType: "grocery-items", changes: { added: [], updated: [], removedUids: ["x"] } },
-      { changeType: "menus", changes: { added: [{}], updated: [], removedUids: [] } },
-      { changeType: "menu-items", changes: { added: [], updated: [{}], removedUids: [] } },
-    ] as unknown as ReadonlyArray<AnySyncResult>;
-
-    notifyFromResults(results, notifier);
-
-    expect(resourceListChanged).toHaveBeenCalledTimes(5);
+  it("starts converging, so a zero-progress first loop cycle after boot still retries fast", () => {
+    expect(nextSyncPace(BOOT_PACE, "core_aborted", INTERVAL)).toEqual({
+      pace: { kind: "converging", misses: 1 },
+      delayMs: PARTIAL_RETRY_MS,
+    });
   });
 
-  it("skips a pantry changeType entirely", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
-
-    const results = [
-      { changeType: "pantry", changes: { added: [{}], updated: [{}], removedUids: ["y"] } },
-    ] as unknown as ReadonlyArray<AnySyncResult>;
-
-    notifyFromResults(results, notifier);
-
-    expect(resourceListChanged).not.toHaveBeenCalled();
+  it("settles to the interval after an ok cycle", () => {
+    expect(nextSyncPace(BOOT_PACE, "ok", INTERVAL)).toEqual({ pace: steady, delayMs: INTERVAL });
   });
 
-  it("skips a qualifying changeType whose changes are all empty", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
-
-    const results = [
-      { changeType: "recipes", changes: { added: [], updated: [], removedUids: [] } },
-      { changeType: "grocery-lists", changes: { added: [], updated: [], removedUids: [] } },
-    ] as unknown as ReadonlyArray<AnySyncResult>;
-
-    notifyFromResults(results, notifier);
-
-    expect(resourceListChanged).not.toHaveBeenCalled();
+  it("starts converging on a partial cycle, even from steady", () => {
+    expect(nextSyncPace(steady, "core_partial", INTERVAL)).toEqual({
+      pace: { kind: "converging", misses: 0 },
+      delayMs: PARTIAL_RETRY_MS,
+    });
   });
 
-  it("fans out nothing for an empty results array", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
-
-    notifyFromResults([], notifier);
-
-    expect(resourceListChanged).not.toHaveBeenCalled();
+  it("resets the miss count when a converging cycle makes progress again", () => {
+    expect(nextSyncPace({ kind: "converging", misses: 2 }, "core_partial", INTERVAL).pace).toEqual({
+      kind: "converging",
+      misses: 0,
+    });
   });
 
-  it("fires for added, updated, and removedUids independently", () => {
-    const { notifier, resourceListChanged } = makeStubNotifier();
+  it(`falls back to the interval on the ${MAX_CONVERGING_MISSES.toString()}th zero-progress pass in a row`, () => {
+    let pace: SyncPace = { kind: "converging", misses: 0 };
+    const delays: number[] = [];
+    for (let i = 0; i < MAX_CONVERGING_MISSES; i++) {
+      const next = nextSyncPace(pace, "core_aborted", INTERVAL);
+      pace = next.pace;
+      delays.push(next.delayMs);
+    }
+    expect(delays).toEqual([...Array<number>(MAX_CONVERGING_MISSES - 1).fill(PARTIAL_RETRY_MS), INTERVAL]);
+    expect(pace).toEqual(steady);
+  });
 
-    // One result with only `added`, one with only `updated`, one with only `removedUids`
-    const results = [
-      { changeType: "recipes", changes: { added: [{}], updated: [], removedUids: [] } },
-      { changeType: "menus", changes: { added: [], updated: [{}], removedUids: [] } },
-      { changeType: "menu-items", changes: { added: [], updated: [], removedUids: ["z"] } },
-    ] as unknown as ReadonlyArray<AnySyncResult>;
+  it.each(["core_aborted", "flush_failed", "contract_breach"] as const)(
+    "keeps the interval for a %s cycle when steady, so an outage doesn't speed the loop up",
+    (outcome) => {
+      expect(nextSyncPace(steady, outcome, INTERVAL)).toEqual({ pace: steady, delayMs: INTERVAL });
+    },
+  );
 
-    notifyFromResults(results, notifier);
-
-    expect(resourceListChanged).toHaveBeenCalledTimes(3);
+  it("never retries slower than the interval itself", () => {
+    expect(nextSyncPace(steady, "core_partial", 30_000).delayMs).toBe(30_000);
   });
 });
 
@@ -81,7 +72,7 @@ describe("notifyFromResults", () => {
 
 describe("runSyncLoop", () => {
   it("calls onCycle immediately (before the first interval elapses)", async () => {
-    const onCycle = vi.fn().mockResolvedValue(undefined);
+    const onCycle = vi.fn().mockResolvedValue("ok");
 
     const handle = runSyncLoop(onCycle, 10_000); // very long interval — should never fire
 
@@ -93,7 +84,7 @@ describe("runSyncLoop", () => {
   });
 
   it("calls onCycle multiple times across short intervals then stabilises after stop()", async () => {
-    const onCycle = vi.fn().mockResolvedValue(undefined);
+    const onCycle = vi.fn().mockResolvedValue("ok");
 
     const INTERVAL = 15; // ms — small enough to get ≥2 calls quickly
 
@@ -132,7 +123,7 @@ describe("runSyncLoop", () => {
   });
 
   it("stop() aborts the in-flight wait promptly, with no extra onCycle calls", async () => {
-    const onCycle = vi.fn().mockResolvedValue(undefined);
+    const onCycle = vi.fn().mockResolvedValue("ok");
 
     const INTERVAL = 500; // long interval — only the immediate call should fire
 

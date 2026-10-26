@@ -119,7 +119,7 @@ export interface GeneratedPhoto {
 // the served model id are best-effort (logged, not load-bearing).
 const photoResponseSchema = z.object({
   model: z.string().optional(),
-  usage: z.object({ cost: z.number() }).partial().passthrough().optional(),
+  usage: z.object({ cost: z.number() }).partial().loose().optional(),
   choices: z
     .array(
       z.object({

@@ -13,6 +13,7 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { ResourceDef, ResourceSpec } from "./resource.js";
 import type { ToolDef, ToolSpec } from "./tool.js";
 
+import { PartialSyncError } from "../paprika/sync-types.js";
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { errorTypeName, startOperation, tracePromise, traceResultAsync } from "../telemetry/trace-result.js";
 
@@ -36,8 +37,8 @@ import { errorTypeName, startOperation, tracePromise, traceResultAsync } from ".
  * checked.
  *
  * `dependsOn` is the single source of truth — its element union is the tools' and
- * hooks' `deps`. A boot pipeline ({@link BootPhase}) sequences side-effects the
- * construction topo-sort cannot express. The sync seam follows the same shape:
+ * hooks' `deps`. A post-sync boot hook ({@link ModuleParts.onIndexReady}) sequences
+ * side-effects the construction topo-sort cannot express. The sync seam follows the same shape:
  * each module contributes a `reconcile` per owned entity, reached through the same
  * {@link BootCtx}, and the kernel drives them — so a central sync needs no
  * global slice over the modules' hidden stores. See {@link SyncContribution} and
@@ -100,7 +101,7 @@ export interface Infra {
   readonly config: PaprikaConfig;
   /**
    * The recipe/category → discover re-index seam: recipe writes and the category
-   * reconcile emit here, and discover's `index` boot hook subscribes. Carried on
+   * reconcile emit here, and discover's `onIndexReady` hook subscribes. Carried on
    * `infra` because there is no dependency edge into discover (its contract is
    * empty by design). See {@link IndexEventEmitter}.
    */
@@ -118,7 +119,7 @@ export interface Infra {
 /**
  * The process-wide context a boot hook receives: the module's own internals
  * (`state`), exactly its declared dependencies' contracts (`deps`), and `infra`.
- * No `server` — boot phases run once per process, before any session exists.
+ * No `server` — boot-time code runs once per process, before any session exists.
  */
 export interface BootCtx<State, Deps extends DomainId> {
   readonly state: State;
@@ -142,14 +143,12 @@ export interface DomainCtx<State, Deps extends DomainId, Writes = Record<never, 
   readonly writes: Writes;
 }
 
-// Post-sync boot hooks. Construction order (topo-sort) handles "built before";
-// the INITIAL sync cycle (the driver below) runs next; THEN these hooks run — so
-// e.g. the vector index builds against already-synced stores. Sync is the driver,
-// not a hook, so the only post-sync phase is `index`; the array keeps the loop
-// shape for future phases.
-export type BootPhase = "index";
-const BOOT_PHASES: ReadonlyArray<BootPhase> = ["index"];
-type BootHooks<State, Deps extends DomainId> = Partial<Record<BootPhase, (ctx: BootCtx<State, Deps>) => Promise<void>>>;
+// Post-sync boot hook (see ModuleParts.onIndexReady below). Construction order
+// (topo-sort) handles "built before"; the INITIAL sync cycle (the driver below)
+// runs next; THEN this hook runs — so e.g. the vector index builds against
+// already-synced stores. Sync is the driver, not a hook. One hook, one consumer
+// (discover) — reintroduce a phase array only when a second post-sync phase
+// actually exists.
 
 /**
  * Sync tier — three buckets the driver runs in order each cycle: reference → core →
@@ -174,8 +173,8 @@ export type SyncTier = "reference" | "core" | "additive";
  * entity via `syncs`. `reconcile` receives the SAME {@link BootCtx} the boot hooks
  * do: its own store/cache via `state`, its declared deps' contracts via `deps`, the
  * Paprika client via `infra.client`. So no central all-stores context is needed. It
- * resolves to an `AnySyncResult` to be emitted as `sync:complete` (recipes/grocery/
- * menus), or `void` for reference/soft entities that emit nothing; an `err` is the
+ * resolves to an `AnySyncResult` carrying the cycle's per-entity changes (recipes/grocery/
+ * menus), or `void` for reference/soft entities that report none; an `err` is the
  * abort signal the driver scopes by tier — a reconcile never
  * throws. `sweep` is the per-store pending-write TTL sweep the driver runs once at
  * end-of-cycle.
@@ -195,7 +194,7 @@ interface ErasedSync {
 
 /**
  * What a module's `.build((state, infra, deps) => …)` callback returns. `api` must satisfy
- * the contract the module registered for its own id; `tools`/`resources`/`onReady`
+ * the contract the module registered for its own id; `tools`/`resources`/`onIndexReady`
  * get a ctx narrowed to `State` + the `dependsOn` tuple — INFERRED, so the author
  * writes no per-module ctx alias; `flush` is optional.
  *
@@ -208,8 +207,9 @@ interface ErasedSync {
  * `resources` is parallel to `tools`: each entry is a `defineResource` {@link ResourceDef}
  * the kernel registers via `resource.register(ctx)`, reading its own data via
  * `ctx.state` and any shared data via `ctx.deps.<id>` contracts. Resources are
- * read-only (Content domains only — recipe, grocery-list, menu — plus the widgets
- * feature), so they never touch `ctx.writes` and most modules supply none.
+ * read-only (the recipe photo proxy and the widgets feature — both `ui://`; ADR-0026
+ * removed the `paprika://` content resources), so they never touch `ctx.writes` and
+ * most modules supply none.
  */
 export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, Writes = Record<never, never>> {
   readonly api: DomainRegistry[Id];
@@ -217,7 +217,8 @@ export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, 
   readonly writes?: Writes;
   readonly resources?: ReadonlyArray<ResourceDef<State, Deps>>;
   readonly syncs?: ReadonlyArray<SyncContribution<State, Deps>>;
-  readonly onReady?: BootHooks<State, Deps>;
+  /** Runs once, after the initial sync cycle (see the boot-hook note above `ModuleParts`). */
+  readonly onIndexReady?: (ctx: BootCtx<State, Deps>) => Promise<void>;
   readonly flush?: () => ResultAsync<void, CacheError>;
 }
 
@@ -251,7 +252,7 @@ interface ErasedBuild {
   readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources?: ReadonlyArray<ErasedResourceDef>;
   readonly syncs?: ReadonlyArray<ErasedSync>;
-  readonly onReady?: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>>;
+  readonly onIndexReady?: (ctx: ErasedBootCtx) => Promise<void>;
   readonly flush?: () => ResultAsync<void, CacheError>;
 }
 
@@ -325,7 +326,7 @@ export function defineModule<Id extends DomainId, const DepList extends Readonly
             tools: parts.tools,
             resources: parts.resources,
             syncs: parts.syncs,
-            onReady: parts.onReady,
+            onIndexReady: parts.onIndexReady,
             flush: parts.flush,
           };
         },
@@ -381,25 +382,36 @@ export interface Kernel {
    * Run ONE sync cycle: reference catalogs first (best-effort), then core (recipe
    * first, then the rest in dependency order; a core `err` aborts), then additive
    * best-effort, then flush + sweep. Never throws.
-   * Returns the results a production wiring emits as `sync:complete` (feeding the
-   * notifier subscriber) — but ONLY for a cycle that completed through flush; an
-   * aborted cycle (a core `err` or a flush error) returns `[]`, so a partial,
-   * un-flushed cycle fans out no resource notification. The initial cycle already
-   * ran at build time (gating the
+   * Returns the cycle's `outcome` plus its per-entity change results, which feed the
+   * change-count metrics. Results come back ONLY for a cycle that completed through
+   * flush; an aborted cycle (a core `err` or a flush error) returns `[]`, so a partial,
+   * un-flushed cycle counts no changes. The interval driver reads `outcome` to pace its
+   * next cycle (`core_partial` retries sooner). The initial cycle already ran at build
+   * time (gating the
    * post-sync hooks); the interval driver calls this on its loop.
    *
    * `trigger` only labels telemetry (the cycle span + duration histogram);
    * behavior is identical. buildKernel's internal initial call passes "boot";
    * every external caller is the interval path and takes the default.
    */
-  syncOnce(trigger?: SyncTrigger): Promise<ReadonlyArray<AnySyncResult>>;
+  syncOnce(trigger?: SyncTrigger): Promise<SyncCycle>;
 }
 
 /** What started a sync cycle — a telemetry label, not a behavioral input. */
 export type SyncTrigger = "boot" | "interval";
 
-/** How a sync cycle ended, as recorded on its span and duration histogram. */
-type SyncOutcome = "ok" | "core_aborted" | "flush_failed" | "contract_breach";
+/**
+ * How a sync cycle ended, as recorded on its span and duration histogram.
+ * `core_partial` is a core abort whose reconcile persisted part of its batch
+ * ({@link PartialSyncError}); `core_aborted` is one that made no progress.
+ */
+export type SyncOutcome = "ok" | "core_partial" | "core_aborted" | "flush_failed" | "contract_breach";
+
+/** One completed `syncOnce`: how it ended, and the results (empty unless it flushed). */
+export interface SyncCycle {
+  readonly outcome: SyncOutcome;
+  readonly results: ReadonlyArray<AnySyncResult>;
+}
 
 const ATTR_SYNC_TRIGGER = "mcp_paprika.sync.trigger";
 const ATTR_SYNC_OUTCOME = "mcp_paprika.sync.outcome";
@@ -439,15 +451,14 @@ interface Built {
   readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources: ReadonlyArray<ErasedResourceDef> | undefined;
   readonly syncs: ReadonlyArray<ErasedSync> | undefined;
-  readonly onReady: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>> | undefined;
+  readonly onIndexReady: ((ctx: ErasedBootCtx) => Promise<void>) | undefined;
 }
 
 /**
  * Build the kernel: (0) construct every module in dependency order — each `.state`
  * factory hydrates its own cache, so "all built" ⇒ "all caches warm"; then (1) run
- * the initial sync cycle; then (2) run the boot phases in order, each to completion
- * before the next. Returns a per-session registrar. Defaults to the self-registered
- * modules.
+ * the initial sync cycle; then (2) run every module's `onIndexReady` hook. Returns
+ * a per-session registrar. Defaults to the self-registered modules.
  */
 export async function buildKernel(
   infra: Infra,
@@ -466,8 +477,8 @@ export async function buildKernel(
   const bootCtxOf = (b: Built): ErasedBootCtx => ({ state: b.state, deps: depsOf(b.dependsOn), infra });
 
   // The boot trace: one root span covering construction → initial sync →
-  // boot phases (the cycle and reconcile spans parent under it via the active
-  // context), with a child per module build. Boot is the one place per-module
+  // the onIndexReady hook (the cycle and reconcile spans parent under it via the
+  // active context), with a child per module build. Boot is the one place per-module
   // timing matters — every .state factory hydrates its disk caches serially in
   // dependency order, so a slow startup names its culprit here. A build or
   // hook that throws (boot fail-fast) ends the open spans
@@ -501,7 +512,7 @@ export async function buildKernel(
         tools: b.tools,
         resources: b.resources,
         syncs: b.syncs,
-        onReady: b.onReady,
+        onIndexReady: b.onIndexReady,
       });
     }
   });
@@ -563,16 +574,16 @@ export async function buildKernel(
       if (sync.sweep !== undefined) sweepers.push(sync.sweep);
     }
   }
-  const syncOnce = async (trigger: SyncTrigger = "interval"): Promise<ReadonlyArray<AnySyncResult>> => {
+  const syncOnce = async (trigger: SyncTrigger = "interval"): Promise<SyncCycle> => {
     // The cycle span parents every reconcile span (and their undici fetch
     // children) via the active context; `finish` is the single end point that
     // stamps the outcome, records the duration histogram, and — only for a
     // cycle that completed through flush — counts the applied changes. The
     // change counters mirror the results contract: an aborted cycle reports
-    // none, exactly as it fans out no notification.
+    // none.
     const cycleSpan = getTracer().startSpan("paprika.sync_cycle", { attributes: { [ATTR_SYNC_TRIGGER]: trigger } });
     const cycleElapsedSeconds = startTimer();
-    const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): ReadonlyArray<AnySyncResult> => {
+    const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): SyncCycle => {
       const elapsedSeconds = cycleElapsedSeconds();
       cycleSpan.setAttribute(ATTR_SYNC_OUTCOME, outcome);
       if (outcome !== "ok") cycleSpan.setStatus({ code: SpanStatusCode.ERROR });
@@ -614,7 +625,7 @@ export async function buildKernel(
       } else {
         infra.log.debug(fields, "sync cycle complete");
       }
-      return results;
+      return { outcome, results };
     };
     return context.with(trace.setSpan(context.active(), cycleSpan), async () => {
       const results: Array<AnySyncResult> = [];
@@ -648,8 +659,10 @@ export async function buildKernel(
           if (coreErr !== undefined) {
             // A core err aborts the cycle: no flush, no sweep, no results — the
             // partially reconciled state stays in memory and the next cycle retries.
+            // A PartialSyncError already persisted its own landed items, so it's
+            // reported apart for the loop to retry sooner.
             infra.log.error({ err: coreErr }, "sync failed");
-            return finish("core_aborted", []);
+            return finish(coreErr instanceof PartialSyncError ? "core_partial" : "core_aborted", []);
           }
         }
         for (const run of additiveSyncs) {
@@ -664,8 +677,8 @@ export async function buildKernel(
         }
         // Only a cycle that reached flush reports results: a core-reconcile err (or
         // a flush error) aborts the cycle. Returning the partially accumulated
-        // `results` for an aborted, un-flushed cycle would fan out a resource
-        // notification for state that never became durable — return `[]` instead.
+        // `results` for an aborted, un-flushed cycle would count changes for state
+        // that never became durable — return `[]` instead.
         return (await flushAll()).match(
           () => {
             let swept = 0;
@@ -688,27 +701,22 @@ export async function buildKernel(
     });
   };
 
-  // Boot: construct → run the INITIAL sync cycle → run post-sync hooks. The initial
-  // cycle gates the hooks, so e.g. the vector `index` builds against already-synced
-  // stores. The interval loop just calls `syncOnce` repeatedly. The startup breadcrumb
-  // (#158) brackets the cycle: a failure logs `sync failed` (error) from the catch above.
+  // Boot: construct → run the INITIAL sync cycle → run the post-sync onIndexReady
+  // hook. The initial cycle gates the hook, so e.g. the vector index builds against
+  // already-synced stores. The interval loop just calls `syncOnce` repeatedly. The
+  // startup breadcrumb (#158) brackets the cycle: a failure logs `sync failed`
+  // (error) from the catch above.
   infra.log.info("running initial sync");
-  // The initial cycle's results are intentionally discarded: at this point no server /
-  // session exists (stdio's ServerRef is unset; HTTP has zero sessions), so a resource
-  // notification would no-op. The interval
-  // driver's immediate first iteration re-syncs and DOES call notifyFromResults once a
-  // session can receive it. If the bootstrap order ever changes so a server exists here,
-  // wire notifyFromResults onto this call too.
+  // The initial cycle's results are intentionally discarded — the interval driver
+  // re-syncs immediately to keep the cache warm, and nothing consumes a cycle's results.
   await inBoot(async () => {
     await syncOnce("boot");
-    for (const phase of BOOT_PHASES) {
-      await tracePromise(getTracer(), `boot.phase ${phase}`, {}, async () => {
-        for (const b of built) {
-          const hook = b.onReady?.[phase];
-          if (hook !== undefined) await hook(bootCtxOf(b));
-        }
-      });
-    }
+    // Span name kept verbatim as "boot.phase index" (pre-collapse dashboards key on it).
+    await tracePromise(getTracer(), "boot.phase index", {}, async () => {
+      for (const b of built) {
+        if (b.onIndexReady !== undefined) await b.onIndexReady(bootCtxOf(b));
+      }
+    });
   });
   bootOp.end();
 

@@ -184,7 +184,7 @@ describe("generate_recipe_photo tool", () => {
   });
 
   it("returns not-configured message when photo-gen client is null (feature gate)", async () => {
-    // Default setup: photographyClient is null (no IMAGE_GEN_API_KEY in test config).
+    // Default setup: photographyClient is null (no OPENAI_API_KEY in test config).
     // No injectPhotographyClient call — the gate fires.
     kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID })], photos: [] });
     const result = await kh.callTool("generate_recipe_photo", { recipe_uid: RECIPE_UID });
@@ -313,7 +313,7 @@ describe("generate_recipe_photo tool", () => {
       .mockReturnValue(errAsync(new PhotographyAPIError("bad key", 401, "https://x/chat/completions")));
     seedAndInject({ generate });
     const result = await kh.callTool("generate_recipe_photo", { recipe_uid: RECIPE_UID });
-    expect(getText(result)).toContain("IMAGE_GEN_API_KEY");
+    expect(getText(result)).toContain("OPENAI_API_KEY");
     expect(result.isError).toBe(true);
   });
 

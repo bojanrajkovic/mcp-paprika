@@ -7,7 +7,6 @@ import type { Logger } from "pino";
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { PaprikaClient } from "../../paprika/client.js";
 import type { PaprikaClientError } from "../../paprika/errors.js";
-import type { Notifier } from "../../server/notifier.js";
 import type { RecipeApi } from "./api.js";
 import type { Category } from "./category/types.js";
 import type { RecipeUid } from "./ids.js";
@@ -29,9 +28,8 @@ import { PhotoUidSchema } from "./ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto, sha256Hex } from "./photo-helpers.js";
 import { PhotoStore } from "./photo/store.js";
 import { photoDiskDescriptor } from "./photo/types.js";
-import { recipeToRow, resolveCategoryRefs } from "./recipe-markdown.js";
+import { recipeToRow, resolveCategoryRefs } from "./recipe-helpers.js";
 import { recipePhotoResource } from "./resources/photo-resource.js";
-import { recipeResource } from "./resources/recipe-resource.js";
 import { RecipeStore } from "./store.js";
 import { categoriesSync } from "./syncs/category-sync.js";
 import { photosSync } from "./syncs/photo-sync.js";
@@ -83,8 +81,7 @@ export interface RecipeState {
 
 /**
  * Recipe's write chokepoints (`ctx.writes`), invoked by its own recipe / category /
- * photo tools. Recipe is a Content entity, so its recipe writes fire
- * `resourceListChanged()`; category and photo writes are silent. Vector-index
+ * photo tools. Vector-index
  * maintenance (#177) writes the discover-owned index, which recipe cannot reach (no
  * dependency edge into discover by design) — so each recipe/category write EMITS on
  * `infra.indexEvents`, the kernel re-index seam discover's `index` boot hook subscribes
@@ -92,7 +89,7 @@ export interface RecipeState {
  * photo-gen-facing write, is a CONTRACT method and lives on `api`, not here.)
  */
 export interface RecipeWrites {
-  /** Persist a saved recipe locally, then nudge cloud sync. Content → fires resourceListChanged. */
+  /** Persist a saved recipe locally, then nudge cloud sync. */
   commitRecipe(saved: Recipe): ResultAsync<void, CacheError>;
   /** Hard-delete (empty-trash) commit: purge the recipe from cache + store. */
   commitRecipeHardDelete(saved: Recipe): ResultAsync<void, CacheError>;
@@ -100,7 +97,7 @@ export interface RecipeWrites {
   reconcileLocalRecipe(authoritative: Recipe): Promise<boolean>;
   /** Canonical pull for a 404: drop a stale local phantom. Best-effort — absorbs its own failures. */
   reconcileLocalRecipeAbsent(uid: RecipeUid): Promise<boolean>;
-  /** Persist a category create/rename/re-parent locally. Reference → no resourceListChanged. */
+  /** Persist a category create/rename/re-parent locally. */
   commitCategoryUpsert(category: Category): ResultAsync<void, CacheError>;
   /** Persist a category soft-delete locally. */
   commitCategoryDelete(category: Category): ResultAsync<void, CacheError>;
@@ -165,7 +162,6 @@ register(
     })
     .build((state, infra) => {
       const client: PaprikaClient = infra.client;
-      const notifier: Notifier = infra.notifier;
       const log: Logger = infra.log;
 
       // ---- Recipe write chokepoints ----
@@ -180,7 +176,6 @@ register(
       const commitRecipe: RecipeWrites["commitRecipe"] = (saved) =>
         commitEntities(state.recipe, [upsertOp(saved, { markDelete: saved.inTrash })], {
           onCommitted: () => {
-            notifier.resourceListChanged();
             // Re-index at commit time, before notifySync: a tool-written recipe's UID is
             // pending, so the sync recipe-diff filters it out and never re-embeds it (#177).
             // A trashed recipe is REMOVED from the index, else re-embedded (mirrors the
@@ -198,7 +193,6 @@ register(
       const commitRecipeHardDelete: RecipeWrites["commitRecipeHardDelete"] = (saved) =>
         commitEntities(state.recipe, [deleteOp(saved.uid)], {
           onCommitted: () => {
-            notifier.resourceListChanged();
             infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
           },
           finish,
@@ -218,7 +212,6 @@ register(
           .match(
             () => {
               state.recipe.store.set(authoritative);
-              notifier.resourceListChanged();
               // Same inTrash branch as commitRecipe: a canonical pull that lands a trashed
               // recipe must REMOVE it from the index, not re-embed it.
               if (authoritative.inTrash) {
@@ -248,7 +241,6 @@ register(
           .match(
             () => {
               state.recipe.store.delete(uid);
-              notifier.resourceListChanged();
               infra.indexEvents.emit({ type: "recipe-removed", uids: [uid] });
               return true;
             },
@@ -260,9 +252,8 @@ register(
       };
 
       // ---- Category write chokepoints ----
-      // Mark-pending-first mirrors commitRecipe. No resourceListChanged() — categories
-      // have no MCP resource surface; recipe rendering resolves names through the store
-      // on read.
+      // Mark-pending-first mirrors commitRecipe; a category write emits only the
+      // index-event re-embed signal below.
       const commitCategoryUpsert: RecipeWrites["commitCategoryUpsert"] = (category) =>
         commitEntities(state.category, [upsertOp(category)], {
           // A category rename changes the display name baked into its recipes' embedding
@@ -277,8 +268,7 @@ register(
 
       // ---- Photo write chokepoints ----
       // attachPhotoToRecipe builds the Photo + photo-bearing recipe, runs the client's
-      // verified 3-request upload, then commits BOTH the recipe and photo stores. No
-      // resourceListChanged() — the recipe resource renders photoUrl, not photo/photoLarge.
+      // verified 3-request upload, then commits BOTH the recipe and photo stores.
       // The one multi-slice commit: recipe + photo land jointly (shared marks, joint
       // clear-on-failure, one notifySync) via the helper's `commitSlices` core.
       const commitPhotoUpload = (savedRecipe: Recipe, savedPhoto: Photo): ResultAsync<void, CacheError> =>
@@ -356,12 +346,12 @@ register(
           resolveCategoryNames: (uids) => state.category.store.resolveNames([...uids]),
           recipesInCategory: (categoryUid) =>
             state.recipe.store
-              .getAll()
+              .getActive()
               .filter((r) => r.categories.includes(categoryUid))
               .map((r) => r.uid),
           hasSynced: () => state.recipe.store.hasSynced,
-          getAll: () => state.recipe.store.getAll(),
-          size: () => state.recipe.store.size,
+          getActive: () => state.recipe.store.getActive(),
+          activeSize: () => state.recipe.store.activeSize,
           // Resolve each recipe's category names through recipe's own category store so
           // the category dependency stays private — discover calls this instead of
           // importing recipeToRow and resolving names itself.
@@ -398,7 +388,7 @@ register(
           deleteCategoryTool,
           ...photoWriteTools,
         ],
-        resources: [recipeResource, recipePhotoResource],
+        resources: [recipePhotoResource],
         syncs: [recipesSync(state), categoriesSync(state), photosSync(state)],
         flush: () =>
           ResultAsync.combine([

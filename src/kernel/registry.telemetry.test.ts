@@ -9,6 +9,7 @@ import type { ErasedModule, Infra, SyncTier } from "./registry.js";
 import { makeKernelInfra } from "../../test/support/kernel-harness.js";
 import { installTestTelemetry } from "../../test/support/telemetry-test-utils.js";
 import { PaprikaError } from "../paprika/errors.js";
+import { PartialSyncError } from "../paprika/sync-types.js";
 import { buildKernel } from "./registry.js";
 
 // Module scope, before any recording — see the helper's doc-comment.
@@ -34,7 +35,15 @@ function fakeModule(
   return {
     id,
     dependsOn: [],
-    build: async () => ({ state: {}, api: {}, tools: [], resources: undefined, syncs, onReady: undefined, flush }),
+    build: async () => ({
+      state: {},
+      api: {},
+      tools: [],
+      resources: undefined,
+      syncs,
+      onIndexReady: undefined,
+      flush,
+    }),
   } as unknown as ErasedModule;
 }
 
@@ -115,6 +124,20 @@ describe("syncOnce telemetry", () => {
     // An aborted cycle counts no changes — mirroring its empty results contract.
     const after = (await telemetry.sumPoints("mcp_paprika.sync.changes")).reduce((n, p) => n + p.value, 0);
     expect(after).toBe(baseline);
+  });
+
+  it("marks a partially-applied core abort core_partial (span ERROR)", async () => {
+    const partial = new PartialSyncError({ landed: 2, failed: 1, cause: new PaprikaError("rate limited") });
+    const kernel = await buildKernel(infra(), [
+      fakeModule("recipe", [{ tier: "core", reconcile: () => errAsync(partial) }]),
+    ]);
+    telemetry.spanExporter.reset();
+
+    await kernel.syncOnce();
+
+    const [cycle] = telemetry.spansNamed("paprika.sync_cycle");
+    expect(cycle!.attributes["mcp_paprika.sync.outcome"]).toBe("core_partial");
+    expect(cycle!.status.code).toBe(SpanStatusCode.ERROR);
   });
 
   it("ends the boot and module spans as errors when a module build rejects (the trace must export)", async () => {

@@ -73,12 +73,7 @@ register(
       // `ctx.deps["meal-type"]` — so it goes in `api`, not `ctx.writes`.
       const catalogWriteMutex = new Mutex();
       // The commit protocol lives in src/entity/commit.ts; this binds meal-type's slice.
-      // Meal-type commits fire resourceListChanged even though meal types have no
-      // resource of their own: menu RESOURCES resolve item type names and ordering
-      // through this catalog live, so a rename/recolor/reorder/delete changes their
-      // rendered content without any menu entity changing.
       const mealTypeFx = {
-        onCommitted: () => infra.notifier.resourceListChanged(),
         finish: () => notifySyncBestEffort(infra.client, infra.log),
       };
       const commitMealTypes = (mealTypes: ReadonlyArray<Readonly<MealType>>): ResultAsync<void, CacheError> =>
@@ -157,7 +152,6 @@ register(
         noun: "Meal type",
         state,
         save: (tombstone) => infra.client.saveMealTypes([tombstone]),
-        onCommitted: mealTypeFx.onCommitted,
         finish: mealTypeFx.finish,
       });
       // Serialized on the catalog write mutex like every other
@@ -170,19 +164,6 @@ register(
       // back to `ensureMealType` for an unknown name) — a self-reference, not a
       // cross-domain reach.
       const api: MealTypeApi = {
-        // Build the uid→name map from the catalog and resolve in order, skipping
-        // unknown/dangling UIDs (the same projection the meal/menu renderers build
-        // inline today). `MealTypeStore` has no `resolveNames` of its own.
-        resolveNames: (uids) => {
-          const nameByUid = new Map<string, string>();
-          for (const mt of state.store.getAll()) nameByUid.set(mt.uid, mt.name);
-          const names: Array<string> = [];
-          for (const uid of uids) {
-            const name = nameByUid.get(uid);
-            if (name !== undefined) names.push(name);
-          }
-          return names;
-        },
         // Resolves a `{name}|{uid}|{builtin}` spec against this module's own
         // store, returning a structured `MealTypeResolveResult`.
         resolveSpec: (spec) => {

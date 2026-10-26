@@ -1,6 +1,7 @@
 import type { ClientCapabilities, ElicitRequestFormParams, ElicitResult } from "@modelcontextprotocol/sdk/types.js";
 import { err, ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import type { ElicitationServer } from "./elicit.js";
 
@@ -11,6 +12,7 @@ import {
   confirmOrCancel,
   formatLookupOutcome,
   imageResult,
+  integer,
   type LookupOutcome,
   resolveLookup,
   resolveOrPick,
@@ -313,5 +315,26 @@ describe("commitFailure", () => {
   it("omits structuredContent when not passed (non-schema caller unaffected)", () => {
     const result = commitFailure("grocery list", err({ message: "disk full" }));
     expect(result?.structuredContent).toBeUndefined();
+  });
+});
+
+describe("integer", () => {
+  const published = (schema: z.ZodType) => {
+    const { $schema: _, ...rest } = z.toJSONSchema(schema);
+    return rest;
+  };
+
+  it("publishes only the bounds it is given", () => {
+    expect(published(integer())).toEqual({ type: "integer" });
+    expect(published(integer({ min: 0 }))).toEqual({ type: "integer", minimum: 0 });
+    expect(published(integer({ min: 1, max: 50 }))).toEqual({ type: "integer", minimum: 1, maximum: 50 });
+  });
+
+  it("still validates integers and the given bounds", () => {
+    const count = integer({ min: 0, max: 3 });
+    expect(count.safeParse(2).success).toBe(true);
+    expect(count.safeParse(2.5).success).toBe(false);
+    expect(count.safeParse(-1).success).toBe(false);
+    expect(count.safeParse(4).success).toBe(false);
   });
 });

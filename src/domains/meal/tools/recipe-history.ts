@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { errorResult, structuredResult } from "../../../shared/tools.js";
+import { errorResult, integer, structuredResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
 import { mealRowSchema, resolveMealTypeName } from "./helpers.js";
@@ -24,7 +24,7 @@ export const readRecipeHistoryOutputSchema = z.object({
   recipeUid: RecipeUidSchema,
   recipeName: z.string(),
   lastCooked: z.string().nullable().describe("Calendar day of the most recent past cook, yyyy-MM-dd, or null."),
-  timesCooked: z.number().int().nonnegative(),
+  timesCooked: integer({ min: 0 }),
   recent: z.array(mealRowSchema.pick({ uid: true, date: true, typeName: true })),
 });
 

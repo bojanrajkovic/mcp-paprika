@@ -9,7 +9,7 @@ import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, errorResult, structuredResult } from "../../../shared/tools.js";
 import { formatTimestampWire } from "../../../utils/dates.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeReadOutputSchema, recipeToReadStructured, resolveCategoryRefs } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToReadStructured, resolveCategoryRefs } from "../recipe-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**

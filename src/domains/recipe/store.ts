@@ -22,21 +22,12 @@ export type TimeConstraints = {
 };
 
 export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
-  private _lastSyncedAt: Date | null = null;
-
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
   }
 
-  get lastSyncedAt(): Date | null {
-    return this._lastSyncedAt;
-  }
-
-  setLastSyncedAt(at: Date = new Date()): void {
-    this._lastSyncedAt = at;
-  }
-
-  override getAll(): Array<Recipe> {
+  /** Non-trashed recipes only — see the `../../cache/CLAUDE.md` sharp edge on the get/getActive/getAllIncludingTrashed split. */
+  getActive(): Array<Recipe> {
     const results: Array<Recipe> = [];
     for (const recipe of this._items.values()) {
       if (!recipe.inTrash) {
@@ -47,7 +38,7 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
   }
 
   /**
-   * Every recipe including trashed ones (`getAll()` excludes `inTrash`). Used by
+   * Every recipe including trashed ones (`getActive()` excludes `inTrash`). Used by
    * the `delete_category` guard, which must block a category that a trashed —
    * but restorable — recipe still references, so restoring it doesn't surface a
    * dangling category UID.
@@ -56,7 +47,7 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
     return [...this._items.values()];
   }
 
-  override get size(): number {
+  get activeSize(): number {
     let count = 0;
     for (const recipe of this._items.values()) {
       if (!recipe.inTrash) {
@@ -129,7 +120,7 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
   }
 
   filterByIngredients(terms: ReadonlyArray<string>, mode: "all" | "any", limit?: number): Array<Recipe> {
-    const recipes = this.getAll();
+    const recipes = this.getActive();
 
     if (terms.length === 0) {
       return limit !== undefined ? recipes.slice(0, limit) : recipes;
@@ -149,7 +140,7 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
   }
 
   filterByTime(constraints: TimeConstraints): Array<Recipe> {
-    const recipes = this.getAll();
+    const recipes = this.getActive();
 
     const hasConstraints =
       constraints.maxPrepTime !== undefined ||
@@ -207,7 +198,7 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
   }
 
   findByName(title: string): Array<Recipe> {
-    const recipes = this.getAll();
+    const recipes = this.getActive();
     const lowerTitle = title.toLowerCase();
 
     const exact = recipes.filter((r) => r.name.toLowerCase() === lowerTitle);

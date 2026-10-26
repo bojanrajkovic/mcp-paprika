@@ -54,7 +54,7 @@ describe("mark_grocery_item_purchased tool", () => {
     expect(markGroceryItemPurchasedInputSchema.safeParse({ uid: "X", purchased: true }).success).toBe(false);
   });
 
-  it("commits the updated item to the store (Content entity fires resourceListChanged)", async () => {
+  it("commits the updated item to the store", async () => {
     const item = makeGroceryItem({
       uid: "ITEM-2" as GroceryItemUid,
       ingredient: "Eggs",
@@ -69,7 +69,6 @@ describe("mark_grocery_item_purchased tool", () => {
 
     const state = kh.state();
     expect(state.items.store.get("ITEM-2" as GroceryItemUid)).toEqual(expect.objectContaining({ purchased: true }));
-    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("cold-start guard fires when stores have not synced", async () => {

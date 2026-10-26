@@ -1,4 +1,5 @@
-import { mkdir, open, readdir, readFile, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, open, readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import { Mutex } from "async-mutex";
@@ -67,16 +68,24 @@ export const enoentOk =
   (e: CacheError): ResultAsync<T, CacheError> =>
     isNodeError(e.cause) && e.cause.code === "ENOENT" ? okAsync(recovery) : errAsync(e);
 
-/** Open + write + fsync + close — one atomic durable write per call. */
+/** Write and fsync a private sibling, then atomically replace the visible record. */
 export function writeFileAtomic(path: string, contents: string): ResultAsync<void, CacheError> {
   return ResultAsync.fromPromise(
     (async (): Promise<void> => {
-      const fh = await open(path, "w");
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      const fh = await open(temporary, "wx", 0o600);
       try {
-        await fh.writeFile(contents);
-        await fh.sync();
+        try {
+          await fh.writeFile(contents);
+          await fh.sync();
+        } finally {
+          await fh.close();
+        }
+        await rename(temporary, path);
       } finally {
-        await fh.close();
+        await unlink(temporary).catch((cause: unknown) =>
+          isNodeError(cause) && cause.code === "ENOENT" ? undefined : Promise.reject(cause),
+        );
       }
     })(),
     cacheError(`write ${path}`),
@@ -111,6 +120,9 @@ export interface DiskCacheDescriptor<T> {
   readonly parse: (raw: unknown) => T;
   readonly getKey: (item: T) => string;
 }
+
+/** `tryPut`'s outcome: buffered (caller owes a `flush()`), or rejected at the cap. */
+export type TryPutOutcome = { readonly ok: true } | { readonly ok: false; readonly currentCount: number };
 
 export class DiskCache<T> {
   protected readonly _subdir: string;
@@ -229,6 +241,24 @@ export class DiskCache<T> {
     return this._locked("put", () => {
       this._putInner(item);
       return okAsync<void, CacheError>(undefined);
+    });
+  }
+
+  /**
+   * Put `item` only if the population fits under `max`. The count and the put happen
+   * under one mutex hold, so concurrent callers can't both see `max - 1`, both pass,
+   * and both write. A re-put of a known key replaces rather than adds, so it skips
+   * the check. The caller still owes a `flush()`.
+   */
+  tryPut(item: T, max: number): ResultAsync<TryPutOutcome, CacheError> {
+    return this._locked<TryPutOutcome>("tryPut", () => {
+      const alreadyKnown = this._knownKeys.has(this._getKey(item));
+      const currentCount = this._knownKeys.size;
+      if (!alreadyKnown && currentCount >= max) {
+        return okAsync<TryPutOutcome, CacheError>({ ok: false, currentCount });
+      }
+      this._putInner(item);
+      return okAsync<TryPutOutcome, CacheError>({ ok: true });
     });
   }
 

@@ -5,7 +5,6 @@ import type { Logger } from "pino";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { PaprikaClient } from "../../paprika/client.js";
-import type { Notifier } from "../../server/notifier.js";
 import type { GroceryApi } from "./api.js";
 import type { GroceryIngredient } from "./grocery-ingredient/types.js";
 import type { GroceryItem } from "./grocery-item/types.js";
@@ -24,7 +23,6 @@ import { GroceryItemStore } from "./grocery-item/store.js";
 import { groceryItemDiskDescriptor } from "./grocery-item/types.js";
 import { GroceryListStore } from "./grocery-list/store.js";
 import { groceryListDiskDescriptor } from "./grocery-list/types.js";
-import { groceryListResource } from "./resources/grocery-list-resource.js";
 import { groceryIngredientsSync } from "./syncs/ingredient-sync.js";
 import { groceryItemsSync } from "./syncs/item-sync.js";
 import { groceryListsSync } from "./syncs/list-sync.js";
@@ -72,16 +70,14 @@ export interface GroceryState {
 
 /**
  * Grocery's write chokepoints (`ctx.writes`), invoked by its own list/item tools.
- * Grocery lists AND items both fire `resourceListChanged()` — lists have an MCP
- * resource surface and items are inlined in it. (The ingredient catalog write, in
- * `add_grocery_items`, is silent and stays inline in the tool.)
+ * (The ingredient catalog write, in `add_grocery_items`, stays inline in the tool.)
  */
 export interface GroceryWrites {
-  /** Persist a saved grocery list locally, then nudge cloud sync. Content → fires resourceListChanged. */
+  /** Persist a saved grocery list locally, then nudge cloud sync. */
   commitGroceryList(saved: Readonly<GroceryList>): ResultAsync<void, CacheError>;
-  /** Persist a saved grocery item locally. Inlined in the list resource → fires resourceListChanged. */
+  /** Persist a saved grocery item locally. */
   commitGroceryItem(saved: Readonly<GroceryItem>): ResultAsync<void, CacheError>;
-  /** Batch variant of commitGroceryItem: one flush, one resourceListChanged, one notifySync. */
+  /** Batch variant of commitGroceryItem: one flush, one notifySync. */
   commitGroceryItemsBatch(items: ReadonlyArray<Readonly<GroceryItem>>): ResultAsync<void, CacheError>;
 }
 
@@ -132,19 +128,16 @@ register(
     })
     .build((state, infra) => {
       const client: PaprikaClient = infra.client;
-      const notifier: Notifier = infra.notifier;
 
       // ---- Grocery write chokepoints ----
-      // Assembled here (not in `.state`) because they close over `infra.client` and
-      // `infra.notifier`, keeping GroceryState pure. All three are internal —
-      // grocery's own tools reach them via `ctx.writes`; the empty `api` exposes none
-      // (no live sibling reads grocery — see api.ts).
+      // Assembled here (not in `.state`) because they close over `infra.client`,
+      // keeping GroceryState pure. All three are internal — grocery's own tools reach
+      // them via `ctx.writes`; the empty `api` exposes none (no live sibling reads
+      // grocery — see api.ts).
       //
       // The commit protocol (mark-first → cache → flush → clear-on-failure → store
-      // → effects → notify) lives in src/entity/commit.ts; these bind grocery's
-      // slices. Lists and items both fire resourceListChanged() — Content domain.
+      // → effects → notify) lives in src/entity/commit.ts; these bind grocery's slices.
       const groceryFx = {
-        onCommitted: () => notifier.resourceListChanged(),
         finish: () => notifySyncBestEffort(client, infra.log),
       };
       const commitGroceryList: GroceryWrites["commitGroceryList"] = (saved) =>
@@ -177,7 +170,6 @@ register(
           addRecipeToGroceryListTool,
           deleteAisleTool,
         ],
-        resources: [groceryListResource],
         // Order matters: lists before items (children reference parent), then the
         // ingredient catalog. All three are core — inside the outer try that aborts the
         // sync cycle on failure.

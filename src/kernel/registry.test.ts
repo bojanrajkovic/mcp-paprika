@@ -7,6 +7,7 @@ import type { ErasedModule, Infra, SyncTier } from "./registry.js";
 
 import { makeKernelInfra } from "../../test/support/kernel-harness.js";
 import { PaprikaError } from "../paprika/errors.js";
+import { PartialSyncError } from "../paprika/sync-types.js";
 import { buildKernel } from "./registry.js";
 
 /**
@@ -36,13 +37,56 @@ function fakeModule(
   return {
     id,
     dependsOn: [],
-    build: async () => ({ state: {}, api: {}, tools: [], resources: undefined, syncs, onReady: undefined, flush }),
+    build: async () => ({
+      state: {},
+      api: {},
+      tools: [],
+      resources: undefined,
+      syncs,
+      onIndexReady: undefined,
+      flush,
+    }),
   } as unknown as ErasedModule;
 }
 
 function infra(): Infra {
   return makeKernelInfra({ cacheDir: "/tmp/kernel-driver-test-unused" });
 }
+
+describe("buildKernel boot ordering", () => {
+  it("runs onIndexReady exactly once, after the initial sync, and not on later cycles", async () => {
+    const order: string[] = [];
+    const indexed = {
+      id: "discover",
+      dependsOn: [],
+      build: async () => ({
+        state: {},
+        api: {},
+        tools: [],
+        resources: undefined,
+        syncs: [
+          {
+            tier: "core",
+            reconcile: () => {
+              order.push("sync");
+              return okAsync(undefined);
+            },
+          },
+        ],
+        onIndexReady: async () => {
+          order.push("index");
+        },
+        flush: undefined,
+      }),
+    } as unknown as ErasedModule;
+
+    const kernel = await buildKernel(infra(), [indexed]);
+    expect(order).toEqual(["sync", "index"]);
+
+    await kernel.syncOnce();
+    expect(order).toEqual(["sync", "index", "sync"]);
+  });
+});
 
 describe("buildKernel sync driver", () => {
   it("runs the recipe module's core reconcile first, others after (stable)", async () => {
@@ -72,7 +116,8 @@ describe("buildKernel sync driver", () => {
       fakeModule("grocery", [{ tier: "core", reconcile: () => okAsync(RESULT("grocery-lists")) }]),
       fakeModule("pantry", [{ tier: "core", reconcile: () => okAsync(undefined) }]),
     ]);
-    const results = await kernel.syncOnce();
+    const { outcome, results } = await kernel.syncOnce();
+    expect(outcome).toBe("ok");
     expect(results.map((r) => r.changeType).sort()).toEqual(["grocery-lists", "recipes"]);
   });
 
@@ -81,7 +126,18 @@ describe("buildKernel sync driver", () => {
       fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }]),
       fakeModule("boom", [{ tier: "core", reconcile: () => errAsync(new PaprikaError("core boom")) }]),
     ]);
-    await expect(kernel.syncOnce()).resolves.toEqual([]);
+    await expect(kernel.syncOnce()).resolves.toEqual({ outcome: "core_aborted", results: [] });
+  });
+
+  it("reports core_partial (still aborting: no results, no sweep) when a core reconcile errs with partial progress", async () => {
+    const sweep = vi.fn(() => 0);
+    const partial = new PartialSyncError({ landed: 3, failed: 2, cause: new PaprikaError("rate limited") });
+    const kernel = await buildKernel(infra(), [
+      fakeModule("recipe", [{ tier: "core", reconcile: () => errAsync(partial), sweep }]),
+    ]);
+    sweep.mockClear();
+    await expect(kernel.syncOnce()).resolves.toEqual({ outcome: "core_partial", results: [] });
+    expect(sweep).not.toHaveBeenCalled();
   });
 
   it("aborts the cycle and returns [] when a reconcile breaks the contract by throwing", async () => {
@@ -98,7 +154,7 @@ describe("buildKernel sync driver", () => {
         },
       ]),
     ]);
-    await expect(kernel.syncOnce()).resolves.toEqual([]);
+    await expect(kernel.syncOnce()).resolves.toEqual({ outcome: "contract_breach", results: [] });
   });
 
   it("keeps an additive reconcile best-effort: an err is swallowed, core results survive", async () => {
@@ -106,7 +162,7 @@ describe("buildKernel sync driver", () => {
       fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }]),
       fakeModule("photo", [{ tier: "additive", reconcile: () => errAsync(new PaprikaError("additive boom")) }]),
     ]);
-    const results = await kernel.syncOnce();
+    const { results } = await kernel.syncOnce();
     expect(results.map((r) => r.changeType)).toEqual(["recipes"]);
   });
 
@@ -135,7 +191,7 @@ describe("buildKernel sync driver", () => {
       fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }]),
       fakeModule("aisle", [{ tier: "reference", reconcile: () => errAsync(new PaprikaError("reference boom")) }]),
     ]);
-    const results = await kernel.syncOnce();
+    const { results } = await kernel.syncOnce();
     expect(results.map((r) => r.changeType)).toEqual(["recipes"]);
   });
 
@@ -145,7 +201,7 @@ describe("buildKernel sync driver", () => {
         errAsync<void, CacheError>({ context: "flush", message: "flush failed", cause: undefined }),
       ),
     ]);
-    await expect(kernel.syncOnce()).resolves.toEqual([]);
+    await expect(kernel.syncOnce()).resolves.toEqual({ outcome: "flush_failed", results: [] });
   });
 
   it("runs each contribution's sweep at end-of-cycle", async () => {
@@ -178,7 +234,7 @@ describe("buildKernel module construction", () => {
           tools: [],
           resources: undefined,
           syncs: undefined,
-          onReady: undefined,
+          onIndexReady: undefined,
           flush: undefined,
         };
       },

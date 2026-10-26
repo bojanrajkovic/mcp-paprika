@@ -161,21 +161,9 @@ describe("recipe photo MCP resource", () => {
     expect(vi.mocked(fetchImageBytes)).toHaveBeenCalledTimes(1);
   });
 
-  describe("list", () => {
-    it("lists the primary photo URI for recipes that have a photo", async () => {
-      kh.seed({
-        recipes: [
-          makeRecipe({ uid: "r1" as RecipeUid, name: "Has Photo", photoLarge: "photo-a.jpg" }),
-          makeRecipe({ uid: "r2" as RecipeUid, name: "No Photo", photoLarge: null, imageUrl: "" }),
-        ],
-      });
+  it("registers no list callback, so photos never appear in an attach picker", () => {
+    kh.seed({ recipes: [makeRecipe({ uid: "r1" as RecipeUid, photoLarge: "photo-a.jpg" })] });
 
-      const result = (await kh.callResourceList("recipe-photo")) as {
-        resources: Array<{ uri: string; name: string; mimeType: string }>;
-      };
-      expect(result.resources).toEqual([
-        { uri: "ui://recipe/r1/photo", name: "Has Photo photo", mimeType: "image/jpeg" },
-      ]);
-    });
+    expect(() => kh.callResourceList("recipe-photo")).toThrow("has no list callback");
   });
 });

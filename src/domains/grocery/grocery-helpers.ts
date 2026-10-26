@@ -42,8 +42,7 @@ export type GroceryListReadStructured = z.infer<typeof groceryListReadOutputSche
 
 /**
  * Map a `GroceryItem` into a {@link GroceryItemRow}, resolving its aisle name through
- * the live catalog (the same resolution {@link groceryListToMarkdown} uses, so the
- * text table and the structured row agree by construction).
+ * the live catalog.
  */
 export function groceryItemToRow(item: GroceryItem, aisles: AisleDisplaySource): GroceryItemRow {
   const aisle = aisles.displayName(item);
@@ -107,36 +106,4 @@ export function groceryListToReadStructured(
   aisles: AisleDisplaySource,
 ): GroceryListReadStructured {
   return { uid: list.uid, name: list.name, items: groceryItemsToRows(items, aisles) };
-}
-
-/**
- * Renders a grocery list as markdown with metadata and a table of items. The list
- * UID and the per-item UIDs travel on the structured channel
- * ({@link groceryListToReadStructured}) and the resource header, so the human text
- * carries no identifiers.
- */
-export function groceryListToMarkdown(
-  list: GroceryList,
-  items: ReadonlyArray<GroceryItem>,
-  aisles: AisleDisplaySource,
-): string {
-  const lines: Array<string> = [];
-  lines.push(`# ${list.name}`);
-  lines.push("");
-  lines.push(`**Items:** ${items.length.toString()}`);
-
-  if (items.length > 0) {
-    lines.push("");
-    lines.push("| Ingredient | Qty | Aisle | Purchased |");
-    lines.push("|------------|-----|-------|-----------|");
-    for (const item of items) {
-      const qty = item.quantity !== "" ? item.quantity : "—";
-      const aisleName = aisles.displayName(item);
-      const aisle = aisleName !== "" ? aisleName : "—";
-      const purchased = item.purchased ? "Yes" : "No";
-      lines.push(`| ${item.ingredient} | ${qty} | ${aisle} | ${purchased} |`);
-    }
-  }
-
-  return lines.join("\n");
 }

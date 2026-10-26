@@ -1,13 +1,11 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import dotenv from "dotenv";
 import { err, ok, type Result } from "neverthrow";
+import parseDurationMs from "parse-duration";
 import { z } from "zod";
 
-import { parseDuration } from "./duration.js";
-import { isNodeError } from "./errors.js";
-import { toMessage } from "./log.js";
 import { getConfigDir } from "./xdg.js";
 
 const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
@@ -22,19 +20,16 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "http.host": "MCP_HTTP_HOST",
   "http.allowedHosts": "MCP_ALLOWED_HOSTS",
   "http.allowedOrigins": "MCP_ALLOWED_ORIGINS",
-  "http.shutdownDrainMs": "MCP_HTTP_SHUTDOWN_DRAIN_MS",
+  "http.shutdownDrainMs": "MCP_HTTP_SHUTDOWN_DRAIN",
   "http.widgetPreview": "MCP_WIDGET_PREVIEW",
   "logging.level": "MCP_LOG_LEVEL",
   "logging.notifyLevel": "MCP_LOG_NOTIFY_LEVEL",
   "logging.pretty": "MCP_LOG_PRETTY",
   "logging.file": "MCP_LOG_FILE",
-  "features.replicateApiToken": "REPLICATE_API_TOKEN",
-  "features.embeddings.apiKey": "OPENAI_API_KEY",
-  "features.embeddings.baseUrl": "OPENAI_BASE_URL",
+  "features.ai.apiKey": "OPENAI_API_KEY",
+  "features.ai.baseUrl": "OPENAI_BASE_URL",
   "features.embeddings.model": "EMBEDDING_MODEL",
-  "features.imageGen.apiKey": "IMAGE_GEN_API_KEY",
-  "features.imageGen.baseUrl": "IMAGE_GEN_BASE_URL",
-  "features.imageGen.reuseEmbeddingsCreds": "IMAGE_GEN_REUSE_EMBEDDINGS_CREDS",
+  "features.imageGen.enabled": "IMAGE_GEN_ENABLED",
   "oauth.publicUrl": "MCP_PUBLIC_URL",
   "oauth.preset": "MCP_OIDC_PRESET",
   "oauth.discoveryUrl": "MCP_OIDC_DISCOVERY_URL",
@@ -44,14 +39,28 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "oauth.clientId": "MCP_OIDC_CLIENT_ID",
   "oauth.clientSecret": "MCP_OIDC_CLIENT_SECRET",
   "oauth.trustProxy": "MCP_TRUST_PROXY",
+  "oauth.clientIpHeader": "MCP_CLIENT_IP_HEADER",
   "oauth.allowlist.emails": "MCP_ALLOWED_EMAILS",
   "oauth.allowlist.subs": "MCP_ALLOWED_SUBS",
   "oauth.redirectAllowlist": "MCP_OAUTH_REDIRECT_ALLOWLIST",
 };
 
+/** Env vars renamed in a breaking release: old name → new name. */
+const RENAMED_ENV_VARS: Readonly<Record<string, string>> = {
+  MCP_HTTP_SHUTDOWN_DRAIN_MS: "MCP_HTTP_SHUTDOWN_DRAIN",
+};
+
+/** Env vars removed in a breaking release, with what to do instead. */
+const REMOVED_ENV_VARS: Readonly<Record<string, string>> = {
+  IMAGE_GEN_API_KEY: "Image generation now uses OPENAI_API_KEY, shared with semantic search.",
+  IMAGE_GEN_BASE_URL: "Image generation now uses OPENAI_BASE_URL, shared with semantic search.",
+  IMAGE_GEN_REUSE_EMBEDDINGS_CREDS: "Image generation always uses OPENAI_API_KEY now; delete this setting.",
+};
+
 export class ConfigError extends Error {
   readonly reason: string;
-  readonly kind: "invalid_json" | "file_read_error" | "validation";
+  /** `validation`: a value failed the schema. `migration`: a setting from an older release that is no longer read. */
+  readonly kind: "validation" | "migration";
 
   private constructor(reason: string, kind: ConfigError["kind"]) {
     super(reason);
@@ -60,17 +69,27 @@ export class ConfigError extends Error {
     this.kind = kind;
   }
 
-  static invalidJson(path: string, cause: unknown): ConfigError {
-    const detail = toMessage(cause);
-    return new ConfigError(`Invalid JSON in ${path}: ${detail}`, "invalid_json");
+  /** A `config.json` exists, but configuration is read only from env vars and the config dir's `.env`. */
+  static legacyConfigFile(path: string): ConfigError {
+    const envPath = join(dirname(path), ".env");
+    return new ConfigError(
+      `${path} is no longer read. Move its settings to environment variables or to ${envPath} ` +
+        `(one NAME=value per line; see docs/configuration.md), then delete config.json.`,
+      "migration",
+    );
   }
 
-  static fileReadError(path: string, cause: unknown): ConfigError {
-    const detail = toMessage(cause);
-    return new ConfigError(`Cannot read ${path}: ${detail}`, "file_read_error");
+  /** An env var from an older release is set under its old name. */
+  static renamedEnvVar(oldName: string, newName: string): ConfigError {
+    return new ConfigError(`${oldName} was renamed to ${newName}. Set ${newName} instead.`, "migration");
   }
 
-  static validation(issues: ReadonlyArray<z.ZodIssue>): ConfigError {
+  /** An env var from an older release is set, but nothing reads it any more. */
+  static removedEnvVar(name: string, instead: string): ConfigError {
+    return new ConfigError(`${name} was removed. ${instead}`, "migration");
+  }
+
+  static validation(issues: ReadonlyArray<z.core.$ZodIssue>): ConfigError {
     const lines = issues.map((issue) => {
       const path = issue.path.join(".");
       const hint = ENV_VAR_HINTS[path];
@@ -82,18 +101,26 @@ export class ConfigError extends Error {
   }
 }
 
-const durationField = z.union([z.string(), z.number()]).transform((val, ctx) => {
-  return parseDuration(val).match(
-    (duration) => duration.as("milliseconds"),
-    (parseErr) => {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: parseErr.reason,
-      });
-      return z.NEVER;
-    },
-  );
-});
+// Go's `time.ParseDuration` grammar plus `d`: one or more number+unit pairs, e.g. `15m`,
+// `1h30m`, `500ms`, `.5h`, `7d`, or a bare `0` (as in Go). Strict on purpose — any other
+// bare number is ambiguous (seconds? minutes? milliseconds?), so it fails at boot with a
+// hint instead of guessing. Both micro signs work for microseconds (`µs` U+00B5, `μs` U+03BC).
+const GO_DURATION = /^(0|((\d+(\.\d*)?|\.\d+)(ns|us|µs|μs|ms|s|m|h|d))+)$/;
+
+// Node's timers can't wait longer than this; a bigger delay silently fires after 1 ms.
+const MAX_TIMER_MS = 2_147_483_647;
+
+/** Normalize what parse-duration misreads: Greek mu → micro sign, and `5.h` → `5h` (it reads `5.h` as 5 ms). */
+function toParseDurationInput(val: string): string {
+  return val.replaceAll("μ", "µ").replace(/(\d)\.(?=[a-zµ])/g, "$1");
+}
+
+const durationField = z
+  .string()
+  .trim()
+  .regex(GO_DURATION, 'must be a duration with units, like "15m", "1h30m", "500ms", or "7d"')
+  .transform((val) => Math.round(parseDurationMs(toParseDurationInput(val)) ?? 0))
+  .pipe(z.number().max(MAX_TIMER_MS, "must be at most 24d (Node's timer limit)"));
 
 const BOOLEAN_STRINGS: Readonly<Record<string, boolean>> = {
   true: true,
@@ -109,7 +136,7 @@ const booleanField = z.union([z.boolean(), z.string()]).transform((val, ctx) => 
   const mapped = BOOLEAN_STRINGS[val];
   if (mapped === undefined) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: `expected "true", "false", "1", or "0", got ${JSON.stringify(val)}`,
     });
     return z.NEVER;
@@ -125,30 +152,28 @@ const listField = z.union([z.array(z.string()), z.string()]).transform((val) => 
     .filter((s) => s.length > 0);
 });
 
-const embeddingConfigSchema = z.object({
+// Default base URL for every OpenAI-compatible feature. OpenRouter serves both the
+// embedding models and the image models behind `generate_recipe_photo`.
+const DEFAULT_AI_BASE_URL = "https://openrouter.ai/api/v1";
+
+// One credential block for every OpenAI-compatible feature (semantic search and image
+// generation). Per-feature config holds only what differs between them.
+const aiCredsSchema = z.object({
   apiKey: z.string().min(1),
-  baseUrl: z.string().min(1),
+  baseUrl: z.string().min(1).default(DEFAULT_AI_BASE_URL),
+});
+
+// Semantic search turns on when the shared creds AND a model are set.
+const embeddingsFeatureSchema = z.object({
   model: z.string().min(1),
 });
 
-// Image generation (OpenRouter chat-completions) feature config. Unlike
-// embeddings, the model is NOT configured here — it is selected per
-// `generate_recipe_photo` tool call. Credentials come from one of two mutually
-// exclusive paths, enforced by `.superRefine` below:
-//   - a dedicated key (`apiKey`, optional `baseUrl`) → isolated OpenRouter
-//     cost tracking for image generation, OR
-//   - `reuseEmbeddingsCreds: true` → borrow `features.embeddings.{apiKey,baseUrl}`
-//     (both already point at OpenRouter in the common single-account setup).
-const imageGenConfigSchema = z.object({
-  apiKey: z.string().min(1).optional(),
-  baseUrl: z.string().min(1).optional(),
-  reuseEmbeddingsCreds: booleanField.default(false),
+// Image generation turns on when the shared creds point at OpenRouter, unless switched
+// off: it bills per image, so a deployment sharing a key for search alone can opt out.
+// The model is chosen per `generate_recipe_photo` call, not here.
+const imageGenFeatureSchema = z.object({
+  enabled: booleanField.default(true),
 });
-
-// Default base URL for the dedicated-key path. OpenRouter is the only provider
-// that serves the image-generation models behind the `generate_recipe_photo` tool via
-// chat-completions image output.
-const DEFAULT_IMAGE_GEN_BASE_URL = "https://openrouter.ai/api/v1";
 
 const pinoLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
 
@@ -173,7 +198,8 @@ export const paprikaConfigSchema = z
     sync: z
       .object({
         enabled: booleanField.default(true),
-        interval: durationField.prefault("15m"),
+        // At least 1s: a zero interval would re-sync against Paprika back to back.
+        interval: durationField.pipe(z.number().min(1000, "must be at least 1s")).prefault("15m"),
         // Window during which a local write is shielded from sync reconciliation
         // (sync would otherwise see a stale canonical list and either delete the
         // just-written item or resurrect the just-deleted one). Cleared on
@@ -222,9 +248,9 @@ export const paprikaConfigSchema = z
       .prefault({}),
     features: z
       .object({
-        replicateApiToken: z.string().min(1).optional(),
-        embeddings: embeddingConfigSchema.optional(),
-        imageGen: imageGenConfigSchema.optional(),
+        ai: aiCredsSchema.optional(),
+        embeddings: embeddingsFeatureSchema.optional(),
+        imageGen: imageGenFeatureSchema.optional(),
       })
       .optional(),
     oauth: z
@@ -240,17 +266,29 @@ export const paprikaConfigSchema = z
           .transform((v) => v.replace(/\/+$/, ""))
           .optional(),
         preset: z.enum(["google", "entra", "okta", "auth0", "keycloak"]).optional(),
-        discoveryUrl: z.string().url().optional(),
+        discoveryUrl: z.url().optional(),
         scopes: listField.optional(),
         emailVerifiedPolicy: z.enum(["strict", "skip", "if-present"]).optional(),
         allowedAlgs: listField.optional(),
         clientId: z.string().min(1).optional(),
         clientSecret: z.string().min(1).optional(),
-        // Trust X-Forwarded-For / CF-Connecting-IP for the DCR rate-limit key.
-        // Default false (safe for direct exposure). Set true behind a sanitizing
-        // reverse proxy (k8s ingress, Tailscale Funnel, Cloudflare). See
-        // src/auth/routes.ts:buildDcrRateLimit for why this matters.
+        // Trust a front proxy's client-IP header for the DCR rate-limit key and
+        // the request span's client.address. Default false (safe for direct
+        // exposure). Set true behind a sanitizing reverse proxy (k8s ingress,
+        // Tailscale Funnel, Cloudflare). See src/transport/client-ip.ts.
         trustProxy: booleanField.default(false),
+        // Which header that proxy sets (rightmost entry wins); resolved to
+        // `x-forwarded-for` when unset. Meaningless without trustProxy, so the
+        // superRefine below rejects that combination instead of ignoring it.
+        // An empty value (a templated manifest's `value: ""`) means unset.
+        clientIpHeader: z.preprocess(
+          (v) => (v === "" ? undefined : v),
+          z
+            .string()
+            .regex(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/, "must be an HTTP header name, e.g. cf-connecting-ip")
+            .transform((v) => v.toLowerCase())
+            .optional(),
+        ),
         allowlist: z
           .object({
             emails: listField.default([]),
@@ -272,10 +310,19 @@ export const paprikaConfigSchema = z
     if (cfg.transport !== "http") return;
     const oauth = cfg.oauth;
 
+    if (oauth?.clientIpHeader !== undefined && !oauth.trustProxy) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["oauth", "clientIpHeader"],
+        message:
+          "MCP_CLIENT_IP_HEADER needs MCP_TRUST_PROXY=true; without a trusted proxy the header is client-forgeable",
+      });
+    }
+
     // Check publicUrl (required when transport=http)
     if (!oauth?.publicUrl) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["oauth", "publicUrl"],
         message: "MCP_PUBLIC_URL is required when MCP_TRANSPORT=http",
       });
@@ -285,14 +332,14 @@ export const paprikaConfigSchema = z
         const url = new URL(oauth.publicUrl);
         if (url.protocol !== "https:") {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             path: ["oauth", "publicUrl"],
             message: "must be a valid https:// URL",
           });
         }
       } catch {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["oauth", "publicUrl"],
           message: "must be a valid https:// URL",
         });
@@ -304,7 +351,7 @@ export const paprikaConfigSchema = z
     const subs = oauth?.allowlist?.subs ?? [];
     if (emails.length === 0 && subs.length === 0) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["oauth", "allowlist"],
         message: "at least one of MCP_ALLOWED_EMAILS or MCP_ALLOWED_SUBS must be non-empty when MCP_TRANSPORT=http",
       });
@@ -312,7 +359,7 @@ export const paprikaConfigSchema = z
 
     if (!oauth?.preset && !oauth?.discoveryUrl) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["oauth", "preset"],
         message: "one of MCP_OIDC_PRESET or MCP_OIDC_DISCOVERY_URL must be set",
       });
@@ -320,84 +367,64 @@ export const paprikaConfigSchema = z
 
     if (!oauth?.clientId || !oauth?.clientSecret) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["oauth", oauth?.clientId ? "clientSecret" : "clientId"],
         message: "MCP_OIDC_CLIENT_ID and MCP_OIDC_CLIENT_SECRET are required when MCP_TRANSPORT=http",
       });
     }
   })
-  // Image-generation credential resolution is independent of transport. When the
-  // block is present it must resolve to a usable credential via exactly one path.
+  // AI feature config is independent of transport.
   .superRefine((cfg, ctx) => {
-    const imageGen = cfg.features?.imageGen;
-    if (!imageGen) return;
-
-    const hasKey = imageGen.apiKey !== undefined;
-    const reuse = imageGen.reuseEmbeddingsCreds;
-
-    if (hasKey && reuse) {
+    // A model without creds would silently leave semantic search off.
+    if (cfg.features?.embeddings !== undefined && cfg.features.ai === undefined) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["features", "imageGen", "apiKey"],
-        message: "set either IMAGE_GEN_API_KEY or IMAGE_GEN_REUSE_EMBEDDINGS_CREDS, not both",
-      });
-    }
-    if (!hasKey && !reuse) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["features", "imageGen", "apiKey"],
-        message: "image generation requires either an API key or reuseEmbeddingsCreds=true",
-      });
-    }
-    if (reuse && !cfg.features?.embeddings) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["features", "imageGen", "reuseEmbeddingsCreds"],
-        message: "reuseEmbeddingsCreds=true requires features.embeddings to be configured",
-      });
-    }
-    if (reuse && imageGen.baseUrl !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["features", "imageGen", "baseUrl"],
-        message:
-          "IMAGE_GEN_BASE_URL is ignored when reuseEmbeddingsCreds=true (the embeddings base URL is used); unset one of them",
+        code: "custom",
+        path: ["features", "ai", "apiKey"],
+        message: "EMBEDDING_MODEL is set, but semantic search also needs OPENAI_API_KEY",
       });
     }
   });
 
 export type PaprikaConfig = z.infer<typeof paprikaConfigSchema>;
-export type EmbeddingConfig = z.infer<typeof embeddingConfigSchema>;
-export type ImageGenConfig = z.infer<typeof imageGenConfigSchema>;
+/** Everything the embedding client needs: the shared creds plus the model. */
+export interface EmbeddingConfig {
+  readonly apiKey: string;
+  readonly baseUrl: string;
+  readonly model: string;
+}
 
-/**
- * Effective image-generation credentials after resolving the dedicated-key vs
- * reuse-embeddings paths. `model` is intentionally absent — it is a
- * `generate_recipe_photo` tool-call parameter, not server config.
- */
+/** Image generation's credentials. The model is chosen per tool call, so it isn't here. */
 export interface ResolvedImageGenConfig {
   readonly apiKey: string;
   readonly baseUrl: string;
 }
 
+/** Semantic search's config, or `null` when it's off (no creds, or no `EMBEDDING_MODEL`). */
+export function resolveEmbeddingConfig(config: PaprikaConfig): EmbeddingConfig | null {
+  const ai = config.features?.ai;
+  const embeddings = config.features?.embeddings;
+  return ai !== undefined && embeddings !== undefined ? { ...ai, model: embeddings.model } : null;
+}
+
 /**
- * Resolve `features.imageGen` to concrete credentials, or `null` when image
- * generation is not enabled. The schema's `.superRefine` guarantees a present
- * block is internally consistent; this function additionally tolerates the
- * reuse-without-embeddings case by returning `null` (defense in depth).
+ * Whether a base URL is OpenRouter's. The photography client speaks OpenRouter's image
+ * extension of chat completions (`modalities`, `message.images`) with OpenRouter model
+ * IDs, so no other endpoint can serve it.
+ */
+export function isOpenRouterBaseUrl(baseUrl: string): boolean {
+  return URL.canParse(baseUrl) && new URL(baseUrl).hostname === "openrouter.ai";
+}
+
+/**
+ * Image generation's creds, or `null` when it's off: no creds, a base URL that isn't
+ * OpenRouter, or `IMAGE_GEN_ENABLED=false`.
  */
 export function resolveImageGenConfig(config: PaprikaConfig): ResolvedImageGenConfig | null {
-  const imageGen = config.features?.imageGen;
-  if (!imageGen) return null;
-
-  if (imageGen.reuseEmbeddingsCreds) {
-    const embeddings = config.features?.embeddings;
-    return embeddings ? { apiKey: embeddings.apiKey, baseUrl: embeddings.baseUrl } : null;
-  }
-  if (imageGen.apiKey !== undefined) {
-    return { apiKey: imageGen.apiKey, baseUrl: imageGen.baseUrl ?? DEFAULT_IMAGE_GEN_BASE_URL };
-  }
-  return null;
+  const ai = config.features?.ai;
+  const enabled = config.features?.imageGen?.enabled ?? true;
+  return ai !== undefined && enabled && isOpenRouterBaseUrl(ai.baseUrl)
+    ? { apiKey: ai.apiKey, baseUrl: ai.baseUrl }
+    : null;
 }
 
 /**
@@ -409,29 +436,6 @@ export function resolveImageGenConfig(config: PaprikaConfig): ResolvedImageGenCo
  */
 export function resolvePendingWriteTtl(config: PaprikaConfig): number {
   return config.sync.enabled ? config.sync.pendingWriteTtl : 0;
-}
-
-// Reads config.json from configDir. ENOENT returns ok({}). Invalid JSON and permission errors return err.
-function readConfigFile(configDir: string): Result<Record<string, unknown>, ConfigError> {
-  const filePath = join(configDir, "config.json");
-  let content: string;
-  try {
-    content = readFileSync(filePath, "utf-8");
-  } catch (error: unknown) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return ok({});
-    }
-    return err(ConfigError.fileReadError(filePath, error));
-  }
-  try {
-    const parsed: unknown = JSON.parse(content);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      return err(ConfigError.invalidJson(filePath, new Error("expected a JSON object")));
-    }
-    return ok(parsed as Record<string, unknown>);
-  } catch (error: unknown) {
-    return err(ConfigError.invalidJson(filePath, error));
-  }
 }
 
 // Loads .env file from configDir into process.env. Missing .env is silently ignored.
@@ -451,6 +455,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   const http: Record<string, unknown> = {};
   const logging: Record<string, unknown> = {};
   const features: Record<string, unknown> = {};
+  const ai: Record<string, unknown> = {};
   const embeddings: Record<string, unknown> = {};
   const imageGen: Record<string, unknown> = {};
   const oauth: Record<string, unknown> = {};
@@ -471,7 +476,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
   if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
   if (env["MCP_ALLOWED_ORIGINS"] !== undefined) http["allowedOrigins"] = env["MCP_ALLOWED_ORIGINS"];
-  if (env["MCP_HTTP_SHUTDOWN_DRAIN_MS"] !== undefined) http["shutdownDrainMs"] = env["MCP_HTTP_SHUTDOWN_DRAIN_MS"];
+  if (env["MCP_HTTP_SHUTDOWN_DRAIN"] !== undefined) http["shutdownDrainMs"] = env["MCP_HTTP_SHUTDOWN_DRAIN"];
   if (env["MCP_WIDGET_PREVIEW"] !== undefined) http["widgetPreview"] = env["MCP_WIDGET_PREVIEW"];
 
   if (env["MCP_LOG_LEVEL"] !== undefined && env["MCP_LOG_LEVEL"] !== "") {
@@ -492,15 +497,10 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
     logging["pretty"] = raw === "auto" ? "auto" : (BOOLEAN_STRINGS[raw] ?? raw);
   }
 
-  if (env["REPLICATE_API_TOKEN"] !== undefined) features["replicateApiToken"] = env["REPLICATE_API_TOKEN"];
-  if (env["OPENAI_API_KEY"] !== undefined) embeddings["apiKey"] = env["OPENAI_API_KEY"];
-  if (env["OPENAI_BASE_URL"] !== undefined) embeddings["baseUrl"] = env["OPENAI_BASE_URL"];
+  if (env["OPENAI_API_KEY"] !== undefined) ai["apiKey"] = env["OPENAI_API_KEY"];
+  if (env["OPENAI_BASE_URL"] !== undefined) ai["baseUrl"] = env["OPENAI_BASE_URL"];
   if (env["EMBEDDING_MODEL"] !== undefined) embeddings["model"] = env["EMBEDDING_MODEL"];
-
-  if (env["IMAGE_GEN_API_KEY"] !== undefined) imageGen["apiKey"] = env["IMAGE_GEN_API_KEY"];
-  if (env["IMAGE_GEN_BASE_URL"] !== undefined) imageGen["baseUrl"] = env["IMAGE_GEN_BASE_URL"];
-  if (env["IMAGE_GEN_REUSE_EMBEDDINGS_CREDS"] !== undefined)
-    imageGen["reuseEmbeddingsCreds"] = env["IMAGE_GEN_REUSE_EMBEDDINGS_CREDS"];
+  if (env["IMAGE_GEN_ENABLED"] !== undefined) imageGen["enabled"] = env["IMAGE_GEN_ENABLED"];
 
   if (env["MCP_PUBLIC_URL"] !== undefined) oauth["publicUrl"] = env["MCP_PUBLIC_URL"];
   if (env["MCP_OIDC_PRESET"] !== undefined) oauth["preset"] = env["MCP_OIDC_PRESET"];
@@ -512,12 +512,14 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_OIDC_CLIENT_ID"] !== undefined) oauth["clientId"] = env["MCP_OIDC_CLIENT_ID"];
   if (env["MCP_OIDC_CLIENT_SECRET"] !== undefined) oauth["clientSecret"] = env["MCP_OIDC_CLIENT_SECRET"];
   if (env["MCP_TRUST_PROXY"] !== undefined) oauth["trustProxy"] = env["MCP_TRUST_PROXY"];
+  if (env["MCP_CLIENT_IP_HEADER"] !== undefined) oauth["clientIpHeader"] = env["MCP_CLIENT_IP_HEADER"];
   if (env["MCP_OAUTH_REDIRECT_ALLOWLIST"] !== undefined)
     oauth["redirectAllowlist"] = env["MCP_OAUTH_REDIRECT_ALLOWLIST"];
 
   if (env["MCP_ALLOWED_EMAILS"] !== undefined) allowlist["emails"] = env["MCP_ALLOWED_EMAILS"];
   if (env["MCP_ALLOWED_SUBS"] !== undefined) allowlist["subs"] = env["MCP_ALLOWED_SUBS"];
 
+  if (Object.keys(ai).length > 0) features["ai"] = ai;
   if (Object.keys(embeddings).length > 0) features["embeddings"] = embeddings;
   if (Object.keys(imageGen).length > 0) features["imageGen"] = imageGen;
   if (Object.keys(allowlist).length > 0) oauth["allowlist"] = allowlist;
@@ -531,47 +533,28 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   return overrides;
 }
 
-// Recursively merges base config with overrides. Override values win for non-object fields.
-// Keys are treated strictly as data: the base value is read only from base's OWN properties
-// (a bracket read of an absent `__proto__` would otherwise yield `Object.prototype` and
-// wrongly recurse into it), and each merged value is written with `Object.defineProperty`
-// rather than `result[key] = …` (assignment honors the `__proto__` accessor, mutating or
-// nulling the prototype chain instead of recording the key). See #345.
-/** @internal Pure helper for config merging. Exported for property-based testing only. */
-export function deepMerge(base: Record<string, unknown>, overrides: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...base };
-  for (const key of Object.keys(overrides)) {
-    const baseVal = Object.hasOwn(base, key) ? base[key] : undefined;
-    const overVal = overrides[key];
-    const merged =
-      typeof baseVal === "object" &&
-      baseVal !== null &&
-      !Array.isArray(baseVal) &&
-      typeof overVal === "object" &&
-      overVal !== null &&
-      !Array.isArray(overVal)
-        ? deepMerge(baseVal as Record<string, unknown>, overVal as Record<string, unknown>)
-        : overVal;
-    Object.defineProperty(result, key, { value: merged, writable: true, enumerable: true, configurable: true });
-  }
-  return result;
-}
-
 // Orchestrates the full config loading pipeline. Accepts optional configDir for testability.
 export function loadConfig(configDir?: string): Result<PaprikaConfig, ConfigError> {
   const dir = configDir ?? getConfigDir();
 
+  // Fail loudly on settings an older release read, rather than silently ignoring them.
+  const legacyFile = join(dir, "config.json");
+  if (existsSync(legacyFile)) return err(ConfigError.legacyConfigFile(legacyFile));
+
   loadDotEnv(dir);
 
-  return readConfigFile(dir).andThen((fileConfig) => {
-    const envOverrides = buildEnvOverrides(process.env);
-    const merged = deepMerge(fileConfig, envOverrides);
+  // After loadDotEnv, so an old name in `.env` is caught as well as one in the real env.
+  for (const [oldName, newName] of Object.entries(RENAMED_ENV_VARS)) {
+    if (process.env[oldName] !== undefined) return err(ConfigError.renamedEnvVar(oldName, newName));
+  }
+  for (const [name, instead] of Object.entries(REMOVED_ENV_VARS)) {
+    // An empty leftover (`IMAGE_GEN_API_KEY=`) sets nothing, so it doesn't block boot.
+    if ((process.env[name] ?? "") !== "") return err(ConfigError.removedEnvVar(name, instead));
+  }
 
-    const parseResult = paprikaConfigSchema.safeParse(merged);
-    if (!parseResult.success) {
-      return err(ConfigError.validation(parseResult.error.issues));
-    }
-
-    return ok(parseResult.data);
-  });
+  const parseResult = paprikaConfigSchema.safeParse(buildEnvOverrides(process.env));
+  if (!parseResult.success) {
+    return err(ConfigError.validation(parseResult.error.issues));
+  }
+  return ok(parseResult.data);
 }
