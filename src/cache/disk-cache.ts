@@ -1,4 +1,5 @@
-import { mkdir, open, readdir, readFile, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, open, readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import { Mutex } from "async-mutex";
@@ -67,16 +68,24 @@ export const enoentOk =
   (e: CacheError): ResultAsync<T, CacheError> =>
     isNodeError(e.cause) && e.cause.code === "ENOENT" ? okAsync(recovery) : errAsync(e);
 
-/** Open + write + fsync + close — one atomic durable write per call. */
+/** Write and fsync a private sibling, then atomically replace the visible record. */
 export function writeFileAtomic(path: string, contents: string): ResultAsync<void, CacheError> {
   return ResultAsync.fromPromise(
     (async (): Promise<void> => {
-      const fh = await open(path, "w");
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      const fh = await open(temporary, "wx", 0o600);
       try {
-        await fh.writeFile(contents);
-        await fh.sync();
+        try {
+          await fh.writeFile(contents);
+          await fh.sync();
+        } finally {
+          await fh.close();
+        }
+        await rename(temporary, path);
       } finally {
-        await fh.close();
+        await unlink(temporary).catch((cause: unknown) =>
+          isNodeError(cause) && cause.code === "ENOENT" ? undefined : Promise.reject(cause),
+        );
       }
     })(),
     cacheError(`write ${path}`),
