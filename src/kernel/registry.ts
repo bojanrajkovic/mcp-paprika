@@ -38,11 +38,8 @@ import { buildSyncDriver } from "./sync.js";
  *
  * `dependsOn` is the single source of truth — its element union is the tools' and
  * hooks' `deps`. A post-sync boot hook ({@link ModuleParts.onIndexReady}) sequences
- * side-effects the construction topo-sort cannot express. The sync seam follows the same shape:
- * each module contributes a `reconcile` per owned entity, reached through the same
- * {@link BootCtx}, and the kernel drives them — so a central sync needs no
- * global slice over the modules' hidden stores. See {@link SyncContribution} and
- * the driver in `./sync.ts`.
+ * side-effects the construction topo-sort cannot express. Each module contributes a
+ * {@link SyncContribution} per owned entity; the sync driver in `./sync.ts` runs them.
  */
 
 /**
@@ -337,16 +334,14 @@ export interface Kernel {
   /** Flush every module that owns a cache — only if a snapshot is wanted. */
   flushAll(): ResultAsync<void, CacheError>;
   /**
-   * Run ONE sync cycle: reference catalogs first (best-effort), then core (recipe
-   * first, then the rest in dependency order; a core `err` aborts), then additive
-   * best-effort, then flush + sweep. Never throws.
+   * Run ONE sync cycle (tiered reconciles, then flush + sweep; see
+   * {@link buildSyncDriver}). Never throws.
    * Returns the cycle's `outcome` plus its per-entity change results, which feed the
    * change-count metrics. Results come back ONLY for a cycle that completed through
    * flush; an aborted cycle (a core `err` or a flush error) returns `[]`, so a partial,
    * un-flushed cycle counts no changes. The interval driver reads `outcome` to pace its
    * next cycle (`core_partial` retries sooner). The initial cycle already ran at build
-   * time (gating the
-   * post-sync hooks); the interval driver calls this on its loop.
+   * time (gating the post-sync hooks); the interval driver calls this on its loop.
    *
    * `trigger` only labels telemetry (the cycle span + duration histogram);
    * behavior is identical. buildKernel's internal initial call passes "boot";
@@ -355,8 +350,7 @@ export interface Kernel {
   syncOnce(trigger?: SyncTrigger): Promise<SyncCycle>;
 }
 
-/** One constructed module, as `buildKernel` holds it. The sync driver reads `id` and `syncs`. */
-export interface Built {
+interface Built {
   readonly id: string;
   readonly dependsOn: ReadonlyArray<string>;
   readonly state: unknown;
@@ -433,13 +427,17 @@ export async function buildKernel(
   const flushAll = (): ResultAsync<void, CacheError> =>
     ResultAsync.combine(flushers.map((f) => f())).map(() => undefined);
 
-  const syncOnce = buildSyncDriver({ built, bootCtxOf, flushAll, log: infra.log });
+  const syncOnce = buildSyncDriver({
+    modules: built.map((b) => ({ id: b.id, syncs: b.syncs, ctx: () => bootCtxOf(b) })),
+    flushAll,
+    log: infra.log.child({ component: "sync" }),
+  });
 
   // Boot: construct → run the INITIAL sync cycle → run the post-sync onIndexReady
   // hook. The initial cycle gates the hook, so e.g. the vector index builds against
   // already-synced stores. The interval loop just calls `syncOnce` repeatedly. The
   // startup breadcrumb (#158) brackets the cycle: a failure logs `sync failed`
-  // (error) from the catch above.
+  // (error) from the driver in ./sync.ts.
   infra.log.info("running initial sync");
   // The initial cycle's results are intentionally discarded — the interval driver
   // re-syncs immediately to keep the cache warm, and nothing consumes a cycle's results.

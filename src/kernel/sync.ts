@@ -4,20 +4,13 @@ import type { Logger } from "pino";
 
 import type { CacheError } from "../cache/disk-cache.js";
 import type { AnySyncResult, SyncError } from "../paprika/sync-types.js";
-import type { BootCtx, Built, DomainId, ErasedBootCtx } from "./registry.js";
+import type { BootCtx, DomainId, ErasedBootCtx } from "./registry.js";
 
 import { PartialSyncError } from "../paprika/sync-types.js";
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
 
-/**
- * The kernel's sync engine: a dumb driver over per-module reconciles. Each module
- * contributes a `reconcile` per owned entity via {@link SyncContribution}, reached
- * through the same {@link BootCtx} the boot hooks receive, so a central sync needs
- * no global slice over the modules' hidden stores. `buildKernel` calls
- * {@link buildSyncDriver} once at boot to get the `syncOnce` its `Kernel` exposes;
- * the interval loop (`src/server/sync-loop.ts`) calls it repeatedly.
- */
+/** The kernel's sync driver: a dumb sequencer over per-module reconciles. */
 
 /**
  * Sync tier — three buckets the driver runs in order each cycle: reference → core →
@@ -107,24 +100,29 @@ const syncSweepExpired = lazy(() =>
 /** `error.type` class for a reconcile failure: the error's constructor, or the plain-object CacheError. */
 const syncErrorType = (error: SyncError): string => errorTypeName(error, "CacheError");
 
+/** One constructed module, as the sync driver sees it. */
+interface SyncModule {
+  readonly id: string;
+  readonly syncs: ReadonlyArray<ErasedSync> | undefined;
+  /** Builds the boot ctx the module's reconciles receive, once per reconcile call. */
+  readonly ctx: () => ErasedBootCtx;
+}
+
 /** What the sync driver needs from `buildKernel`. */
-export interface SyncDriverDeps {
+interface SyncDriverDeps {
   /** The constructed modules, in dependency (topo-sort) order. */
-  readonly built: ReadonlyArray<Built>;
-  /** The boot ctx each module's reconciles receive. */
-  readonly bootCtxOf: (b: Built) => ErasedBootCtx;
+  readonly modules: ReadonlyArray<SyncModule>;
   /** Flushes every module cache; a cycle reports results only once this succeeds. */
   readonly flushAll: () => ResultAsync<void, CacheError>;
   readonly log: Logger;
 }
 
 /**
- * Build the sync driver: bucket every module's reconciles into their tiers once, and
- * return `syncOnce`, which `buildKernel` exposes as `Kernel.syncOnce`. Three tiers run
- * in order: reference catalogs first (best-effort), then core in dependency order (a
- * failure aborts the cycle), then additive best-effort; then flush + sweep. The whole
- * cycle never throws. Tiers scope abort-blast-radius, not data ordering — nothing
- * reads a sibling store during reconcile.
+ * Build the sync driver: bucket every module's reconciles by {@link SyncTier} once, and
+ * return `syncOnce`, which `buildKernel` exposes as `Kernel.syncOnce`. Each cycle runs
+ * the tiers in order, then flush + sweep, and never throws. Each module's reconciles
+ * receive the same {@link BootCtx} its boot hook does, so the driver needs no global
+ * slice over the modules' hidden stores.
  *
  * Recipe's core reconciles must LEAD the core tier: recipe must be marked synced
  * before the other core reconciles (pantry, grocery) run, so a later core failure
@@ -135,12 +133,11 @@ export interface SyncDriverDeps {
  * `SyncContribution` ordinal (copy first, abstract on the third).
  */
 export function buildSyncDriver({
-  built,
-  bootCtxOf,
+  modules,
   flushAll,
   log,
 }: SyncDriverDeps): (trigger?: SyncTrigger) => Promise<SyncCycle> {
-  const syncOrder = [...built].sort((a, z) => (a.id === "recipe" ? -1 : 0) - (z.id === "recipe" ? -1 : 0));
+  const syncOrder = [...modules].sort((a, z) => (a.id === "recipe" ? -1 : 0) - (z.id === "recipe" ? -1 : 0));
   type RunSync = () => ResultAsync<AnySyncResult | void, SyncError>;
   const referenceSyncs: Array<RunSync> = [];
   const coreSyncs: Array<RunSync> = [];
@@ -159,7 +156,7 @@ export function buildSyncDriver({
           `paprika.sync.reconcile ${b.id}`,
           { attributes: { [ATTR_SYNC_TIER]: sync.tier, [ATTR_SYNC_DOMAIN]: b.id }, errorType: syncErrorType },
           () =>
-            sync.reconcile(bootCtxOf(b)).map((result) => {
+            sync.reconcile(b.ctx()).map((result) => {
               // The reconcile span is the active span here (traceResultAsync
               // runs fn under it); stamp what the reconcile produced.
               if (result !== undefined) {
@@ -180,7 +177,7 @@ export function buildSyncDriver({
     }
   }
 
-  return async (trigger: SyncTrigger = "interval"): Promise<SyncCycle> => {
+  const syncOnce = async (trigger: SyncTrigger = "interval"): Promise<SyncCycle> => {
     // The cycle span parents every reconcile span (and their undici fetch
     // children) via the active context; `finish` is the single end point that
     // stamps the outcome, records the duration histogram, and — only for a
@@ -306,4 +303,5 @@ export function buildSyncDriver({
       }
     });
   };
+  return syncOnce;
 }

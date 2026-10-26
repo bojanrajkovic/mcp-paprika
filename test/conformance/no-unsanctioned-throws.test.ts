@@ -85,9 +85,9 @@ const INSTRUMENTATION_RETHROWS: ReadonlyArray<readonly [file: string, fn: string
 // Recognized form #5: fail-fast at process entry and kernel construction, off
 // the request path. Pinned to exact files (not a directory prefix) so a throw
 // added to a request-serving sibling — e.g. src/transport/http.ts — is NOT
-// waved through; and within registry.ts (which also holds the sync driver) to
-// the construction-time dependency-graph check, so a future throw on the
-// driver path is NOT silently sanctioned.
+// waved through; and within registry.ts to the construction-time
+// dependency-graph check (`visit`), so a throw added to `registerAll` or to
+// `buildKernel`'s runtime closures is NOT silently sanctioned.
 const BOOT_SITES: ReadonlyArray<readonly [file: string, fn: string]> = [
   ["src/index.ts", "*"],
   ["src/transport/e2e-server.ts", "*"],
