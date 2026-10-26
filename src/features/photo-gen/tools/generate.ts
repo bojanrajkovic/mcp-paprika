@@ -111,8 +111,8 @@ export const generatePhotoTool = defineTool(
       const photographyClient = ctx.state.photographyClient;
       if (photographyClient === null) {
         return errorResult(
-          "AI photo generation is not configured on this server. Set IMAGE_GEN_API_KEY (or reuse the " +
-            "embeddings credentials) to enable generate_recipe_photo.",
+          "AI photo generation is not configured on this server. Set OPENAI_API_KEY (and leave " +
+            "IMAGE_GEN_ENABLED unset or true) to enable generate_recipe_photo.",
         );
       }
 
@@ -170,7 +170,7 @@ export const generatePhotoTool = defineTool(
           if (error instanceof PhotographyAPIError) {
             if (error.status === 401 || error.status === 403) {
               return errorResult(
-                "Image generation failed: the provider rejected the credentials. Check IMAGE_GEN_API_KEY (or the reused OpenRouter key).",
+                "Image generation failed: the provider rejected the credentials. Check OPENAI_API_KEY.",
               );
             }
             return errorResult(`Image generation failed (HTTP ${error.status.toString()}): ${toMessage(error)}`);

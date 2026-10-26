@@ -1,7 +1,7 @@
 import type { PhotoGenApi } from "./api.js";
 
 import { defineModule, register } from "../../kernel/registry.js";
-import { resolveImageGenConfig } from "../../utils/config.js";
+import { isOpenRouterBaseUrl, resolveImageGenConfig } from "../../utils/config.js";
 import { PhotographyClient } from "../photography.js";
 import { generatePhotoTool } from "./tools/generate.js";
 
@@ -48,6 +48,15 @@ register(
         resolvedImageGen !== null
           ? new PhotographyClient(resolvedImageGen, infra.log.child({ component: "photography" }))
           : null;
+
+      // Photo generation bills per image and turns on with OPENAI_API_KEY, so say so at boot.
+      const log = infra.log.child({ component: "photo-gen" });
+      const ai = infra.config.features?.ai;
+      if (photographyClient !== null) {
+        log.info("photo generation enabled (set IMAGE_GEN_ENABLED=false to turn it off)");
+      } else if (ai !== undefined && !isOpenRouterBaseUrl(ai.baseUrl)) {
+        log.info("photo generation disabled: it needs OPENAI_BASE_URL to be OpenRouter");
+      }
 
       return { photographyClient };
     })

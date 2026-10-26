@@ -5,6 +5,7 @@ import type { DiscoverApi } from "./api.js";
 
 import { defineModule, register } from "../../kernel/registry.js";
 import { getMeter, lazy } from "../../telemetry/scope.js";
+import { resolveEmbeddingConfig } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { EMBEDDING_SCHEMA_VERSION, EmbeddingClient } from "../embeddings.js";
 import { VectorStore } from "../vector-store.js";
@@ -48,9 +49,9 @@ register(
       // Using `infra.config` ensures there is no second, divergent parse whose error
       // arm would silently disable the feature. Unconfigured → a null vectorStore,
       // and both the tool and the index hook below no-op cleanly.
-      const embeddingsConfig = infra.config.features?.embeddings;
+      const embeddingsConfig = resolveEmbeddingConfig(infra.config);
 
-      if (embeddingsConfig === undefined) {
+      if (embeddingsConfig === null) {
         infra.log.child({ component: "discover" }).info("semantic search disabled");
         return { vectorStore: null, embedder: null };
       }

@@ -211,7 +211,7 @@ async function main(): Promise<void> {
     pretty: true,
   }).child({ component: "e2e" });
 
-  // Force features OFF regardless of ambient env: OPENAI_API_KEY / IMAGE_GEN_API_KEY
+  // Force features OFF regardless of ambient env: OPENAI_API_KEY
   // would otherwise enable embeddings/image-gen and make discover + generate_recipe_photo
   // try to hit the network. Dropping the `features` key (it is optional) leaves
   // `config.features?.…` undefined, so both feature modules build null components and
