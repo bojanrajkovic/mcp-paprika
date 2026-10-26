@@ -1,6 +1,6 @@
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 
-import type { SyncContribution } from "../../../kernel/registry.js";
+import type { SyncContribution } from "../../../kernel/sync.js";
 import type { RecipeSyncResult, SyncError } from "../../../paprika/sync-types.js";
 import type { RecipeState } from "../module.js";
 import type { Recipe } from "../types.js";

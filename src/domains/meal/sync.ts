@@ -1,4 +1,4 @@
-import type { SyncContribution } from "../../kernel/registry.js";
+import type { SyncContribution } from "../../kernel/sync.js";
 import type { MealState } from "./module.js";
 
 import { syncReplaceAllEntity } from "../../paprika/sync.js";

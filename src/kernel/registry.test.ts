@@ -1,53 +1,16 @@
-import { errAsync, okAsync, type ResultAsync } from "neverthrow";
-import { describe, expect, it, vi } from "vitest";
+import { okAsync } from "neverthrow";
+import { describe, expect, it } from "vitest";
 
-import type { CacheError } from "../cache/disk-cache.js";
-import type { AnySyncResult, SyncError } from "../paprika/sync-types.js";
-import type { ErasedModule, Infra, SyncTier } from "./registry.js";
+import type { ErasedModule, Infra } from "./registry.js";
 
 import { makeKernelInfra } from "../../test/support/kernel-harness.js";
-import { PaprikaError } from "../paprika/errors.js";
-import { PartialSyncError } from "../paprika/sync-types.js";
 import { buildKernel } from "./registry.js";
 
 /**
- * Drives the kernel's `syncOnce` orchestration in isolation via synthetic modules
- * passed to `buildKernel(infra, modules)`. This covers the dumb-driver contract:
- * reference-before-core ordering, recipe-first within core, reference- and
- * additive-are-best-effort, core-err-aborts-the-cycle (plus the defensive catch
- * for a reconcile that breaks the Result contract by throwing),
- * results-only-after-flush, and end-of-cycle sweep.
+ * Drives `buildKernel`'s construction and boot phases via synthetic modules: the
+ * dependency-ordered `.build` with its deps, and the initial sync gating the
+ * `onIndexReady` hook. The sync driver's own contract is covered in `sync.test.ts`.
  */
-
-const RESULT = (changeType: AnySyncResult["changeType"]): AnySyncResult =>
-  ({ changeType, changes: { added: [{ uid: "x" }], updated: [], removedUids: [] } }) as unknown as AnySyncResult;
-
-interface SyncSpec {
-  readonly tier: SyncTier;
-  reconcile: () => ResultAsync<AnySyncResult | void, SyncError>;
-  sweep?: () => number;
-}
-
-/** A bare ErasedModule with controlled syncs + flush — no stores, no client calls. */
-function fakeModule(
-  id: string,
-  syncs: ReadonlyArray<SyncSpec>,
-  flush?: () => ResultAsync<void, CacheError>,
-): ErasedModule {
-  return {
-    id,
-    dependsOn: [],
-    build: async () => ({
-      state: {},
-      api: {},
-      tools: [],
-      resources: undefined,
-      syncs,
-      onIndexReady: undefined,
-      flush,
-    }),
-  } as unknown as ErasedModule;
-}
 
 function infra(): Infra {
   return makeKernelInfra({ cacheDir: "/tmp/kernel-driver-test-unused" });
@@ -85,133 +48,6 @@ describe("buildKernel boot ordering", () => {
 
     await kernel.syncOnce();
     expect(order).toEqual(["sync", "index", "sync"]);
-  });
-});
-
-describe("buildKernel sync driver", () => {
-  it("runs the recipe module's core reconcile first, others after (stable)", async () => {
-    const order: string[] = [];
-    const core = (id: string): SyncSpec => ({
-      tier: "core",
-      reconcile: () => {
-        order.push(id);
-        return okAsync(undefined);
-      },
-    });
-    // Registration order puts recipe in the middle; the driver must hoist it to front.
-    const kernel = await buildKernel(infra(), [
-      fakeModule("aaa", [core("aaa")]),
-      fakeModule("recipe", [core("recipe")]),
-      fakeModule("zzz", [core("zzz")]),
-    ]);
-    order.length = 0;
-    await kernel.syncOnce();
-    expect(order[0]).toBe("recipe");
-    expect(order).toEqual(["recipe", "aaa", "zzz"]);
-  });
-
-  it("returns the completed cycle's results (one per emitting reconcile)", async () => {
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }]),
-      fakeModule("grocery", [{ tier: "core", reconcile: () => okAsync(RESULT("grocery-lists")) }]),
-      fakeModule("pantry", [{ tier: "core", reconcile: () => okAsync(undefined) }]),
-    ]);
-    const { outcome, results } = await kernel.syncOnce();
-    expect(outcome).toBe("ok");
-    expect(results.map((r) => r.changeType).sort()).toEqual(["grocery-lists", "recipes"]);
-  });
-
-  it("aborts the cycle and returns [] when a core reconcile errs", async () => {
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }]),
-      fakeModule("boom", [{ tier: "core", reconcile: () => errAsync(new PaprikaError("core boom")) }]),
-    ]);
-    await expect(kernel.syncOnce()).resolves.toEqual({ outcome: "core_aborted", results: [] });
-  });
-
-  it("reports core_partial (still aborting: no results, no sweep) when a core reconcile errs with partial progress", async () => {
-    const sweep = vi.fn(() => 0);
-    const partial = new PartialSyncError({ landed: 3, failed: 2, cause: new PaprikaError("rate limited") });
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [{ tier: "core", reconcile: () => errAsync(partial), sweep }]),
-    ]);
-    sweep.mockClear();
-    await expect(kernel.syncOnce()).resolves.toEqual({ outcome: "core_partial", results: [] });
-    expect(sweep).not.toHaveBeenCalled();
-  });
-
-  it("aborts the cycle and returns [] when a reconcile breaks the contract by throwing", async () => {
-    // Defensive catch: a reconcile must return a Result, but a bug inside a chain
-    // callback rejects the underlying promise — syncOnce still never throws.
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }]),
-      fakeModule("boom", [
-        {
-          tier: "core",
-          reconcile: () => {
-            throw new Error("contract-breaking throw");
-          },
-        },
-      ]),
-    ]);
-    await expect(kernel.syncOnce()).resolves.toEqual({ outcome: "contract_breach", results: [] });
-  });
-
-  it("keeps an additive reconcile best-effort: an err is swallowed, core results survive", async () => {
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }]),
-      fakeModule("photo", [{ tier: "additive", reconcile: () => errAsync(new PaprikaError("additive boom")) }]),
-    ]);
-    const { results } = await kernel.syncOnce();
-    expect(results.map((r) => r.changeType)).toEqual(["recipes"]);
-  });
-
-  it("runs reference reconciles before core, then additive", async () => {
-    const order: string[] = [];
-    const spec = (id: string, tier: SyncTier): SyncSpec => ({
-      tier,
-      reconcile: () => {
-        order.push(id);
-        return okAsync(undefined);
-      },
-    });
-    // Registration order puts the reference catalog LAST; the tier must still run it first.
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [spec("recipe", "core")]),
-      fakeModule("meals", [spec("meals", "additive")]),
-      fakeModule("aisle", [spec("aisle", "reference")]),
-    ]);
-    order.length = 0;
-    await kernel.syncOnce();
-    expect(order).toEqual(["aisle", "recipe", "meals"]);
-  });
-
-  it("keeps a reference reconcile best-effort: an err is swallowed, core results survive", async () => {
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }]),
-      fakeModule("aisle", [{ tier: "reference", reconcile: () => errAsync(new PaprikaError("reference boom")) }]),
-    ]);
-    const { results } = await kernel.syncOnce();
-    expect(results.map((r) => r.changeType)).toEqual(["recipes"]);
-  });
-
-  it("returns [] when flush errs, even though reconciles produced results", async () => {
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(RESULT("recipes")) }], () =>
-        errAsync<void, CacheError>({ context: "flush", message: "flush failed", cause: undefined }),
-      ),
-    ]);
-    await expect(kernel.syncOnce()).resolves.toEqual({ outcome: "flush_failed", results: [] });
-  });
-
-  it("runs each contribution's sweep at end-of-cycle", async () => {
-    const sweep = vi.fn(() => 0);
-    const kernel = await buildKernel(infra(), [
-      fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(undefined), sweep }]),
-    ]);
-    sweep.mockClear();
-    await kernel.syncOnce();
-    expect(sweep).toHaveBeenCalledOnce();
   });
 });
 

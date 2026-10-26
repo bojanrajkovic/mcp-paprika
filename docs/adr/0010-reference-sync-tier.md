@@ -58,4 +58,4 @@ Rejected: it gives the same failure isolation with no kernel change, but overloa
 - [ADR-0009](0009-domain-isolated-tool-modules-kernel.md) — the kernel sync driver this refines.
 - [ADR-0004](0004-tool-vs-resource-classification.md) — the Content / Data / **Reference** classification this mirrors into the sync model.
 - Issue [#224](https://github.com/bojanrajkovic/mcp-paprika/issues/224) — surfaced the meal-type tier question that led here.
-- `src/kernel/registry.ts` — `SyncTier` and the `syncOnce` driver; `src/kernel/registry.test.ts` — the tier-ordering and best-effort tests.
+- `src/kernel/sync.ts` — `SyncTier` and the `syncOnce` driver; `src/kernel/sync.test.ts` — the tier-ordering and best-effort tests.

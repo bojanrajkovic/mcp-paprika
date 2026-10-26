@@ -1,21 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { context, SpanStatusCode, trace, ValueType } from "@opentelemetry/api";
+import { context, trace } from "@opentelemetry/api";
 import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError } from "../cache/disk-cache.js";
 import type { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { PaprikaClient } from "../paprika/client.js";
-import type { AnySyncResult, SyncError } from "../paprika/sync-types.js";
 import type { IndexEventEmitter } from "../server/index-events.js";
 import type { Notifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { ResourceDef, ResourceSpec } from "./resource.js";
+import type { ErasedSync, SyncContribution, SyncCycle, SyncTrigger } from "./sync.js";
 import type { ToolDef, ToolSpec } from "./tool.js";
 
-import { PartialSyncError } from "../paprika/sync-types.js";
-import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
-import { errorTypeName, startOperation, tracePromise, traceResultAsync } from "../telemetry/trace-result.js";
+import { getTracer } from "../telemetry/scope.js";
+import { errorTypeName, startOperation, tracePromise } from "../telemetry/trace-result.js";
+import { buildSyncDriver } from "./sync.js";
 
 /**
  * The domain-isolation composition kernel.
@@ -38,11 +38,8 @@ import { errorTypeName, startOperation, tracePromise, traceResultAsync } from ".
  *
  * `dependsOn` is the single source of truth — its element union is the tools' and
  * hooks' `deps`. A post-sync boot hook ({@link ModuleParts.onIndexReady}) sequences
- * side-effects the construction topo-sort cannot express. The sync seam follows the same shape:
- * each module contributes a `reconcile` per owned entity, reached through the same
- * {@link BootCtx}, and the kernel drives them — so a central sync needs no
- * global slice over the modules' hidden stores. See {@link SyncContribution} and
- * {@link buildKernel}.
+ * side-effects the construction topo-sort cannot express. Each module contributes a
+ * {@link SyncContribution} per owned entity; the sync driver in `./sync.ts` runs them.
  */
 
 /**
@@ -144,53 +141,11 @@ export interface DomainCtx<State, Deps extends DomainId, Writes = Record<never, 
 }
 
 // Post-sync boot hook (see ModuleParts.onIndexReady below). Construction order
-// (topo-sort) handles "built before"; the INITIAL sync cycle (the driver below)
-// runs next; THEN this hook runs — so e.g. the vector index builds against
+// (topo-sort) handles "built before"; the INITIAL sync cycle (the driver in
+// ./sync.ts) runs next; THEN this hook runs — so e.g. the vector index builds against
 // already-synced stores. Sync is the driver, not a hook. One hook, one consumer
 // (discover) — reintroduce a phase array only when a second post-sync phase
 // actually exists.
-
-/**
- * Sync tier — three buckets the driver runs in order each cycle: reference → core →
- * additive. Tiers scope abort-blast-radius, NOT data ordering: nothing reads a sibling
- * store during reconcile (every catalog name resolves at read time), so a tier only
- * decides which reconciles a failure may take down. See docs/adr/0010-reference-sync-tier.md.
- *
- * - `reference` (the lookup catalogs: aisle, category, meal-type) runs FIRST, each
- *   best-effort: an `err` is logged and the cycle continues, degrading to the
- *   last-good in-memory catalog rather than aborting the primary data sync.
- * - `core` (recipe, pantry, grocery) runs next, in dependency order; a core `err`
- *   aborts the cycle as a logged no-op, mirroring the sync loop's never-throws
- *   contract (reworked from throw-abort to Result-abort).
- * - `additive` (meals, menus, photos) runs last, each best-effort, so a soft read
- *   surface can't abort core sync.
- */
-export type SyncTier = "reference" | "core" | "additive";
-
-/**
- * One entity's contribution to the sync cycle — the seam between a central sync
- * and module-owned (hidden) stores. A multi-entity domain supplies one per owned
- * entity via `syncs`. `reconcile` receives the SAME {@link BootCtx} the boot hooks
- * do: its own store/cache via `state`, its declared deps' contracts via `deps`, the
- * Paprika client via `infra.client`. So no central all-stores context is needed. It
- * resolves to an `AnySyncResult` carrying the cycle's per-entity changes (recipes/grocery/
- * menus), or `void` for reference/soft entities that report none; an `err` is the
- * abort signal the driver scopes by tier — a reconcile never
- * throws. `sweep` is the per-store pending-write TTL sweep the driver runs once at
- * end-of-cycle.
- */
-export interface SyncContribution<State, Deps extends DomainId> {
-  readonly tier: SyncTier;
-  reconcile(ctx: BootCtx<State, Deps>): ResultAsync<AnySyncResult | void, SyncError>;
-  sweep?(): number;
-}
-
-/** Kernel-facing erased sync contribution (the `State`/`Deps` generics gone). */
-interface ErasedSync {
-  readonly tier: SyncTier;
-  reconcile(ctx: ErasedBootCtx): ResultAsync<AnySyncResult | void, SyncError>;
-  sweep?(): number;
-}
 
 /**
  * What a module's `.build((state, infra, deps) => …)` callback returns. `api` must satisfy
@@ -223,7 +178,7 @@ export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, 
 }
 
 /** Kernel-facing erased contexts (the `DomainCtx`/`BootCtx` generics gone). */
-interface ErasedBootCtx {
+export interface ErasedBootCtx {
   readonly state: unknown;
   readonly deps: Record<string, unknown>;
   readonly infra: Infra;
@@ -379,16 +334,14 @@ export interface Kernel {
   /** Flush every module that owns a cache — only if a snapshot is wanted. */
   flushAll(): ResultAsync<void, CacheError>;
   /**
-   * Run ONE sync cycle: reference catalogs first (best-effort), then core (recipe
-   * first, then the rest in dependency order; a core `err` aborts), then additive
-   * best-effort, then flush + sweep. Never throws.
+   * Run ONE sync cycle (tiered reconciles, then flush + sweep; see
+   * {@link buildSyncDriver}). Never throws.
    * Returns the cycle's `outcome` plus its per-entity change results, which feed the
    * change-count metrics. Results come back ONLY for a cycle that completed through
    * flush; an aborted cycle (a core `err` or a flush error) returns `[]`, so a partial,
    * un-flushed cycle counts no changes. The interval driver reads `outcome` to pace its
    * next cycle (`core_partial` retries sooner). The initial cycle already ran at build
-   * time (gating the
-   * post-sync hooks); the interval driver calls this on its loop.
+   * time (gating the post-sync hooks); the interval driver calls this on its loop.
    *
    * `trigger` only labels telemetry (the cycle span + duration histogram);
    * behavior is identical. buildKernel's internal initial call passes "boot";
@@ -396,52 +349,6 @@ export interface Kernel {
    */
   syncOnce(trigger?: SyncTrigger): Promise<SyncCycle>;
 }
-
-/** What started a sync cycle — a telemetry label, not a behavioral input. */
-export type SyncTrigger = "boot" | "interval";
-
-/**
- * How a sync cycle ended, as recorded on its span and duration histogram.
- * `core_partial` is a core abort whose reconcile persisted part of its batch
- * ({@link PartialSyncError}); `core_aborted` is one that made no progress.
- */
-export type SyncOutcome = "ok" | "core_partial" | "core_aborted" | "flush_failed" | "contract_breach";
-
-/** One completed `syncOnce`: how it ended, and the results (empty unless it flushed). */
-export interface SyncCycle {
-  readonly outcome: SyncOutcome;
-  readonly results: ReadonlyArray<AnySyncResult>;
-}
-
-const ATTR_SYNC_TRIGGER = "mcp_paprika.sync.trigger";
-const ATTR_SYNC_OUTCOME = "mcp_paprika.sync.outcome";
-const ATTR_SYNC_TIER = "mcp_paprika.sync.tier";
-const ATTR_SYNC_DOMAIN = "mcp_paprika.sync.domain";
-const ATTR_SYNC_ENTITY = "mcp_paprika.sync.entity";
-const ATTR_SYNC_CHANGE_KIND = "mcp_paprika.sync.change.kind";
-
-const syncCycleDuration = lazy(() =>
-  getMeter().createHistogram("mcp_paprika.sync.cycle.duration", {
-    description: "Duration of sync cycles, by trigger and outcome",
-    unit: "s",
-    valueType: ValueType.DOUBLE,
-  }),
-);
-const syncChanges = lazy(() =>
-  getMeter().createCounter("mcp_paprika.sync.changes", {
-    description: "Entity changes applied by sync cycles that completed through flush",
-    unit: "{change}",
-  }),
-);
-const syncSweepExpired = lazy(() =>
-  getMeter().createCounter("mcp_paprika.sync.sweep.expired", {
-    description: "Pending-write marks expired by the end-of-cycle TTL sweep",
-    unit: "{mark}",
-  }),
-);
-
-/** `error.type` class for a reconcile failure: the error's constructor, or the plain-object CacheError. */
-const syncErrorType = (error: SyncError): string => errorTypeName(error, "CacheError");
 
 interface Built {
   readonly id: string;
@@ -520,192 +427,17 @@ export async function buildKernel(
   const flushAll = (): ResultAsync<void, CacheError> =>
     ResultAsync.combine(flushers.map((f) => f())).map(() => undefined);
 
-  // The sync DRIVER (seam: central sync ↔ module-owned stores). The engine is a
-  // dumb sequencer — each entity's reconcile lives in its module, reached through
-  // the BootCtx (its own store/cache + declared deps + the client). Three tiers run
-  // in order: reference catalogs first (best-effort), then core in dependency order
-  // (a failure aborts the cycle), then additive best-effort; then flush + sweep. The
-  // whole cycle never throws. Tiers scope abort-blast-radius, not data ordering —
-  // nothing reads a sibling store during reconcile.
-  //
-  // Recipe's core reconciles must LEAD the core tier: recipe must be marked synced
-  // before the other core reconciles (pantry, grocery) run, so a later core failure
-  // can't gate recipe tools for the interval. Recipe is dep-free, so the topo-sort
-  // (which orders aisle→pantry→grocery via their dependency edges) can't hoist it — a
-  // stable sort keyed on id "recipe" does. This is the one ordering the dependency DAG
-  // can't express; if a second priority case ever appears, promote it to a declared
-  // `SyncContribution` ordinal (copy first, abstract on the third).
-  const syncOrder = [...built].sort((a, z) => (a.id === "recipe" ? -1 : 0) - (z.id === "recipe" ? -1 : 0));
-  type RunSync = () => ResultAsync<AnySyncResult | void, SyncError>;
-  const referenceSyncs: Array<RunSync> = [];
-  const coreSyncs: Array<RunSync> = [];
-  const additiveSyncs: Array<RunSync> = [];
-  const sweepers: Array<() => number> = [];
-  for (const b of syncOrder) {
-    if (b.syncs === undefined) continue;
-    for (const sync of b.syncs) {
-      // Each reconcile runs under its own span (named by owning domain — a
-      // domain with several syncs shares the name; the entity attribute
-      // stamped from the result disambiguates), child of the cycle span via
-      // the active context. error.type carries the typed failure's class.
-      const run: RunSync = () =>
-        traceResultAsync(
-          getTracer(),
-          `paprika.sync.reconcile ${b.id}`,
-          { attributes: { [ATTR_SYNC_TIER]: sync.tier, [ATTR_SYNC_DOMAIN]: b.id }, errorType: syncErrorType },
-          () =>
-            sync.reconcile(bootCtxOf(b)).map((result) => {
-              // The reconcile span is the active span here (traceResultAsync
-              // runs fn under it); stamp what the reconcile produced.
-              if (result !== undefined) {
-                trace.getActiveSpan()?.setAttributes({
-                  [ATTR_SYNC_ENTITY]: result.changeType,
-                  "mcp_paprika.sync.added": result.changes.added.length,
-                  "mcp_paprika.sync.updated": result.changes.updated.length,
-                  "mcp_paprika.sync.removed": result.changes.removedUids.length,
-                });
-              }
-              return result;
-            }),
-        );
-      if (sync.tier === "reference") referenceSyncs.push(run);
-      else if (sync.tier === "core") coreSyncs.push(run);
-      else additiveSyncs.push(run);
-      if (sync.sweep !== undefined) sweepers.push(sync.sweep);
-    }
-  }
-  const syncOnce = async (trigger: SyncTrigger = "interval"): Promise<SyncCycle> => {
-    // The cycle span parents every reconcile span (and their undici fetch
-    // children) via the active context; `finish` is the single end point that
-    // stamps the outcome, records the duration histogram, and — only for a
-    // cycle that completed through flush — counts the applied changes. The
-    // change counters mirror the results contract: an aborted cycle reports
-    // none.
-    const cycleSpan = getTracer().startSpan("paprika.sync_cycle", { attributes: { [ATTR_SYNC_TRIGGER]: trigger } });
-    const cycleElapsedSeconds = startTimer();
-    const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): SyncCycle => {
-      const elapsedSeconds = cycleElapsedSeconds();
-      cycleSpan.setAttribute(ATTR_SYNC_OUTCOME, outcome);
-      if (outcome !== "ok") cycleSpan.setStatus({ code: SpanStatusCode.ERROR });
-      cycleSpan.end();
-      syncCycleDuration().record(elapsedSeconds, {
-        [ATTR_SYNC_TRIGGER]: trigger,
-        [ATTR_SYNC_OUTCOME]: outcome,
-      });
-      let total = 0;
-      const entitiesChanged: string[] = [];
-      for (const r of results) {
-        const counts = [
-          ["added", r.changes.added.length],
-          ["updated", r.changes.updated.length],
-          ["removed", r.changes.removedUids.length],
-        ] as const;
-        let entityTotal = 0;
-        for (const [kind, n] of counts) {
-          if (n > 0) syncChanges().add(n, { [ATTR_SYNC_ENTITY]: r.changeType, [ATTR_SYNC_CHANGE_KIND]: kind });
-          entityTotal += n;
-        }
-        total += entityTotal;
-        if (entityTotal > 0) entitiesChanged.push(r.changeType);
-      }
-      // Close every cycle with a summary line (the interval loop is otherwise
-      // silent on success): a change-bearing cycle at info, a clean no-op at
-      // debug. The aborted outcomes already logged their err/warn above, so they
-      // close at debug here without a second error line. Trace correlation via the
-      // span; per-entity counts live on the sync_changes metric.
-      const fields = {
-        trigger,
-        outcome,
-        durationSec: Math.round(elapsedSeconds),
-        changes: total,
-        entities: entitiesChanged,
-      };
-      if (outcome === "ok" && total > 0) {
-        infra.log.info(fields, "sync cycle complete");
-      } else {
-        infra.log.debug(fields, "sync cycle complete");
-      }
-      return { outcome, results };
-    };
-    return context.with(trace.setSpan(context.active(), cycleSpan), async () => {
-      const results: Array<AnySyncResult> = [];
-      // The reconciles speak Result, so the abort seam is the core-tier
-      // `err` below, not a catch. The try/catch is pure defense-in-depth for a
-      // reconcile that breaks its own contract (a throw inside a chain callback
-      // rejects the underlying promise): syncOnce's never-throws promise is
-      // load-bearing for the interval loop and boot.
-      try {
-        // Reference catalogs first, best-effort: a catalog fetch failure degrades to the
-        // last-good in-memory catalog (consumers resolve names at read time and gate on
-        // hasSynced) rather than aborting the primary data sync below.
-        for (const run of referenceSyncs) {
-          (await run()).match(
-            (r) => {
-              if (r !== undefined) results.push(r);
-            },
-            (err) => {
-              infra.log.warn({ err }, "reference sync failed; core sync unaffected");
-            },
-          );
-        }
-        for (const run of coreSyncs) {
-          const coreErr = (await run()).match(
-            (r) => {
-              if (r !== undefined) results.push(r);
-              return undefined;
-            },
-            (err) => err,
-          );
-          if (coreErr !== undefined) {
-            // A core err aborts the cycle: no flush, no sweep, no results — the
-            // partially reconciled state stays in memory and the next cycle retries.
-            // A PartialSyncError already persisted its own landed items, so it's
-            // reported apart for the loop to retry sooner.
-            infra.log.error({ err: coreErr }, "sync failed");
-            return finish(coreErr instanceof PartialSyncError ? "core_partial" : "core_aborted", []);
-          }
-        }
-        for (const run of additiveSyncs) {
-          (await run()).match(
-            (r) => {
-              if (r !== undefined) results.push(r);
-            },
-            (err) => {
-              infra.log.warn({ err }, "additive sync failed; core sync unaffected");
-            },
-          );
-        }
-        // Only a cycle that reached flush reports results: a core-reconcile err (or
-        // a flush error) aborts the cycle. Returning the partially accumulated
-        // `results` for an aborted, un-flushed cycle would count changes for state
-        // that never became durable — return `[]` instead.
-        return (await flushAll()).match(
-          () => {
-            let swept = 0;
-            for (const sweep of sweepers) swept += sweep();
-            if (swept > 0) {
-              infra.log.debug({ swept }, "swept pending writes past TTL");
-              syncSweepExpired().add(swept);
-            }
-            return finish("ok", results);
-          },
-          (flushErr) => {
-            infra.log.error({ err: flushErr }, "sync flush failed");
-            return finish("flush_failed", []);
-          },
-        );
-      } catch (err) {
-        infra.log.error({ err }, "sync failed (reconcile broke the Result contract)");
-        return finish("contract_breach", []);
-      }
-    });
-  };
+  const syncOnce = buildSyncDriver({
+    modules: built.map((b) => ({ id: b.id, syncs: b.syncs, ctx: () => bootCtxOf(b) })),
+    flushAll,
+    log: infra.log.child({ component: "sync" }),
+  });
 
   // Boot: construct → run the INITIAL sync cycle → run the post-sync onIndexReady
   // hook. The initial cycle gates the hook, so e.g. the vector index builds against
   // already-synced stores. The interval loop just calls `syncOnce` repeatedly. The
   // startup breadcrumb (#158) brackets the cycle: a failure logs `sync failed`
-  // (error) from the catch above.
+  // (error) from the driver in ./sync.ts.
   infra.log.info("running initial sync");
   // The initial cycle's results are intentionally discarded — the interval driver
   // re-syncs immediately to keep the cache warm, and nothing consumes a cycle's results.
