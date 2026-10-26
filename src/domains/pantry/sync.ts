@@ -1,4 +1,4 @@
-import type { SyncContribution } from "../../kernel/registry.js";
+import type { SyncContribution } from "../../kernel/sync.js";
 import type { PantrySyncResult } from "../../paprika/sync-types.js";
 import type { PantryState } from "./module.js";
 
