@@ -1,6 +1,6 @@
 import { scheduler } from "node:timers/promises";
 
-import type { SyncOutcome } from "../kernel/registry.js";
+import type { SyncOutcome } from "../kernel/sync.js";
 
 /**
  * The background sync interval driver. The kernel exposes only `syncOnce()`; this

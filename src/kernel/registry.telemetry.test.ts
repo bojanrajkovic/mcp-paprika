@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { CacheError } from "../cache/disk-cache.js";
 import type { AnySyncResult, SyncError } from "../paprika/sync-types.js";
-import type { ErasedModule, Infra, SyncTier } from "./registry.js";
+import type { ErasedModule, Infra } from "./registry.js";
+import type { SyncTier } from "./sync.js";
 
 import { makeKernelInfra } from "../../test/support/kernel-harness.js";
 import { installTestTelemetry } from "../../test/support/telemetry-test-utils.js";

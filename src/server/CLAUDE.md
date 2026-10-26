@@ -30,7 +30,7 @@ The notifier needs the server, the server is registered after the kernel is buil
 
 ### The sync loop keeps the cache warm; it consumes no cycle results
 
-`buildKernel`'s `syncOnce` returns the cycle's `outcome` and the `AnySyncResult[]` of a completed cycle. The interval loop re-runs `syncOnce` to keep the in-memory stores warm against remote changes, and paces its next wait from the outcome (`nextSyncPace`, a pure state machine: a `core_partial` cycle, and the boot window, retry after `PARTIAL_RETRY_MS` until an `ok` or `MAX_CONVERGING_MISSES` zero-progress passes in a row; a steady loop always waits the full interval). There is no client-facing notification, because the surface has no resources to refresh (ADR-0026); the `Notifier` carries only `loggingMessage`.
+The kernel's `syncOnce` (`../kernel/sync.ts`) returns the cycle's `outcome` and the `AnySyncResult[]` of a completed cycle. The interval loop re-runs `syncOnce` to keep the in-memory stores warm against remote changes, and paces its next wait from the outcome (`nextSyncPace`, a pure state machine: a `core_partial` cycle, and the boot window, retry after `PARTIAL_RETRY_MS` until an `ok` or `MAX_CONVERGING_MISSES` zero-progress passes in a row; a steady loop always waits the full interval). There is no client-facing notification, because the surface has no resources to refresh (ADR-0026); the `Notifier` carries only `loggingMessage`.
 
 ### The index-event seam (`IndexEventEmitter`) crosses a non-edge
 
