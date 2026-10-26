@@ -27,6 +27,26 @@ flowchart TB
   N -.->|"stdio: singleServer / http: broadcast"| SRV
 ```
 
+### HTTP sessions and restarts
+
+An HTTP session belongs to the OAuth subject whose token opened it, and only that subject can use it. Each session also leaves a small record on disk (`<cache dir>/sessions/`), so a restart doesn't strand clients: a request for an id that isn't live is rebuilt from its record under the same id, with the client's capabilities restored, instead of getting a `404`. See [ADR-0027](adr/0027-session-rehydration.md).
+
+```mermaid
+flowchart TB
+  R["request with mcp-session-id"] --> L{"live?"}
+  L -->|"yes, same subject"| S["serve"]
+  L -->|"yes, other subject"| NF["404 Session not found"]
+  L -->|no| V{"UUID-shaped?"}
+  V -->|no| NF
+  V -->|yes| D{"record on disk?"}
+  D -->|no| NF
+  D -->|"yes, unused past the TTL"| P["prune record"] --> NF
+  D -->|"yes, other subject"| NF
+  D -->|"yes, same subject"| RB["rebuild: synthetic initialize<br/>under the same id"]
+  RB -->|ok| S
+  RB -->|failed| NF
+```
+
 ## Caching and sync
 
 Every Paprika entity family lives in two layers: an in-memory store that is the session's source of truth, backed by an atomic-write per-entity disk cache. Tools never touch the filesystem; they query the store, which is hydrated from disk at startup and kept fresh by background sync. That split keeps disk I/O off the hot path and tool code trivially testable, and the disk layer makes the server usable the instant it restarts: the cache is warm before the first sync returns, so a redeploy never leaves the user staring at a cold, empty library. See `src/cache/CLAUDE.md` (the store layer and, in its Persistence section, the disk layer).

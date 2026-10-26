@@ -31,6 +31,8 @@ export const mcpServerOperationDuration: () => Histogram = lazy(() =>
 
 /** Which transport served a session/operation — custom-prefixed; shared by both transports' recordings. */
 export const ATTR_MCP_PAPRIKA_TRANSPORT = "mcp_paprika.transport";
+/** How an HTTP session-adopt attempt ended (`AdoptOutcome` in src/transport/session-rehydration.ts). */
+export const ATTR_MCP_PAPRIKA_SESSION_ADOPT_OUTCOME = "mcp_paprika.session.adopt.outcome";
 
 /** MCP session lifetime, recorded once at session close; attr: `mcp_paprika.transport`. */
 export const mcpServerSessionDuration: () => Histogram = lazy(() =>

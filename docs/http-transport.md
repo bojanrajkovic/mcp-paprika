@@ -87,6 +87,26 @@ discard the id and initialize again:
 { "jsonrpc": "2.0", "error": { "code": -32001, "message": "Session not found" }, "id": null }
 ```
 
+### Surviving restarts
+
+Sessions survive a restart. At `initialize` the server writes a small record to
+`<cache dir>/sessions/<session id>.json`: the protocol version, the client's name, version,
+and capabilities, the owning subject, and two timestamps. No tokens. After a restart, a
+request with an old session id is served from a session rebuilt from that record, so the
+client never sees the `404`. Put the [cache directory](configuration.md#cache-directory) on a
+persistent volume for this to work.
+
+A record is removed when the client ends the session with `DELETE /mcp`, or once it has gone
+unused for longer than the TTL. The server keeps a bounded number of records and sweeps
+expired ones at boot and when the cap is reached. If every slot holds a session still in
+use, a new session works but won't survive a restart; the server logs
+`session record cap reached; this session won't survive a restart`. The TTL, the cap, and
+how often an active session refreshes its record are `SESSION_TTL_MS`,
+`MAX_PERSISTED_SESSIONS`, and `LAST_SEEN_REFRESH_MS` in `src/transport/session-store.ts`.
+
+One thing doesn't survive: an elicitation prompt that's open at the moment of the restart.
+The session comes back, but that tool call fails and the assistant has to retry it.
+
 ## Graceful shutdown (Kubernetes)
 
 On `SIGTERM` the server shuts down in two phases:
