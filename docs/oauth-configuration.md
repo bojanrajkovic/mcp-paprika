@@ -10,21 +10,21 @@ reference.
 
 ## Environment variables
 
-| Variable                         | Config path                 | Required     | Default    | Description                                                                       |
-| -------------------------------- | --------------------------- | ------------ | ---------- | --------------------------------------------------------------------------------- |
-| `MCP_PUBLIC_URL`                 | `oauth.publicUrl`           | Yes (http)   | —          | Publicly reachable `https://` URL for this server (no trailing slash)             |
-| `MCP_OIDC_PRESET`                | `oauth.preset`              | Yes (http) ¹ | —          | OIDC provider preset: `google`, `entra`, `okta`, `auth0`, `keycloak`              |
-| `MCP_OIDC_DISCOVERY_URL`         | `oauth.discoveryUrl`        | Yes (http) ¹ | —          | OIDC discovery URL; an alternative to `MCP_OIDC_PRESET` for any OIDC IdP          |
-| `MCP_OIDC_CLIENT_ID`             | `oauth.clientId`            | Yes (http)   | —          | OAuth client ID issued by the IdP                                                 |
-| `MCP_OIDC_CLIENT_SECRET`         | `oauth.clientSecret`        | Yes (http)   | —          | OAuth client secret issued by the IdP                                             |
-| `MCP_ALLOWED_EMAILS`             | `oauth.allowlist.emails`    | Yes (http) ² | `[]`       | Comma-separated email addresses allowed to use the server                         |
-| `MCP_ALLOWED_SUBS`               | `oauth.allowlist.subs`      | Yes (http) ² | `[]`       | Comma-separated OIDC subject identifiers allowed to use the server                |
-| `MCP_TRUST_PROXY`                | `oauth.trustProxy`          | No           | `false`    | Trust a front proxy's client-IP header (see [Trust proxy](#trust-proxy))          |
-| `MCP_CLIENT_IP_HEADER`           | `oauth.clientIpHeader`      | No           | —          | Header that proxy sets; needs `MCP_TRUST_PROXY=true` (default `x-forwarded-for`)  |
-| `MCP_OAUTH_REDIRECT_ALLOWLIST`   | `oauth.redirectAllowlist`   | No           | `[]`       | Recognized redirect origins for the [consent gate](#redirect-origin-consent-gate) |
-| `MCP_OIDC_SCOPES`                | `oauth.scopes`              | No           | —          | Extra OAuth scopes to request (comma-separated)                                   |
-| `MCP_OIDC_EMAIL_VERIFIED_POLICY` | `oauth.emailVerifiedPolicy` | No           | `strict` ³ | Email verification policy: `strict`, `skip`, or `if-present`                      |
-| `MCP_OIDC_ALLOWED_ALGS`          | `oauth.allowedAlgs`         | No           | `RS256` ⁴  | Allowed JWT signing algorithms (comma-separated)                                  |
+| Variable                         | Required     | Default    | Description                                                                       |
+| -------------------------------- | ------------ | ---------- | --------------------------------------------------------------------------------- |
+| `MCP_PUBLIC_URL`                 | Yes (http)   | —          | Publicly reachable `https://` URL for this server (no trailing slash)             |
+| `MCP_OIDC_PRESET`                | Yes (http) ¹ | —          | OIDC provider preset: `google`, `entra`, `okta`, `auth0`, `keycloak`              |
+| `MCP_OIDC_DISCOVERY_URL`         | Yes (http) ¹ | —          | OIDC discovery URL; an alternative to `MCP_OIDC_PRESET` for any OIDC IdP          |
+| `MCP_OIDC_CLIENT_ID`             | Yes (http)   | —          | OAuth client ID issued by the IdP                                                 |
+| `MCP_OIDC_CLIENT_SECRET`         | Yes (http)   | —          | OAuth client secret issued by the IdP                                             |
+| `MCP_ALLOWED_EMAILS`             | Yes (http) ² | `[]`       | Comma-separated email addresses allowed to use the server                         |
+| `MCP_ALLOWED_SUBS`               | Yes (http) ² | `[]`       | Comma-separated OIDC subject identifiers allowed to use the server                |
+| `MCP_TRUST_PROXY`                | No           | `false`    | Trust a front proxy's client-IP header (see [Trust proxy](#trust-proxy))          |
+| `MCP_CLIENT_IP_HEADER`           | No           | —          | Header that proxy sets; needs `MCP_TRUST_PROXY=true` (default `x-forwarded-for`)  |
+| `MCP_OAUTH_REDIRECT_ALLOWLIST`   | No           | `[]`       | Recognized redirect origins for the [consent gate](#redirect-origin-consent-gate) |
+| `MCP_OIDC_SCOPES`                | No           | —          | Extra OAuth scopes to request (comma-separated)                                   |
+| `MCP_OIDC_EMAIL_VERIFIED_POLICY` | No           | `strict` ³ | Email verification policy: `strict`, `skip`, or `if-present`                      |
+| `MCP_OIDC_ALLOWED_ALGS`          | No           | `RS256` ⁴  | Allowed JWT signing algorithms (comma-separated)                                  |
 
 ¹ Set at least one of `MCP_OIDC_PRESET` or `MCP_OIDC_DISCOVERY_URL` when
 `MCP_TRANSPORT=http`. Tenant-bound presets (`entra`, `okta`, `auth0`, `keycloak`)

@@ -1,13 +1,11 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import dotenv from "dotenv";
 import { err, ok, type Result } from "neverthrow";
+import parseDurationMs from "parse-duration";
 import { z } from "zod";
 
-import { parseDuration } from "./duration.js";
-import { isNodeError } from "./errors.js";
-import { toMessage } from "./log.js";
 import { getConfigDir } from "./xdg.js";
 
 const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
@@ -22,7 +20,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "http.host": "MCP_HTTP_HOST",
   "http.allowedHosts": "MCP_ALLOWED_HOSTS",
   "http.allowedOrigins": "MCP_ALLOWED_ORIGINS",
-  "http.shutdownDrainMs": "MCP_HTTP_SHUTDOWN_DRAIN_MS",
+  "http.shutdownDrainMs": "MCP_HTTP_SHUTDOWN_DRAIN",
   "http.widgetPreview": "MCP_WIDGET_PREVIEW",
   "logging.level": "MCP_LOG_LEVEL",
   "logging.notifyLevel": "MCP_LOG_NOTIFY_LEVEL",
@@ -50,9 +48,15 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "oauth.redirectAllowlist": "MCP_OAUTH_REDIRECT_ALLOWLIST",
 };
 
+/** Env vars renamed in a breaking release: old name → new name. */
+const RENAMED_ENV_VARS: Readonly<Record<string, string>> = {
+  MCP_HTTP_SHUTDOWN_DRAIN_MS: "MCP_HTTP_SHUTDOWN_DRAIN",
+};
+
 export class ConfigError extends Error {
   readonly reason: string;
-  readonly kind: "invalid_json" | "file_read_error" | "validation";
+  /** `validation`: a value failed the schema. `migration`: a setting from an older release that is no longer read. */
+  readonly kind: "validation" | "migration";
 
   private constructor(reason: string, kind: ConfigError["kind"]) {
     super(reason);
@@ -61,14 +65,19 @@ export class ConfigError extends Error {
     this.kind = kind;
   }
 
-  static invalidJson(path: string, cause: unknown): ConfigError {
-    const detail = toMessage(cause);
-    return new ConfigError(`Invalid JSON in ${path}: ${detail}`, "invalid_json");
+  /** A `config.json` exists, but configuration is read only from env vars and the config dir's `.env`. */
+  static legacyConfigFile(path: string): ConfigError {
+    const envPath = join(dirname(path), ".env");
+    return new ConfigError(
+      `${path} is no longer read. Move its settings to environment variables or to ${envPath} ` +
+        `(one NAME=value per line; see docs/configuration.md), then delete config.json.`,
+      "migration",
+    );
   }
 
-  static fileReadError(path: string, cause: unknown): ConfigError {
-    const detail = toMessage(cause);
-    return new ConfigError(`Cannot read ${path}: ${detail}`, "file_read_error");
+  /** An env var from an older release is set under its old name. */
+  static renamedEnvVar(oldName: string, newName: string): ConfigError {
+    return new ConfigError(`${oldName} was renamed to ${newName}. Set ${newName} instead.`, "migration");
   }
 
   static validation(issues: ReadonlyArray<z.core.$ZodIssue>): ConfigError {
@@ -83,18 +92,26 @@ export class ConfigError extends Error {
   }
 }
 
-const durationField = z.union([z.string(), z.number()]).transform((val, ctx) => {
-  return parseDuration(val).match(
-    (duration) => duration.as("milliseconds"),
-    (parseErr) => {
-      ctx.addIssue({
-        code: "custom",
-        message: parseErr.reason,
-      });
-      return z.NEVER;
-    },
-  );
-});
+// Go's `time.ParseDuration` grammar plus `d`: one or more number+unit pairs, e.g. `15m`,
+// `1h30m`, `500ms`, `.5h`, `7d`, or a bare `0` (as in Go). Strict on purpose — any other
+// bare number is ambiguous (seconds? minutes? milliseconds?), so it fails at boot with a
+// hint instead of guessing. Both micro signs work for microseconds (`µs` U+00B5, `μs` U+03BC).
+const GO_DURATION = /^(0|((\d+(\.\d*)?|\.\d+)(ns|us|µs|μs|ms|s|m|h|d))+)$/;
+
+// Node's timers can't wait longer than this; a bigger delay silently fires after 1 ms.
+const MAX_TIMER_MS = 2_147_483_647;
+
+/** Normalize what parse-duration misreads: Greek mu → micro sign, and `5.h` → `5h` (it reads `5.h` as 5 ms). */
+function toParseDurationInput(val: string): string {
+  return val.replaceAll("μ", "µ").replace(/(\d)\.(?=[a-zµ])/g, "$1");
+}
+
+const durationField = z
+  .string()
+  .trim()
+  .regex(GO_DURATION, 'must be a duration with units, like "15m", "1h30m", "500ms", or "7d"')
+  .transform((val) => Math.round(parseDurationMs(toParseDurationInput(val)) ?? 0))
+  .pipe(z.number().max(MAX_TIMER_MS, "must be at most 24d (Node's timer limit)"));
 
 const BOOLEAN_STRINGS: Readonly<Record<string, boolean>> = {
   true: true,
@@ -174,7 +191,8 @@ export const paprikaConfigSchema = z
     sync: z
       .object({
         enabled: booleanField.default(true),
-        interval: durationField.prefault("15m"),
+        // At least 1s: a zero interval would re-sync against Paprika back to back.
+        interval: durationField.pipe(z.number().min(1000, "must be at least 1s")).prefault("15m"),
         // Window during which a local write is shielded from sync reconciliation
         // (sync would otherwise see a stale canonical list and either delete the
         // just-written item or resurrect the just-deleted one). Cleared on
@@ -433,29 +451,6 @@ export function resolvePendingWriteTtl(config: PaprikaConfig): number {
   return config.sync.enabled ? config.sync.pendingWriteTtl : 0;
 }
 
-// Reads config.json from configDir. ENOENT returns ok({}). Invalid JSON and permission errors return err.
-function readConfigFile(configDir: string): Result<Record<string, unknown>, ConfigError> {
-  const filePath = join(configDir, "config.json");
-  let content: string;
-  try {
-    content = readFileSync(filePath, "utf-8");
-  } catch (error: unknown) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return ok({});
-    }
-    return err(ConfigError.fileReadError(filePath, error));
-  }
-  try {
-    const parsed: unknown = JSON.parse(content);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      return err(ConfigError.invalidJson(filePath, new Error("expected a JSON object")));
-    }
-    return ok(parsed as Record<string, unknown>);
-  } catch (error: unknown) {
-    return err(ConfigError.invalidJson(filePath, error));
-  }
-}
-
 // Loads .env file from configDir into process.env. Missing .env is silently ignored.
 // quiet: true suppresses dotenv's "◇ injected env" startup banner — MCP stdio
 // transport reserves stdout for JSON-RPC framing, so any stray write corrupts
@@ -493,7 +488,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
   if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
   if (env["MCP_ALLOWED_ORIGINS"] !== undefined) http["allowedOrigins"] = env["MCP_ALLOWED_ORIGINS"];
-  if (env["MCP_HTTP_SHUTDOWN_DRAIN_MS"] !== undefined) http["shutdownDrainMs"] = env["MCP_HTTP_SHUTDOWN_DRAIN_MS"];
+  if (env["MCP_HTTP_SHUTDOWN_DRAIN"] !== undefined) http["shutdownDrainMs"] = env["MCP_HTTP_SHUTDOWN_DRAIN"];
   if (env["MCP_WIDGET_PREVIEW"] !== undefined) http["widgetPreview"] = env["MCP_WIDGET_PREVIEW"];
 
   if (env["MCP_LOG_LEVEL"] !== undefined && env["MCP_LOG_LEVEL"] !== "") {
@@ -554,47 +549,24 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   return overrides;
 }
 
-// Recursively merges base config with overrides. Override values win for non-object fields.
-// Keys are treated strictly as data: the base value is read only from base's OWN properties
-// (a bracket read of an absent `__proto__` would otherwise yield `Object.prototype` and
-// wrongly recurse into it), and each merged value is written with `Object.defineProperty`
-// rather than `result[key] = …` (assignment honors the `__proto__` accessor, mutating or
-// nulling the prototype chain instead of recording the key). See #345.
-/** @internal Pure helper for config merging. Exported for property-based testing only. */
-export function deepMerge(base: Record<string, unknown>, overrides: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...base };
-  for (const key of Object.keys(overrides)) {
-    const baseVal = Object.hasOwn(base, key) ? base[key] : undefined;
-    const overVal = overrides[key];
-    const merged =
-      typeof baseVal === "object" &&
-      baseVal !== null &&
-      !Array.isArray(baseVal) &&
-      typeof overVal === "object" &&
-      overVal !== null &&
-      !Array.isArray(overVal)
-        ? deepMerge(baseVal as Record<string, unknown>, overVal as Record<string, unknown>)
-        : overVal;
-    Object.defineProperty(result, key, { value: merged, writable: true, enumerable: true, configurable: true });
-  }
-  return result;
-}
-
 // Orchestrates the full config loading pipeline. Accepts optional configDir for testability.
 export function loadConfig(configDir?: string): Result<PaprikaConfig, ConfigError> {
   const dir = configDir ?? getConfigDir();
 
+  // Fail loudly on settings an older release read, rather than silently ignoring them.
+  const legacyFile = join(dir, "config.json");
+  if (existsSync(legacyFile)) return err(ConfigError.legacyConfigFile(legacyFile));
+
   loadDotEnv(dir);
 
-  return readConfigFile(dir).andThen((fileConfig) => {
-    const envOverrides = buildEnvOverrides(process.env);
-    const merged = deepMerge(fileConfig, envOverrides);
+  // After loadDotEnv, so an old name in `.env` is caught as well as one in the real env.
+  for (const [oldName, newName] of Object.entries(RENAMED_ENV_VARS)) {
+    if (process.env[oldName] !== undefined) return err(ConfigError.renamedEnvVar(oldName, newName));
+  }
 
-    const parseResult = paprikaConfigSchema.safeParse(merged);
-    if (!parseResult.success) {
-      return err(ConfigError.validation(parseResult.error.issues));
-    }
-
-    return ok(parseResult.data);
-  });
+  const parseResult = paprikaConfigSchema.safeParse(buildEnvOverrides(process.env));
+  if (!parseResult.success) {
+    return err(ConfigError.validation(parseResult.error.issues));
+  }
+  return ok(parseResult.data);
 }

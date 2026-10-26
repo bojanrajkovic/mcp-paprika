@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,50 +8,37 @@ import { z } from "zod";
 import {
   buildEnvOverrides,
   ConfigError,
-  deepMerge,
   type EmbeddingConfig,
   loadConfig,
   paprikaConfigSchema,
   resolveImageGenConfig,
 } from "./config.js";
 
+/** The two required settings, for tests that only care about some other env var. */
+const BASE_ENV = { PAPRIKA_EMAIL: "user@test.com", PAPRIKA_PASSWORD: "secret" } as const;
+
 describe("Configuration loading", () => {
   describe("ConfigError", () => {
-    it("is an instance of Error", () => {
-      const error = ConfigError.invalidJson("/path/config.json", new Error("test"));
-      expect(error).toBeInstanceOf(Error);
-    });
-
-    it("has a readonly reason field", () => {
-      const error = ConfigError.invalidJson("/path/config.json", new Error("test"));
-      expect(error.reason).toBeDefined();
-      expect(typeof error.reason).toBe("string");
-    });
-
-    it("has a readonly kind field", () => {
-      const error = ConfigError.invalidJson("/path/config.json", new Error("test"));
-      expect(error.kind).toBeDefined();
-      expect(["invalid_json", "file_read_error", "validation"]).toContain(error.kind);
-    });
-
-    it("ConfigError.invalidJson() creates error with kind 'invalid_json'", () => {
-      const error = ConfigError.invalidJson("/path/config.json", new Error("unexpected token"));
-      expect(error.kind).toBe("invalid_json");
-      expect(error.reason).toContain("/path/config.json");
-      expect(error.reason).toContain("unexpected token");
-    });
-
-    it("ConfigError.fileReadError() creates error with kind 'file_read_error'", () => {
-      const error = ConfigError.fileReadError("/path/config.json", new Error("EACCES"));
-      expect(error.kind).toBe("file_read_error");
-      expect(error.reason).toContain("/path/config.json");
-      expect(error.reason).toContain("EACCES");
-    });
-
-    it("ConfigError.validation() creates error with kind 'validation'", () => {
+    it("ConfigError.validation() creates an Error with kind 'validation'", () => {
       const issues: z.core.$ZodIssue[] = [];
       const error = ConfigError.validation(issues);
+      expect(error).toBeInstanceOf(Error);
       expect(error.kind).toBe("validation");
+    });
+
+    it("ConfigError.legacyConfigFile() names the file and where its settings go", () => {
+      const error = ConfigError.legacyConfigFile("/cfg/mcp-paprika/config.json");
+      expect(error.kind).toBe("migration");
+      expect(error.reason).toContain("/cfg/mcp-paprika/config.json is no longer read");
+      expect(error.reason).toContain("/cfg/mcp-paprika/.env");
+    });
+
+    it("ConfigError.renamedEnvVar() names both the old and the new variable", () => {
+      const error = ConfigError.renamedEnvVar("MCP_HTTP_SHUTDOWN_DRAIN_MS", "MCP_HTTP_SHUTDOWN_DRAIN");
+      expect(error.kind).toBe("migration");
+      expect(error.reason).toBe(
+        "MCP_HTTP_SHUTDOWN_DRAIN_MS was renamed to MCP_HTTP_SHUTDOWN_DRAIN. Set MCP_HTTP_SHUTDOWN_DRAIN instead.",
+      );
     });
   });
 
@@ -125,28 +112,48 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("accepts 'PT15M' ISO 8601 and resolves to 900000 ms", () => {
-      const input = { ...validBase, sync: { interval: "PT15M" } };
-      const result = paprikaConfigSchema.safeParse(input);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.sync.interval).toBe(900000);
-      }
+    it.each([
+      ["1h30m", 5_400_000],
+      ["500ms", 500],
+      ["1.5h", 5_400_000],
+      ["7d", 604_800_000],
+      ["2m30s", 150_000],
+      [".5h", 1_800_000],
+      ["5.h", 18_000_000],
+      ["1.1s", 1_100],
+      ["1500μs", 2],
+      ["1500µs", 2],
+      ["24d", 2_073_600_000],
+    ])("accepts Go-style %s", (text, ms) => {
+      // pendingWriteTtl, not interval: the interval adds its own 1s minimum.
+      const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { pendingWriteTtl: text } });
+      expect(result.success && result.data.sync.pendingWriteTtl).toBe(ms);
     });
 
-    it("accepts 15 (number, minutes) and resolves to 900000 ms", () => {
-      const input = { ...validBase, sync: { interval: 15 } };
-      const result = paprikaConfigSchema.safeParse(input);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.sync.interval).toBe(900000);
-      }
-    });
-
-    it("rejects 'abc' with validation error", () => {
-      const input = { ...validBase, sync: { interval: "abc" } };
-      const result = paprikaConfigSchema.safeParse(input);
+    it("rejects a duration past Node's 24.8-day timer limit", () => {
+      const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { interval: "25d" } });
       expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(ConfigError.validation(result.error.issues).reason).toContain("timer limit");
+      }
+    });
+
+    it.each(["0", "500ms"])("rejects a sync interval under 1s (%s)", (text) => {
+      const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { interval: text } });
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts 0 where it means off (the pending-write TTL)", () => {
+      const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { pendingWriteTtl: "0" } });
+      expect(result.success && result.data.sync.pendingWriteTtl).toBe(0);
+    });
+
+    it.each(["900", "PT15M", "1:30", "15 minutes", "abc", "", "-5m"])("rejects %j with a hint about units", (text) => {
+      const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { interval: text } });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(ConfigError.validation(result.error.issues).reason).toContain('like "15m", "1h30m"');
+      }
     });
 
     it("accepts '60s' for pendingWriteTtl and resolves to 60000 ms", () => {
@@ -367,11 +374,6 @@ describe("Configuration loading", () => {
         } else {
           process.env[key] = value;
         }
-      }
-      try {
-        chmodSync(join(tempDir, "config.json"), 0o644);
-      } catch {
-        // ignore if file doesn't exist
       }
       rmSync(tempDir, { recursive: true, force: true });
     });
@@ -883,6 +885,8 @@ describe("Configuration loading", () => {
       "MCP_HTTP_HOST",
       "MCP_ALLOWED_HOSTS",
       "MCP_ALLOWED_ORIGINS",
+      "MCP_HTTP_SHUTDOWN_DRAIN",
+      "MCP_HTTP_SHUTDOWN_DRAIN_MS",
       "REPLICATE_API_TOKEN",
       "OPENAI_API_KEY",
       "OPENAI_BASE_URL",
@@ -909,19 +913,10 @@ describe("Configuration loading", () => {
           process.env[key] = value;
         }
       }
-      // Restore permissions for cleanup
-      try {
-        chmodSync(join(tempDir, "config.json"), 0o644);
-      } catch {
-        // ignore if file doesn't exist
-      }
       rmSync(tempDir, { recursive: true, force: true });
     });
 
     // Shared helpers
-    function writeConfig(dir: string, config: Record<string, unknown>): void {
-      writeFileSync(join(dir, "config.json"), JSON.stringify(config));
-    }
 
     function writeDotEnv(dir: string, vars: Record<string, string>): void {
       const content = Object.entries(vars)
@@ -946,11 +941,8 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("loadConfig returns ok with PaprikaConfig when config.json provides credentials", () => {
-        writeFileSync(
-          join(tempDir, "config.json"),
-          JSON.stringify({ paprika: { email: "user@test.com", password: "secret" } }),
-        );
+      it("loadConfig returns ok with PaprikaConfig when the config dir's .env provides credentials", () => {
+        writeDotEnv(tempDir, { PAPRIKA_EMAIL: "user@test.com", PAPRIKA_PASSWORD: "secret" });
 
         loadConfig(tempDir).match(
           (config) => {
@@ -965,23 +957,6 @@ describe("Configuration loading", () => {
     });
 
     describe("Source priority chain", () => {
-      it("env var PAPRIKA_EMAIL overrides config.json", () => {
-        writeConfig(tempDir, {
-          paprika: { email: "file@test.com", password: "filepw" },
-        });
-        process.env["PAPRIKA_EMAIL"] = "env@test.com";
-
-        loadConfig(tempDir).match(
-          (config) => {
-            expect(config.paprika.email).toBe("env@test.com");
-            expect(config.paprika.password).toBe("filepw");
-          },
-          (err) => {
-            expect.fail(`Expected Ok but got Err: ${err.message}`);
-          },
-        );
-      });
-
       it("real env vars override .env file values", () => {
         writeDotEnv(tempDir, {
           PAPRIKA_EMAIL: "dotenv@test.com",
@@ -993,23 +968,6 @@ describe("Configuration loading", () => {
           (config) => {
             expect(config.paprika.email).toBe("real@test.com");
             expect(config.paprika.password).toBe("dotenvpw");
-          },
-          (err) => {
-            expect.fail(`Expected Ok but got Err: ${err.message}`);
-          },
-        );
-      });
-
-      it(".env file values override config.json values", () => {
-        writeConfig(tempDir, {
-          paprika: { email: "file@test.com", password: "filepw" },
-        });
-        writeDotEnv(tempDir, { PAPRIKA_EMAIL: "dotenv@test.com" });
-
-        loadConfig(tempDir).match(
-          (config) => {
-            expect(config.paprika.email).toBe("dotenv@test.com");
-            expect(config.paprika.password).toBe("filepw");
           },
           (err) => {
             expect.fail(`Expected Ok but got Err: ${err.message}`);
@@ -1034,7 +992,7 @@ describe("Configuration loading", () => {
     });
 
     describe("File handling", () => {
-      it("missing config.json (ENOENT) does not cause an error", () => {
+      it("missing .env file does not cause an error", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
 
@@ -1046,22 +1004,8 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("missing .env file does not cause an error", () => {
-        writeConfig(tempDir, {
-          paprika: { email: "user@test.com", password: "secret" },
-        });
-
-        loadConfig(tempDir).match(
-          () => {},
-          (err) => {
-            expect.fail(`Expected Ok but got Err: ${err.message}`);
-          },
-        );
-      });
-
-      it("invalid JSON in config.json produces ConfigError with kind 'invalid_json'", () => {
-        writeFileSync(join(tempDir, "config.json"), "not valid json {");
-
+      it("a config.json in the config dir fails with a migration error, even when env vars are complete", () => {
+        writeFileSync(join(tempDir, "config.json"), JSON.stringify({ paprika: { email: "file@test.com" } }));
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
 
@@ -1070,32 +1014,41 @@ describe("Configuration loading", () => {
             expect.fail("Expected Err but got Ok");
           },
           (error) => {
-            expect(error.kind).toBe("invalid_json");
+            expect(error.kind).toBe("migration");
+            expect(error.reason).toContain(join(tempDir, "config.json"));
           },
         );
       });
 
-      it.runIf(process.getuid?.() !== 0)(
-        "permission error on config.json produces ConfigError with kind 'file_read_error'",
-        () => {
-          writeConfig(tempDir, {
-            paprika: { email: "user@test.com", password: "secret" },
-          });
-          chmodSync(join(tempDir, "config.json"), 0o000);
+      it("the old MCP_HTTP_SHUTDOWN_DRAIN_MS name in the config dir's .env also fails with a migration error", () => {
+        writeDotEnv(tempDir, { ...BASE_ENV, MCP_HTTP_SHUTDOWN_DRAIN_MS: "5000" });
 
-          process.env["PAPRIKA_EMAIL"] = "backup@test.com";
-          process.env["PAPRIKA_PASSWORD"] = "secret";
+        loadConfig(tempDir).match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("migration");
+            expect(error.reason).toContain("MCP_HTTP_SHUTDOWN_DRAIN instead");
+          },
+        );
+      });
 
-          loadConfig(tempDir).match(
-            () => {
-              expect.fail("Expected Err but got Ok");
-            },
-            (error) => {
-              expect(error.kind).toBe("file_read_error");
-            },
-          );
-        },
-      );
+      it("the old MCP_HTTP_SHUTDOWN_DRAIN_MS name fails with a migration error naming the new one", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_HTTP_SHUTDOWN_DRAIN_MS"] = "5000";
+
+        loadConfig(tempDir).match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("migration");
+            expect(error.reason).toContain("MCP_HTTP_SHUTDOWN_DRAIN");
+          },
+        );
+      });
     });
 
     describe("transport + HTTP config", () => {
@@ -1396,8 +1349,7 @@ describe("Configuration loading", () => {
 
     describe("MCP_LOG_* env var routing", () => {
       it("MCP_LOG_LEVEL=debug routes to logging.level", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_LEVEL: "debug" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_LEVEL: "debug" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1406,8 +1358,7 @@ describe("Configuration loading", () => {
       });
 
       it("MCP_LOG_NOTIFY_LEVEL=info routes to logging.notifyLevel", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_NOTIFY_LEVEL: "info" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_NOTIFY_LEVEL: "info" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1416,8 +1367,7 @@ describe("Configuration loading", () => {
       });
 
       it("MCP_LOG_FILE=/tmp/x.log routes to logging.file", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_FILE: "/tmp/x.log" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_FILE: "/tmp/x.log" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1426,8 +1376,7 @@ describe("Configuration loading", () => {
       });
 
       it("MCP_LOG_PRETTY=true coerces to boolean true", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "true" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_PRETTY: "true" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1436,8 +1385,7 @@ describe("Configuration loading", () => {
       });
 
       it("MCP_LOG_PRETTY=false coerces to boolean false", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "false" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_PRETTY: "false" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1446,8 +1394,7 @@ describe("Configuration loading", () => {
       });
 
       it("MCP_LOG_PRETTY=1 coerces to boolean true", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "1" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_PRETTY: "1" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1456,8 +1403,7 @@ describe("Configuration loading", () => {
       });
 
       it("MCP_LOG_PRETTY=0 coerces to boolean false", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "0" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_PRETTY: "0" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1466,8 +1412,7 @@ describe("Configuration loading", () => {
       });
 
       it("MCP_LOG_PRETTY=auto passes through as the literal 'auto'", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "auto" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_PRETTY: "auto" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1479,8 +1424,7 @@ describe("Configuration loading", () => {
         // Regression test for a Codex finding: previously the env coercion
         // mapped every non-recognised value to `false`, so typos like "treu"
         // silently disabled pretty logging instead of surfacing the error.
-        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "treu" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_PRETTY: "treu" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(false);
         if (!result.success) {
@@ -1490,8 +1434,7 @@ describe("Configuration loading", () => {
       });
 
       it("empty MCP_LOG_LEVEL is ignored (treated as not set)", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_LEVEL: "" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_LEVEL: "" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(true);
         if (result.success) {
@@ -1501,8 +1444,7 @@ describe("Configuration loading", () => {
       });
 
       it("invalid MCP_LOG_LEVEL value causes loadConfig to return a validation ConfigError", () => {
-        const overrides = buildEnvOverrides({ MCP_LOG_LEVEL: "info-ish" });
-        const merged = deepMerge(validBase, overrides);
+        const merged = buildEnvOverrides({ ...BASE_ENV, MCP_LOG_LEVEL: "info-ish" });
         const result = paprikaConfigSchema.safeParse(merged);
         expect(result.success).toBe(false);
         if (!result.success) {
@@ -1603,12 +1545,12 @@ describe("Configuration loading", () => {
     });
 
     it("env routing: IMAGE_GEN_* vars populate features.imageGen", () => {
-      const overrides = buildEnvOverrides({
+      const merged = buildEnvOverrides({
+        ...BASE_ENV,
         IMAGE_GEN_API_KEY: "env-img-key",
         IMAGE_GEN_BASE_URL: "https://env.example/v1",
         IMAGE_GEN_REUSE_EMBEDDINGS_CREDS: "false",
       });
-      const merged = deepMerge(validBase, overrides);
       const result = paprikaConfigSchema.safeParse(merged);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -1620,13 +1562,13 @@ describe("Configuration loading", () => {
     });
 
     it("env routing: IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true coerces to boolean and reuses", () => {
-      const overrides = buildEnvOverrides({
+      const merged = buildEnvOverrides({
+        ...BASE_ENV,
         OPENAI_API_KEY: "emb-key",
         OPENAI_BASE_URL: "https://openrouter.ai/api/v1",
         EMBEDDING_MODEL: "text-embedding-3-large",
         IMAGE_GEN_REUSE_EMBEDDINGS_CREDS: "true",
       });
-      const merged = deepMerge(validBase, overrides);
       const result = paprikaConfigSchema.safeParse(merged);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -1635,24 +1577,6 @@ describe("Configuration loading", () => {
           baseUrl: "https://openrouter.ai/api/v1",
         });
       }
-    });
-  });
-
-  describe("deepMerge prototype-pollution safety (#345)", () => {
-    // JSON.parse (like a real config file, and like fast-check's fc.object) yields an
-    // OWN enumerable "__proto__" data property — the case that broke the property suite.
-    it("records a '__proto__' override key as own data, without polluting the prototype", () => {
-      const result = deepMerge({}, JSON.parse('{ "__proto__": { "polluted": true } }') as Record<string, unknown>);
-      expect(Object.hasOwn(result, "__proto__")).toBe(true);
-      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
-      // No global pollution: an unrelated fresh object never inherits `polluted`.
-      expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
-    });
-
-    it("a null '__proto__' override neither nulls the prototype nor drops the key", () => {
-      const result = deepMerge({}, JSON.parse('{ "__proto__": null }') as Record<string, unknown>);
-      expect("__proto__" in result).toBe(true);
-      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
     });
   });
 });

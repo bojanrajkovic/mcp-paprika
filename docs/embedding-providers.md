@@ -1,15 +1,14 @@
 # Embedding provider configuration
 
 The `discover_recipes` tool uses embeddings for semantic search, and works with any
-OpenAI-compatible `/v1/embeddings` endpoint. Three values select the provider; set them
-as environment variables or in `config.json` (see [configuration.md](configuration.md)
-for the full config reference):
+OpenAI-compatible `/v1/embeddings` endpoint. Three environment variables select the
+provider (see [configuration.md](configuration.md) for the full config reference):
 
-| Env var           | config.json path              | Description            | Example                         |
-| ----------------- | ----------------------------- | ---------------------- | ------------------------------- |
-| `OPENAI_BASE_URL` | `features.embeddings.baseUrl` | Base URL (up to `/v1`) | `https://openrouter.ai/api/v1`  |
-| `OPENAI_API_KEY`  | `features.embeddings.apiKey`  | Bearer token           | `sk-or-v1-...`                  |
-| `EMBEDDING_MODEL` | `features.embeddings.model`   | Model identifier       | `openai/text-embedding-3-small` |
+| Env var           | Description            | Example                         |
+| ----------------- | ---------------------- | ------------------------------- |
+| `OPENAI_BASE_URL` | Base URL (up to `/v1`) | `https://openrouter.ai/api/v1`  |
+| `OPENAI_API_KEY`  | Bearer token           | `sk-or-v1-...`                  |
+| `EMBEDDING_MODEL` | Model identifier       | `openai/text-embedding-3-small` |
 
 Set all three together to enable semantic search. If any are missing, the server starts
 without `discover_recipes`.
@@ -38,20 +37,6 @@ A worked Ollama configuration, as environment variables:
 OPENAI_BASE_URL=http://localhost:11434/v1
 OPENAI_API_KEY=ollama
 EMBEDDING_MODEL=nomic-embed-text
-```
-
-The same thing in `config.json`:
-
-```json
-{
-  "features": {
-    "embeddings": {
-      "baseUrl": "http://localhost:11434/v1",
-      "apiKey": "ollama",
-      "model": "nomic-embed-text"
-    }
-  }
-}
 ```
 
 Swap the three values for any other row in the matrix.
