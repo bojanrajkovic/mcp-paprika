@@ -72,6 +72,21 @@ This is belt-and-suspenders on top of `MCP_ALLOWED_HOSTS`, not a replacement for
   the port if your clients send one (e.g. `mcp.example.com:443`).
 - Either list automatically enables enforcement. There's no separate toggle.
 
+## Sessions
+
+Each client gets a session at `initialize`, identified by the `mcp-session-id` header the
+server returns. Under OAuth, a session belongs to the subject (the OIDC `sub`) whose token
+opened it. A request that presents the session id with a token for a different subject is
+treated as if the session didn't exist, so a leaked id is useless without its owner's
+token.
+
+An unknown session id gets a `404` with a JSON-RPC error body, which tells the client to
+discard the id and initialize again:
+
+```json
+{ "jsonrpc": "2.0", "error": { "code": -32001, "message": "Session not found" }, "id": null }
+```
+
 ## Graceful shutdown (Kubernetes)
 
 On `SIGTERM` the server shuts down in two phases:

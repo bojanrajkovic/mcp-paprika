@@ -5,6 +5,7 @@ import { StreamableHTTPTransport } from "@hono/mcp";
 import { bearerAuth, mcpAuthRouter } from "@hono/mcp";
 import { serve, type ServerType } from "@hono/node-server";
 import { httpInstrumentationMiddleware } from "@hono/otel";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { context, trace } from "@opentelemetry/api";
@@ -25,6 +26,7 @@ import { buildAuthContext } from "../auth/build.js";
 import { buildAuthCaches } from "../auth/disk.js";
 import { buildAuthMetadataRouter } from "../auth/metadata.js";
 import { buildAuthRoutes, buildClientCap, buildDcrRateLimit, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
+import { requestSubject, subjectMatches } from "../auth/subject.js";
 import { GeneratedImageStore } from "../features/generated-image-store.js";
 import { buildKernel } from "../kernel/registry.js";
 import { buildBrandedServer, buildInfraBase } from "../server/build.js";
@@ -51,6 +53,16 @@ import "../kernel/modules.generated.js";
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";
 
+declare module "hono" {
+  interface ContextVariableMap {
+    /**
+     * The token `bearerAuth` verified for this request; unset under dev-auth bypass.
+     * `@hono/mcp`'s transport reads the same key and forwards it to handlers as `extra.authInfo`.
+     */
+    auth: AuthInfo | undefined;
+  }
+}
+
 /**
  * Handle returned by `startHttp`. Extends `TransportHandle` with the
  * port the HTTP server actually bound to (useful for tests that pass
@@ -63,6 +75,8 @@ export interface HttpTransportHandle extends TransportHandle {
 interface Session {
   server: McpServer;
   transport: StreamableHTTPTransport;
+  /** The OAuth subject that opened this session, or `undefined` under dev-auth bypass. Only that subject may use it. */
+  readonly subject: string | undefined;
   /** Started at initialize — yields elapsed seconds for mcp.server.session.duration at close. */
   readonly elapsedSeconds: () => number;
 }
@@ -494,13 +508,18 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     );
 
     // 5. bearerAuth guards /mcp — all unauthenticated MCP requests are rejected with 401.
-    //    verifyAccessToken throws on invalid tokens; catch and return false.
+    //    verifyAccessToken throws on invalid tokens; catch and return false. The
+    //    verified AuthInfo is kept on the context for the session subject check.
     hono.use(
       "/mcp",
       bearerAuth({
-        verifyToken: async (token: string) => {
+        verifyToken: async (token, c) => {
           try {
-            await auth.provider.verifyAccessToken(token);
+            const authInfo = await auth.provider.verifyAccessToken(token);
+            // Sessions are bound to the token's subject. A token without one would
+            // look like dev-auth bypass and match every other subjectless token.
+            if (requestSubject(authInfo) === undefined) return false;
+            c.set("auth", authInfo);
             return true;
           } catch {
             return false;
@@ -523,11 +542,18 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     }
 
     const sessionId = c.req.header(MCP_SESSION_HEADER);
+    const subject = requestSubject(c.get("auth"));
 
     if (sessionId !== undefined) {
       const session = sessions.get(sessionId);
-      if (!session) {
-        return c.json({ error: "Unknown session id" }, 404);
+      // A session id held under a different subject reads as unknown, so a leaked or
+      // guessed id can't ride another principal's session or confirm that it exists.
+      if (session === undefined || !subjectMatches(subject, session.subject)) {
+        return c.json(
+          // -32001 is the code the MCP SDK's own Streamable HTTP transport sends for an unknown session.
+          { jsonrpc: "2.0", error: { code: -32001, message: "Session not found" }, id: null },
+          404,
+        );
       }
       const response = await session.transport.handleRequest(c);
       return response ?? c.body(null, 204);
@@ -581,7 +607,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     const transport = new StreamableHTTPTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
-        sessions.set(id, { server, transport, elapsedSeconds: startTimer() });
+        sessions.set(id, { server, transport, subject, elapsedSeconds: startTimer() });
         // Stash the session id so the tool/resource span seams can tag spans with
         // `mcp.session.id` — the cross-request grouping key for a turn's spans.
         recordSessionId(server.server, id);
