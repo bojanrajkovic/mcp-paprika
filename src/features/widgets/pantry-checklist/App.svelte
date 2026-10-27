@@ -28,6 +28,7 @@
     PantryItemRow,
     PantryListStructured,
   } from "../shared/server-types.js";
+  import { createSwipeAction } from "../shared/swipe-action.js";
 
   // A pantry row: the server's structured pantry item (B1 — a rename of its fields breaks this widget
   // at compile time) plus transient per-row flags. `inStock` drives which list the row lives in (the
@@ -98,11 +99,6 @@
   ) {
     p.map.set(p.uid, node);
     return {
-      update(next: { map: Map<string, HTMLElement>; uid: string }) {
-        p.map.delete(p.uid);
-        p = next;
-        p.map.set(p.uid, node);
-      },
       destroy() {
         // only forget the uid if this node is still its registrant (a re-added row's fresh
         // element may have re-registered the uid before the old element's teardown runs)
@@ -340,12 +336,11 @@
       // always-mounted body but sits clipped and invisible — a flight to it reads as flying to
       // nowhere — so the head swallows the clone instead and the count bump acknowledges the catch.
       const destRow = drawerOpen ? oosEls.get(item.uid) : undefined;
-      const uid = item.uid;
       const launched = flight.to(destRow ?? drawerHeadEl, {
         swallow: !destRow,
-        onArrive: () => flying.delete(uid),
+        onArrive: () => flying.delete(item.uid),
       });
-      if (launched && destRow) flying.add(uid);
+      if (launched && destRow) flying.add(item.uid);
     }
     const res = await callTool(app, "mark_pantry_item_out_of_stock", {
       uid: item.uid,
@@ -391,11 +386,10 @@
     live.inStock = true; // optimistic
     if (flight) {
       await tick(); // let the aisle row mount (a fresh group included), then fly home to it
-      const uid = live.uid;
-      const launched = flight.to(listEls.get(uid) ?? null, {
-        onArrive: () => flying.delete(uid),
+      const launched = flight.to(listEls.get(live.uid) ?? null, {
+        onArrive: () => flying.delete(live.uid),
       });
-      if (launched) flying.add(uid);
+      if (launched) flying.add(live.uid);
     }
     const res = await callTool(app, "restock_pantry_item", { uid: live.uid });
     live._busy = false;
@@ -456,162 +450,25 @@
     return `expires in ${days.toString()}d`;
   }
 
-  // Swipe-left to mark out, on touch hosts only — the iOS-Mail affordance, with the physics that
-  // sell it: a slop gate so a vertical pan never twitches the row, a graded reveal that tracks the
-  // finger, an armed pop past the commit threshold (with a haptic tick where the host permits it),
-  // a flick shortcut, an eased settle when released early, and a sweep off the edge on commit. The
-  // drag itself is direct manipulation, not authored motion; the settle/sweep durations go through
-  // motion() (and the sweep delay too), so reduced motion commits and settles instantly. The Out
-  // button is the pointer-host path; this is the touch path (the button is hidden there). A no-op
-  // when `enabled` is false (pointer host).
-  const SWIPE_SLOP_PX = 8; // below this the gesture is undecided — vertical pans stay the browser's
-  const SWIPE_ARM_PX = 80; // dragged past this, release commits
-  const FLICK_PX = 40; // a fast flick commits from here…
-  const FLICK_VX = 0.8; // …at this leftward velocity (px/ms)
-  function swipe(
-    node: HTMLElement,
-    param: {
-      enabled: boolean;
-      commit: () => void;
-      drag: (on: boolean) => void;
-      arm: (on: boolean) => void;
-    },
-  ) {
-    let p = param;
-    let x0: number | null = null;
-    let engaged = false; // past the slop gate — this drag is ours, not a scroll
-    let armed = false;
-    let dx = 0;
-    let vx = 0;
-    let lastX = 0;
-    let lastT = 0;
-    let suppressClick = false; // a drag's release also synthesizes a click — swallow that one
-    let sweepTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const setArmed = (on: boolean) => {
-      if (armed === on) return;
-      armed = on;
-      p.arm(on);
-      // A physical tick as the row crosses the threshold — silently unavailable on hosts without
-      // vibration (iOS Safari, permission-gated iframes), where the visual pop still carries it.
-      if (on && typeof navigator.vibrate === "function") navigator.vibrate(10);
-    };
-    // End the drag's transient state. Centralized so every exit path (commit, cancel, a capability
-    // flip mid-drag) leaves no row stuck in the dragging or armed state.
-    const endDrag = () => {
-      x0 = null;
-      engaged = false;
-      p.drag(false);
-      setArmed(false);
-    };
-    const down = (e: PointerEvent) => {
-      // One primary pointer owns the gesture: a second finger or a non-left button never restarts
-      // a drag mid-flight (x0 guard), and a synthetic pointer that can't be captured still tracks.
-      if (!p.enabled || x0 !== null || !e.isPrimary || e.button !== 0) return;
-      clearTimeout(sweepTimer);
-      node.style.transition = "";
-      x0 = e.clientX;
-      lastX = e.clientX;
-      lastT = e.timeStamp;
-      dx = 0;
-      vx = 0;
-      try {
-        node.setPointerCapture(e.pointerId);
-      } catch {
-        // untrusted/synthetic pointers (tests) have no capturable id; bubbling still delivers moves
-      }
-    };
-    const move = (e: PointerEvent) => {
-      if (x0 === null) return;
-      if (!p.enabled) {
-        // host flipped to pointer mid-drag — abandon the gesture
-        node.style.transform = "";
-        return endDrag();
-      }
-      const raw = e.clientX - x0;
-      if (!engaged) {
-        if (Math.abs(raw) < SWIPE_SLOP_PX) return; // undecided: let touch-action own a vertical pan
-        engaged = true;
-        p.drag(true);
-      }
-      const dt = e.timeStamp - lastT;
-      if (dt > 0) vx = (e.clientX - lastX) / dt;
-      lastX = e.clientX;
-      lastT = e.timeStamp;
-      // Resist past the commit threshold so the row can't be dragged fully off — enough to reveal
-      // the action, not slide the whole row away. The row stays opaque; the action shows behind it.
-      dx = Math.max(-120, Math.min(0, raw));
-      node.style.transform = `translateX(${dx.toString()}px)`;
-      setArmed(dx < -SWIPE_ARM_PX);
-    };
-    const settleBack = () => {
-      // Released early: settle home with weight instead of snapping. The inline transition is
-      // cleared afterward so the next drag tracks the finger with no lag.
-      node.style.transition = `transform ${motion(180).toString()}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-      node.style.transform = "";
-      sweepTimer = setTimeout(() => {
-        node.style.transition = "";
-      }, motion(200));
-    };
-    const up = () => {
-      if (x0 === null) return;
-      const wasEngaged = engaged;
-      const commit =
-        p.enabled &&
-        engaged &&
-        (dx < -SWIPE_ARM_PX || (dx < -FLICK_PX && vx < -FLICK_VX));
-      endDrag();
-      // A release over a control (the row's hidden AT button) also fires a click; a real drag's
-      // release must not double as an activation.
-      suppressClick = wasEngaged;
-      if (commit) {
-        // Sweep the row off the edge, then commit — the reveal fills the slot as the row leaves,
-        // and the row's exit slide takes the element from there; never snap it back.
-        node.style.transition = `transform ${motion(130).toString()}ms cubic-bezier(0.25, 1, 0.5, 1)`;
-        node.style.transform = "translateX(-110%)";
-        sweepTimer = setTimeout(() => {
-          p.commit();
-        }, motion(130));
-      } else if (wasEngaged) {
-        settleBack();
-      } else {
-        node.style.transform = "";
-      }
-    };
-    const click = (e: MouseEvent) => {
-      if (suppressClick) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      suppressClick = false;
-    };
-    const cancel = () => {
-      // The browser took the gesture (a scroll won) — settle back, and never commit from a cancel.
-      if (x0 === null) return;
-      const wasEngaged = engaged;
-      endDrag();
-      if (wasEngaged) settleBack();
-      else node.style.transform = "";
-    };
-    node.addEventListener("pointerdown", down);
-    node.addEventListener("pointermove", move);
-    node.addEventListener("pointerup", up);
-    node.addEventListener("pointercancel", cancel);
-    node.addEventListener("click", click, true); // capture: swallow the post-drag click first
-    return {
-      update(next: typeof param) {
-        p = next;
-      },
-      destroy() {
-        clearTimeout(sweepTimer);
-        node.removeEventListener("pointerdown", down);
-        node.removeEventListener("pointermove", move);
-        node.removeEventListener("pointerup", up);
-        node.removeEventListener("pointercancel", cancel);
-        node.removeEventListener("click", click, true);
-      },
-    };
-  }
+  // Swipe-left to mark out, on touch hosts only — the iOS-Mail affordance: a graded reveal that
+  // tracks the finger, an armed pop past the commit threshold (with a haptic tick where the host
+  // permits it), a mid-drag lift shadow, an eased settle when released early, and a sweep off the
+  // edge on commit. The gesture math and the pointer/response wiring are both shared:
+  // createSwipeAction wraps createSwipeRecognizer plus the physics grocery's swipe-to-
+  // check shares; only the direction, the -120..0 resistance clamp, and the exit-transform commit
+  // (this row leaves for the drawer, unlike grocery's, which stays and eases back to rest) are
+  // pantry-specific. Click suppression IS needed here: the row wraps separate button targets (the
+  // hidden `.sr-action` / visible `.rowact` pills) a stray post-drag click could activate. The Out
+  // button is the pointer-host path; this is the touch path (the button is hidden there).
+  const swipe = createSwipeAction({
+    axis: "x",
+    direction: "left",
+    resist: (raw) => Math.max(-120, Math.min(0, raw)),
+    armPx: 80,
+    flick: { px: 40, velocityPxMs: 0.8 },
+    commitTransform: "translateX(-110%)",
+    suppressClick: true,
+  });
 </script>
 
 <WidgetShell dark={theme === "dark"}>
@@ -906,7 +763,7 @@
     gap: 12px;
     padding: 11px 16px;
     background: var(--bg);
-    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
     transition: box-shadow 0.15s;
   }
   .item.busy {

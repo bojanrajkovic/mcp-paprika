@@ -76,8 +76,15 @@
     gap: 12px;
     transition: background 0.1s;
   }
-  .main:hover,
   .main.open {
+    background: var(--hover);
+  }
+  @media (hover: hover) {
+    .main:hover {
+      background: var(--hover);
+    }
+  }
+  .main:active {
     background: var(--hover);
   }
   .main:focus-visible {

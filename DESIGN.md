@@ -172,7 +172,8 @@ The widget surface themes to the host (light/dark, lightness shifts while hue ho
 
 ### Hierarchy
 
-- **Title** (weight 650, 17px, line-height 1.2, letter-spacing -0.01em): The widget header name and the consent client name. The most prominent type on a surface; there is nothing larger except the mono anchor.
+- **Title** (weight 650, 17px, line-height 1.2, letter-spacing -0.01em): The widget header name and the consent client name.
+- **Document title** (weight 650, 19px, line-height 1.25, letter-spacing -0.01em): The name of the content a widget is showing — the `RecipeDetail` heading and the menu name. One clear step above the 15px rows; apart from the consent mono anchor, nothing is larger.
 - **Body** (weight 400, 15px, line-height 1.45): Row labels, grant copy, descriptions. The reading default.
 - **Label** (weight 650, 12px, letter-spacing 0.04em, uppercase): Aisle/group headers and the consent screen's field labels — muted, quietly tracked, never shouting.
 - **Quantity / meta** (13px, muted, `font-variant-numeric: tabular-nums`): The ` · quantity` after an ingredient and other secondary metadata; tabular figures so columns of numbers align.
@@ -271,6 +272,7 @@ The consent screen's load-bearing element: a soft warm panel (`dest-bg`, 11px ra
 - **Do** keep the warm cast on every neutral (hue ~72) so the surfaces sit native in a warm host.
 - **Do** borrow native affordances — real tap targets, swipe-to-act with a visible-button fallback — rather than inventing new ones.
 - **Do** keep the consent screen calm and legible: anchor on the redirect host, state the grant plainly, give Deny equal weight to Allow.
+- **Do** gate every widget `:hover` rule behind `@media (hover: hover)` and pair it with an unconditional `:active` rule carrying the same (or an equivalent) treatment — a touch tap has no "leave" event, so an ungated `:hover` sticks lit until something else is tapped; `:active` gives touch its own press feedback that clears naturally on release.
 
 ### Don't:
 

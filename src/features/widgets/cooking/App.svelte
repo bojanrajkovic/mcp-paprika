@@ -764,7 +764,13 @@
       background 0.13s,
       color 0.13s;
   }
-  .tab:hover {
+  @media (hover: hover) {
+    .tab:hover {
+      background: var(--hover);
+      color: var(--ink);
+    }
+  }
+  .tab:active {
     background: var(--hover);
     color: var(--ink);
   }
@@ -854,7 +860,12 @@
       opacity 0.13s,
       background 0.13s;
   }
-  button.chip.raw:hover {
+  @media (hover: hover) {
+    button.chip.raw:hover {
+      background: color-mix(in oklch, var(--accent) 18%, transparent);
+    }
+  }
+  button.chip.raw:active {
     background: color-mix(in oklch, var(--accent) 18%, transparent);
   }
   .chip.raw.checked {
@@ -872,7 +883,12 @@
     margin: 0;
     opacity: 0.65;
   }
-  .chip .x:hover {
+  @media (hover: hover) {
+    .chip .x:hover {
+      opacity: 1;
+    }
+  }
+  .chip .x:active {
     opacity: 1;
   }
   .chip.inter {
@@ -881,7 +897,12 @@
     border: 1px dashed color-mix(in oklch, var(--accent) 55%, transparent);
     transition: background 0.13s;
   }
-  .chip.inter:hover {
+  @media (hover: hover) {
+    .chip.inter:hover {
+      background: color-mix(in oklch, var(--accent) 10%, transparent);
+    }
+  }
+  .chip.inter:active {
     background: color-mix(in oklch, var(--accent) 10%, transparent);
   }
   .chip.inter .lead {
@@ -901,7 +922,12 @@
     text-decoration: underline;
     text-underline-offset: 2px;
   }
-  .reanchor-open:hover {
+  @media (hover: hover) {
+    .reanchor-open:hover {
+      color: var(--accent);
+    }
+  }
+  .reanchor-open:active {
     color: var(--accent);
   }
   .reanchor-box {
@@ -944,7 +970,12 @@
     border-radius: 10px;
     transition: filter 0.13s;
   }
-  .cta:hover {
+  @media (hover: hover) {
+    .cta:hover {
+      filter: brightness(1.05);
+    }
+  }
+  .cta:active {
     filter: brightness(1.05);
   }
 
@@ -1122,7 +1153,12 @@
   .prep-row.checked .prep-text {
     text-decoration: line-through;
   }
-  .prep-row:hover {
+  @media (hover: hover) {
+    .prep-row:hover {
+      color: var(--accent);
+    }
+  }
+  .prep-row:active {
     color: var(--accent);
   }
 
@@ -1141,7 +1177,12 @@
   /* Scope the subtle hover to the non-primary (Prev) button — on the filled primary it
      would swap the accent fill for --hover while keeping dark --accent-ink text
      (unreadable dark-on-dark). The primary brightens its own fill instead. */
-  .nav .navbtn:not(.primary):hover:not(:disabled) {
+  @media (hover: hover) {
+    .nav .navbtn:not(.primary):hover:not(:disabled) {
+      background: var(--hover);
+    }
+  }
+  .nav .navbtn:not(.primary):active:not(:disabled) {
     background: var(--hover);
   }
   .nav .navbtn:disabled {
@@ -1153,7 +1194,12 @@
     background: var(--accent);
     color: var(--accent-ink);
   }
-  .nav .navbtn.primary:hover:not(:disabled) {
+  @media (hover: hover) {
+    .nav .navbtn.primary:hover:not(:disabled) {
+      filter: brightness(1.06);
+    }
+  }
+  .nav .navbtn.primary:active:not(:disabled) {
     filter: brightness(1.06);
   }
 
@@ -1305,7 +1351,12 @@
     padding: 10px 14px;
     transition: filter 0.13s;
   }
-  .split-main:hover:not(:disabled) {
+  @media (hover: hover) {
+    .split-main:hover:not(:disabled) {
+      filter: brightness(1.05);
+    }
+  }
+  .split-main:active:not(:disabled) {
     filter: brightness(1.05);
   }
   .split-main:disabled {
@@ -1337,7 +1388,12 @@
   .link.subtle {
     color: var(--muted);
   }
-  .link:hover {
+  @media (hover: hover) {
+    .link:hover {
+      filter: brightness(1.08);
+    }
+  }
+  .link:active {
     filter: brightness(1.08);
   }
   .link:focus-visible {

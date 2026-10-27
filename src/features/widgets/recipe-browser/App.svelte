@@ -648,7 +648,13 @@
     border-color: var(--accent);
     color: var(--accent-ink);
   }
-  .chip:not(.on):hover {
+  @media (hover: hover) {
+    .chip:not(.on):hover {
+      background: var(--hover);
+      color: var(--ink);
+    }
+  }
+  .chip:not(.on):active {
     background: var(--hover);
     color: var(--ink);
   }
@@ -671,7 +677,13 @@
       background 0.12s,
       color 0.12s;
   }
-  .pbtn:hover {
+  @media (hover: hover) {
+    .pbtn:hover {
+      background: var(--hover);
+      color: var(--ink);
+    }
+  }
+  .pbtn:active {
     background: var(--hover);
     color: var(--ink);
   }

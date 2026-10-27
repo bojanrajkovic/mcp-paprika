@@ -141,21 +141,24 @@ and rendered in a sandboxed iframe. To iterate on a widget's UI without a host,
 set `MCP_WIDGET_PREVIEW=true` and open the built widget in a browser:
 
 ```
-GET /widget-preview?widget=<name>&payload=<url-encoded-json>
+GET /widget-preview?widget=<name>&theme=<light|dark>#payload=<url-encoded-json>
 ```
 
 The route is **off by default and absent in production** — it is mounted only when
 the flag is set, before the auth block, so it is unauthenticated and exists purely
 for local development. It serves the same HTML the `ui://` resource does, but
 resolves the widget's ext-apps import to a fake host shim module instead of the
-real vendor (ADR-0025): the shim feeds `?payload=` to the widget's `ontoolresult`
-so you see it render, and logs the messages the widget would send back. `?payload=`
-is read client-side by the shim and never reflected into the HTML by the server.
-Two more query params exercise states a plain browser tab can't reach:
-`touch=1` reports a touch host in `getHostContext()`, so swipe-only affordances
-render, and `scale=<n>` repeats the payload's `items` array `n` times inside the
-shim, so a large-list stress test doesn't have to fit the whole list in the URL.
-Run `pnpm build:widgets` (or `pnpm dev:widgets` to rebuild on change) first so
+real vendor (ADR-0025): the shim parses the payload into a per-page mini-store,
+feeds it to the widget's `ontoolresult` so you see it render, and answers the
+widget's own `callServerTool` calls from that store. A mark, clear, add, or
+move-to-pantry mutates the store in place, so the widget's own re-read reflects
+the action, and `?elicitation=1` pops a native `confirm()` in place of the host's
+confirmation dialog. `?touch=1` reports a touch host in `getHostContext()`, so
+swipe-only affordances render. The payload rides the URL **fragment**
+(`#payload=`), which the browser never sends in the HTTP request, so a large
+stress-test payload can't hit Node's request-header size limit. The shim reads it
+client-side and the server never reflects it into the HTML. `?payload=` remains a
+size-bounded fallback for small hand-typed payloads. Run `pnpm build:widgets` (or `pnpm dev:widgets` to rebuild on change) first so
 there is something to preview.
 
 `pnpm dev:preview` serves the same route without the rest of the server. It

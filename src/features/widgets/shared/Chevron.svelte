@@ -5,16 +5,25 @@
   // that expands in place (a recipe row, the pantry drawer) — leave it false for a plain
   // navigate-in affordance (menu, a meal slot). The rotation is a CSS transition, so WidgetShell's
   // global reduced-motion block zeroes it; no per-widget handling needed.
+  // `flip` mirrors the glyph to point left (the week-nav's previous arrow) — mutually
+  // exclusive with `open` in practice (both set transform).
   let {
     size = 15,
     color = "var(--faint)",
     open = false,
-  }: { size?: number; color?: string; open?: boolean } = $props();
+    flip = false,
+  }: {
+    size?: number;
+    color?: string;
+    open?: boolean;
+    flip?: boolean;
+  } = $props();
 </script>
 
 <svg
   class="chev"
   class:open
+  class:flip
   style="--chev-size: {size}px; --chev-color: {color};"
   viewBox="0 0 16 16"
   aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg
@@ -34,5 +43,8 @@
   }
   .chev.open {
     transform: rotate(90deg);
+  }
+  .chev.flip {
+    transform: scaleX(-1);
   }
 </style>
