@@ -21,19 +21,23 @@
 
   main {
     /* Warm-neutral base (hue ~72) to sit native inside the host's warm UI and match the consent
-       screen. `--accent` is paprika-red (#C0392B) — the one brand identity colour, shared with the
-       consent screen and used for every interactive accent (the brand tile, focus rings, the Restock
-       pill, the toast Undo). `--success` is the green done / fresh state (kept distinct so a checked
-       item reads positive, never a red "done"). `--danger` is a vivid fire-engine red, deliberately
-       more saturated than the earthy brand so an alert never reads as the brand. The set is the union
-       of what the widgets use — each consumes its subset (grocery's `--success`/`--success-ink` tick,
-       the expiry `--warn`). */
+       screen. `--brand` / `--brand-ink` are the identity tile (BrandMark): paprika red (#C0392B) with
+       light ink. `--accent` / `--accent-ink` are the interactive accent (focus rings, the Restock
+       pill, rating dots, the toast Undo, filled buttons). The two are separate tokens so the accent
+       can be tuned for legibility (as text and thin strokes) without moving the identity colour.
+       `--success` is the green done / fresh state (kept distinct so a checked item reads positive,
+       never a red "done"). `--danger` is a vivid fire-engine red, deliberately more saturated than
+       the earthy brand so an alert never reads as the brand; `--danger-ink` is the text on a danger
+       fill. The set is the union of what the widgets use — each consumes its subset (grocery's
+       `--success`/`--success-ink` tick, the expiry `--warn`). */
     --bg: oklch(0.99 0.004 75);
     --ink: oklch(0.27 0.012 72);
     --muted: oklch(0.52 0.012 72);
     --faint: oklch(0.64 0.01 72);
     --line: oklch(0.91 0.007 72);
     --hover: oklch(0.96 0.006 72);
+    --brand: oklch(0.543 0.174 30);
+    --brand-ink: oklch(0.99 0.012 40);
     --accent: oklch(0.543 0.174 30);
     --accent-ink: oklch(0.99 0.012 40);
     --success: oklch(0.58 0.13 150);
@@ -41,6 +45,7 @@
     --warn: oklch(0.66 0.12 75);
     --warn-bg: oklch(0.95 0.05 82);
     --danger: oklch(0.56 0.215 29);
+    --danger-ink: oklch(0.99 0.02 29);
     --danger-bg: oklch(0.955 0.042 27);
     color-scheme: light;
 
@@ -81,6 +86,8 @@
     --faint: oklch(0.58 0.01 72);
     --line: oklch(0.31 0.01 72);
     --hover: oklch(0.26 0.012 72);
+    --brand: oklch(0.7 0.155 33);
+    --brand-ink: oklch(0.22 0.03 33);
     --accent: oklch(0.7 0.155 33);
     --accent-ink: oklch(0.22 0.03 33);
     --success: oklch(0.74 0.14 150);
@@ -88,6 +95,7 @@
     --warn: oklch(0.82 0.13 80);
     --warn-bg: oklch(0.3 0.06 80);
     --danger: oklch(0.7 0.2 29);
+    --danger-ink: oklch(0.2 0.04 29);
     --danger-bg: oklch(0.31 0.075 27);
     color-scheme: dark;
   }

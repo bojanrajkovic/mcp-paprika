@@ -1,7 +1,9 @@
 <script lang="ts">
-  // The shared toast: positioned, animated, `role=status`, with an explicit `kind` (error is
-  // danger-styled, info is neutral — no inverted default) and an optional action button (the pantry
-  // Undo). Rendered as a child of WidgetShell's `<main>` so its absolute positioning anchors there.
+  // The shared toast: positioned, animated, and announced to screen readers — an error escalates to
+  // `role=alert` (assertive, interrupts) while info stays `role=status` (polite, waits its turn) — with
+  // an explicit `kind` (error is danger-styled, info is neutral — no inverted default) and an optional
+  // action button (the pantry Undo). Rendered as a child of WidgetShell's `<main>` so its absolute
+  // positioning anchors there.
   interface ToastModel {
     kind: "error" | "info";
     msg: string;
@@ -11,7 +13,11 @@
 </script>
 
 {#if toast}
-  <div class="toast" class:error={toast.kind === "error"} role="status">
+  <div
+    class="toast"
+    class:error={toast.kind === "error"}
+    role={toast.kind === "error" ? "alert" : "status"}
+  >
     <span class="tmsg">{toast.msg}</span>
     {#if toast.action}
       <button class="undo" onclick={toast.action.fn}

@@ -1,7 +1,9 @@
 <script lang="ts">
   // The connector's brand mark — a paprika-orange tile with the "P" monogram, beside the widget
   // title. Each widget shows it in its header for a persistent, on-brand identity. The tile is
-  // decorative (the title carries the accessible name), so it is aria-hidden.
+  // decorative (the title carries the accessible name), so it is aria-hidden. It paints with the
+  // identity tokens (`--brand` / `--brand-ink`), not the interactive `--accent`, so tuning the accent
+  // never moves the mark.
   let { title }: { title: string } = $props();
 </script>
 
@@ -22,8 +24,8 @@
     width: 22px;
     height: 22px;
     border-radius: 6px;
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--brand);
+    color: var(--brand-ink);
     display: grid;
     place-items: center;
     font-weight: 800;

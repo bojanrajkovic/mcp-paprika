@@ -6,7 +6,9 @@
   // `danger-strong` (danger outline + text always — grocery's clear-confirm), `accent` (accent
   // outline + text — the pantry Restock), `accent-fill` (muted at rest, fills accent on hover —
   // the meal-planner's empty-slot Plan call-to-action). The shape, focus ring, and transition are
-  // shared; the variant sets the colors (and the one-px padding differences the originals carried).
+  // shared; the variant sets the colors (and the one-px padding differences the originals carried). On
+  // coarse pointers (touch) the pill grows to a 44px min-height tap target with its label centered;
+  // fine pointers (mouse) keep the compact pill.
   let {
     variant = "neutral",
     onclick,
@@ -34,6 +36,9 @@
 <style>
   .pill {
     flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: 1px solid var(--line);
     color: var(--muted);
     font-size: 12px;
@@ -45,6 +50,12 @@
       background 0.13s,
       color 0.13s,
       border-color 0.13s;
+  }
+  /* Touch hosts get a real 44px tap target; the compact padding still sets the fine-pointer size. */
+  @media (pointer: coarse) {
+    .pill {
+      min-height: 44px;
+    }
   }
   .pill.neutral:hover {
     background: var(--hover);
