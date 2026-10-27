@@ -74,5 +74,39 @@ describe("defineTool — schema-bearing handler return-type guard (compile-time)
         return ce ?? toolResult(`echo:${args.query}`, { echoed: args.query });
       },
     );
+
+    // UNIONS: `outputSchema` is a non-distributive conditional, so a union output keeps a
+    // union schema. A distributive one turned `ZodType<A | B>` into `ZodType<A> | ZodType<B>`,
+    // which no union schema satisfies, so a tool couldn't declare a union output at all.
+    const armA = z.object({ kind: z.literal("a"), a: z.string() });
+    const armB = z.object({ kind: z.literal("b"), b: z.number() });
+
+    // POSITIVE: a union schema accepts a handler returning either arm.
+    defineTool(
+      {
+        name: "ok_union",
+        title: "OK (union)",
+        description: "Declares a union outputSchema and returns its second arm.",
+        annotations: { readOnlyHint: true },
+        inputSchema: {},
+        outputSchema: z.union([armA, armB]),
+      },
+      (_ctx: DomainCtx<unknown, never>) => () => toolResult("b", { kind: "b" as const, b: 1 }),
+    );
+
+    // NEGATIVE: a single-arm schema rejects a handler returning the other arm. `O` is
+    // inferred from the schema, so the handler is held to that arm alone.
+    defineTool(
+      {
+        name: "bad_other_arm",
+        title: "Bad (other arm)",
+        description: "Declares one arm and returns the other, a type error.",
+        annotations: { readOnlyHint: true },
+        inputSchema: {},
+        outputSchema: armA,
+      },
+      // @ts-expect-error the handler returns arm B under a schema that only produces arm A
+      (_ctx: DomainCtx<unknown, never>) => () => toolResult("b", { kind: "b" as const, b: 1 }),
+    );
   });
 });
