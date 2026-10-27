@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { installTestTelemetry } from "../../test/support/telemetry-test-utils.js";
 import { type ClientIpSource, PEER_CLIENT_IP } from "./client-ip.js";
-import { tracedRequests } from "./http.js";
+import { tracedFlush, tracedRequests } from "./http.js";
 
 // Module scope, before any recording — see the helper's doc-comment.
 const telemetry = installTestTelemetry();
@@ -71,5 +71,33 @@ describe("tracedRequests", () => {
     const direct = appWithRoutes(PEER_CLIENT_IP);
     await direct.request("/other", { headers: { "x-forwarded-for": "203.0.113.5" } });
     expect(telemetry.spanExporter.getFinishedSpans()[0]!.attributes["client.address"]).toBeUndefined();
+  });
+});
+
+describe("tracedFlush", () => {
+  // The node-server adapter's response; already finished, so the flush span ends at once.
+  const env = { outgoing: { writableFinished: true, once: () => undefined } };
+
+  function appWithFlush(): Hono {
+    const app = new Hono();
+    app.use("*", tracedRequests());
+    app.use("*", tracedFlush());
+    app.get("/healthz", (c) => c.json({ ok: true }));
+    app.get("/other", (c) => c.text("other"));
+    return app;
+  }
+
+  it("records response.flush as a child of the request span", async () => {
+    await appWithFlush().request("/other", undefined, env);
+
+    const [flush] = telemetry.spansNamed("response.flush");
+    const request = telemetry.spanExporter.getFinishedSpans().find((s) => s.name !== "response.flush");
+    expect(flush?.parentSpanContext?.spanId).toBe(request?.spanContext().spanId);
+  });
+
+  it("records nothing for a probe, which has no request span to hang a flush under", async () => {
+    await appWithFlush().request("/healthz", undefined, env);
+
+    expect(telemetry.spanExporter.getFinishedSpans()).toEqual([]);
   });
 });

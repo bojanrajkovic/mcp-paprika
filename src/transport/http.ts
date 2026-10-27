@@ -156,13 +156,16 @@ function enrichRequestSpan(c: Context, clientIp: ClientIpSource): void {
  * time-to-kernel-buffer, NOT time-to-client — TCP backpressure hides the rest, which only the
  * client's Resource Timing sees. No-ops outside the node-server adapter (the in-memory test
  * transport sets no `outgoing`), and ends immediately if the body already flushed (a tiny response).
- * Registered INSIDE `tracedRequests`, so `context.active()` here is the request span.
+ * Registered INSIDE `tracedRequests`, so `context.active()` here is the request span. A request
+ * `tracedRequests` skips (a probe, the SSE `GET /mcp`) has no span to parent under, so it gets no
+ * flush span either; one would otherwise export as a parentless root on every probe.
  */
 export function tracedFlush(): MiddlewareHandler {
   return async (c, next) => {
     await next();
     const outgoing = (c.env as { outgoing?: ServerResponse }).outgoing;
     if (!outgoing || typeof outgoing.once !== "function") return;
+    if (trace.getSpan(context.active()) === undefined) return;
     const span = getTracer().startSpan("response.flush", undefined, context.active());
     let ended = false;
     const end = (): void => {
