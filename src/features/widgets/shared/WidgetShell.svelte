@@ -22,7 +22,7 @@
   main {
     /* Warm-neutral base (hue ~72) to sit native inside the host's warm UI and match the consent
        screen. `--brand` / `--brand-ink` are the identity tile (BrandMark): paprika red (#C0392B) with
-       light ink. `--accent` / `--accent-ink` are the interactive accent (focus rings, the Restock
+       its own ink. `--accent` / `--accent-ink` are the interactive accent (focus rings, the Restock
        pill, rating dots, the toast Undo, filled buttons). The two are separate tokens so the accent
        can be tuned for legibility (as text and thin strokes) without moving the identity colour.
        `--success` is the green done / fresh state (kept distinct so a checked item reads positive,
@@ -38,7 +38,9 @@
     --hover: oklch(0.96 0.006 72);
     --brand: oklch(0.543 0.174 30);
     --brand-ink: oklch(0.99 0.012 40);
-    --accent: oklch(0.543 0.174 30);
+    /* Darker than the brand (L0.50 vs 0.543): the accent appears as text on tinted fills (the
+       cook flow's active tab, raw-ingredient chips) and must clear WCAG AA 4.5:1 there. */
+    --accent: oklch(0.5 0.174 30);
     --accent-ink: oklch(0.99 0.012 40);
     --success: oklch(0.58 0.13 150);
     --success-ink: oklch(0.99 0.02 150);
