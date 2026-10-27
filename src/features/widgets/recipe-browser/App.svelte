@@ -2,6 +2,8 @@
   import type { App } from "@modelcontextprotocol/ext-apps";
 
   import { onMount } from "svelte";
+  import { flip } from "svelte/animate";
+  import { quintOut } from "svelte/easing";
   import { slide } from "svelte/transition";
 
   import BrandMark from "../shared/BrandMark.svelte";
@@ -19,6 +21,7 @@
     type ReceivedResult,
   } from "../shared/host-bridge.js";
   import { motion } from "../shared/motion.js";
+  import { viewTransition } from "../shared/view-transition.js";
   import {
     parseRecipeDetail,
     type RecipeDetailData,
@@ -74,11 +77,10 @@
   // race token: any move away (Back) nulls it, and the in-flight read is discarded if it no
   // longer matches, so a result landing after the user left never pops the detail pane.
   let loadingRecipeUid = $state<string | null>(null);
-  // The browse list element + the scroll offset captured before opening the detail pane. On Back
-  // the list remounts and the `restoreScroll` action re-applies the offset (Svelte 5 has no
-  // `bind:scrollTop`, so the position is read from the live node and written back on mount).
+  // The browse list element, kept for one imperative use: scrolling back to the top when a fresh
+  // result replaces the list. It is NOT a save/restore ref — the view stays mounted across the
+  // detail swap (see openRecipe), so scroll survives there on its own.
   let listEl = $state<HTMLDivElement | undefined>(undefined);
-  let listScroll = 0;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   const recipes = $derived(browse?.recipes ?? []);
@@ -131,11 +133,45 @@
   const showSort = $derived(source === "list" && recipes.length > 1);
   const allFilteredOut = $derived(recipes.length > 0 && filtered.length === 0);
 
-  const emptyDesc = $derived.by(() => {
-    if (source === "list") return "Your recipe library is empty.";
-    return browse?.query
-      ? `No recipes matched “${browse.query}”.`
-      : "No recipes matched your search.";
+  // The three "nothing to show" moments are distinct states, not one empty screen: a first-run
+  // library (teach how recipes get here), an empty search/discover result (suggest another search),
+  // and — separately, inside the list — the all-filtered-out state (offer to clear the filters). The
+  // widget can't create a recipe, so the first-run "CTA" is copy that names the assistant hand-off,
+  // matching the pantry's empty state; only the filter-empty carries a real button, since clearing
+  // filters is work the widget CAN do.
+  const emptyState = $derived.by(() => {
+    if (source === "list")
+      return {
+        icon: "🍳",
+        title: "No recipes yet",
+        desc: "Your Paprika recipes appear here. Ask your assistant to save one — “save this recipe” — and it’ll be ready to cook.",
+      };
+    if (source === "discover")
+      return {
+        icon: "🔍",
+        title: "Nothing to suggest",
+        desc: browse?.query
+          ? `Nothing surfaced for “${browse.query}”. Ask for a different mood or ingredient.`
+          : "Nothing surfaced this time. Ask your assistant to try a different angle.",
+      };
+    return {
+      icon: "🔍",
+      title: browse?.query ? "Nothing matched" : "No results",
+      desc: browse?.query
+        ? `No recipes matched “${browse.query}”. Ask your assistant to search another way.`
+        : "No recipes matched that search. Ask your assistant to try different words.",
+    };
+  });
+
+  // The filter-empty message names what's filtering (category and/or search), so the cook knows
+  // exactly which control to relax — the "Clear filters" button beside it resets both.
+  const filteredEmptyDesc = $derived.by(() => {
+    const q = query.trim();
+    if (activeCat !== "All" && q !== "")
+      return `Nothing in “${activeCat}” matches “${q}”.`;
+    if (q !== "") return `Nothing matches “${q}”.`;
+    if (activeCat !== "All") return `No “${activeCat}” recipes to show.`;
+    return "No recipes match these filters.";
   });
 
   onMount(() => {
@@ -156,14 +192,16 @@
       browse = b;
       phase = "browse";
       errorMsg = null;
-      // A fresh result set replaces everything: leave any open detail pane, drop the
-      // content-tied refine state (category + search), and reset the saved scroll. The display
-      // preferences (sort mode, photos) persist deliberately.
+      // A fresh result set replaces everything: leave any open detail pane and drop the
+      // content-tied refine state (category + search). The display preferences (sort mode,
+      // photos) persist deliberately.
       detail = null;
       activeCat = "All";
       query = "";
       openUid = null;
-      listScroll = 0;
+      // Fresh result set → scroll the kept-mounted list back to the top; its scrollTop would
+      // otherwise carry over from the previous result onto entirely new (possibly shorter) content.
+      if (listEl) listEl.scrollTop = 0;
       cancelPendingRecipe();
       return;
     }
@@ -173,8 +211,12 @@
     }
   }
 
+  // Bumped on every move away from a pending read. The detail swap runs on a later frame inside
+  // the View Transition, so it re-checks this before applying.
+  let navGen = 0;
   function cancelPendingRecipe() {
     loadingRecipeUid = null;
+    navGen++;
   }
 
   // Collapsing the open row or refining the list moves away from any recipe read in flight, so
@@ -230,14 +272,15 @@
       showToast("Couldn’t open that recipe — try again.");
       return;
     }
-    listScroll = listEl?.scrollTop ?? 0;
-    detail = parsed;
-  }
-
-  // Re-apply the saved scroll offset when the browse list (re)mounts — chiefly the return from
-  // the detail pane.
-  function restoreScroll(node: HTMLDivElement) {
-    node.scrollTop = listScroll;
+    // The browse view stays mounted underneath (display:none), so opening the detail keeps its
+    // scroll position and loaded thumbnails — nothing to save, nothing to restore. The swap MORPHS
+    // via the shared View Transition helper: the tapped row's title (`rb-recipe-title`) glides into
+    // the detail heading over the root cross-fade, degrading to a plain swap where unsupported.
+    const next = parsed;
+    const gen = navGen;
+    viewTransition(() => {
+      if (gen === navGen) detail = next;
+    });
   }
 
   // Both grocery-add and meal-plan need work the widget can't do from a browse row, so they hand
@@ -265,8 +308,8 @@
   }
 
   function backToBrowse() {
-    detail = null;
     cancelPendingRecipe();
+    viewTransition(() => (detail = null));
   }
 
   function showToast(msg: string, kind: "error" | "info" = "error") {
@@ -329,125 +372,171 @@
       title="Couldn’t load recipes"
       desc={errorMsg ?? undefined}
     />
-  {:else if detail}
-    <RecipeDetail
-      recipe={detail}
-      {loadPhoto}
-      onBack={backToBrowse}
-      backLabel="Back to recipes"
-    />
   {:else if recipes.length === 0}
-    <StatusScreen icon="🍽️" title="No recipes found" desc={emptyDesc} />
+    <StatusScreen
+      animate
+      icon={emptyState.icon}
+      title={emptyState.title}
+      desc={emptyState.desc}
+    />
   {:else}
-    <header>
-      <BrandMark {title} />
-      <span class="count"
-        >{filtered.length} recipe{filtered.length === 1 ? "" : "s"}</span
-      >
-    </header>
-
-    {#if showSearch}
-      <div class="search">
-        <svg class="sic" viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" />
-        </svg>
-        <input
-          class="sinp"
-          type="text"
-          placeholder="Search recipes…"
-          autocomplete="off"
-          value={query}
-          oninput={onSearchInput}
-          aria-label="Search recipes"
-        />
-        {#if query !== ""}
-          <button class="sclr" onclick={clearSearch} aria-label="Clear search">
-            <svg viewBox="0 0 16 16" aria-hidden="true"
-              ><path d="M4 4l8 8M12 4l-8 8" /></svg
-            >
-          </button>
-        {/if}
-      </div>
-    {/if}
-
-    <div class="controls">
-      {#if showChips}
-        <div class="chips">
-          {#each categories as c (c)}
-            <button
-              class="chip"
-              class:on={c === activeCat}
-              onclick={() => setCategory(c)}>{c}</button
-            >
-          {/each}
-        </div>
-      {:else}
-        <span class="grow"></span>
-      {/if}
-      <div class="ctrl-acts">
-        {#if showSort}
-          <PillButton onclick={toggleSort} ariaLabel="Change sort order">
-            {sortMode === "rating" ? "★ Rating" : "A–Z"}
-          </PillButton>
-        {/if}
-        <button
-          class="pbtn"
-          class:off={!photos}
-          onclick={() => (photos = !photos)}
-          aria-pressed={photos}
-          aria-label={photos ? "Hide photos" : "Show photos"}
+    <!-- The browse view stays MOUNTED while the detail pane shows (hidden, not unmounted), so the
+         scroll position and every loaded RecipeThumb survive the swap — Back is instant, with no
+         re-fetch and no scroll-restore dance. `detail` is only ever set when recipes.length > 0. -->
+    <div class="browse" class:hidden={detail !== null}>
+      <header>
+        <BrandMark {title} />
+        <span class="count"
+          >{filtered.length} recipe{filtered.length === 1 ? "" : "s"}</span
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <rect x="1.5" y="3" width="13" height="10" rx="1.5" /><circle
-              cx="5.5"
-              cy="6.5"
-              r="1.2"
-            /><path d="M2 12l3.5-3.5 2.5 2.5 2.5-2.5 3.5 3.5" />
+      </header>
+
+      {#if showSearch}
+        <div class="search">
+          <svg class="sic" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" />
           </svg>
-        </button>
+          <input
+            class="sinp"
+            type="text"
+            placeholder="Search recipes…"
+            autocomplete="off"
+            value={query}
+            oninput={onSearchInput}
+            aria-label="Search recipes"
+          />
+          {#if query !== ""}
+            <button
+              class="sclr"
+              onclick={clearSearch}
+              aria-label="Clear search"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true"
+                ><path d="M4 4l8 8M12 4l-8 8" /></svg
+              >
+            </button>
+          {/if}
+        </div>
+      {/if}
+
+      <div class="controls">
+        {#if showChips}
+          <div class="chips">
+            {#each categories as c (c)}
+              <button
+                class="chip"
+                class:on={c === activeCat}
+                onclick={() => setCategory(c)}>{c}</button
+              >
+            {/each}
+          </div>
+        {:else}
+          <span class="grow"></span>
+        {/if}
+        <div class="ctrl-acts">
+          {#if showSort}
+            <PillButton onclick={toggleSort} ariaLabel="Change sort order">
+              {sortMode === "rating" ? "★ Rating" : "A–Z"}
+            </PillButton>
+          {/if}
+          <button
+            class="pbtn"
+            class:off={!photos}
+            onclick={() => (photos = !photos)}
+            aria-pressed={photos}
+            aria-label={photos ? "Hide photos" : "Show photos"}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="1.5" y="3" width="13" height="10" rx="1.5" /><circle
+                cx="5.5"
+                cy="6.5"
+                r="1.2"
+              /><path d="M2 12l3.5-3.5 2.5 2.5 2.5-2.5 3.5 3.5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="list" bind:this={listEl}>
+        {#if allFilteredOut}
+          <StatusScreen
+            inline
+            animate
+            icon="🔍"
+            title="No matches"
+            desc={filteredEmptyDesc}
+          >
+            {#snippet children()}
+              <PillButton onclick={clearFilters} ariaLabel="Clear filters"
+                >Clear filters</PillButton
+              >
+            {/snippet}
+          </StatusScreen>
+        {:else}
+          {#each filtered as r (r.uid)}
+            <!-- Reflow moment: toggling sort (A–Z ↔ ★) or a category chip glides the rows into
+                 their new order instead of snapping. A Svelte JS animation, so its duration is
+                 gated through motion() for reduced motion; content-visibility bounds it to the
+                 on-screen rows, and sort/filter close any open row first, so nothing mid-expand
+                 is ever flipped. -->
+            <div
+              class="row"
+              class:open={openUid === r.uid}
+              animate:flip={{ duration: motion(200), easing: quintOut }}
+            >
+              <RecipeRow
+                recipe={r}
+                open={openUid === r.uid}
+                {photos}
+                dark={theme === "dark"}
+                {loadPhoto}
+                onToggle={() => toggleRow(r.uid)}
+              />
+              {#if openUid === r.uid}
+                <div transition:slide={{ duration: motion(160) }}>
+                  <DetailStrip
+                    recipe={r}
+                    loading={loadingRecipeUid === r.uid}
+                    onRead={() => openRecipe(r)}
+                    onGrocery={() => addToGrocery(r)}
+                    onPlan={() => planMeal(r)}
+                  />
+                </div>
+              {/if}
+            </div>
+          {/each}
+        {/if}
       </div>
     </div>
 
-    <div class="list" bind:this={listEl} use:restoreScroll>
-      {#if allFilteredOut}
-        <div class="noresults">
-          <p>No recipes match these filters.</p>
-          <PillButton onclick={clearFilters} ariaLabel="Clear filters"
-            >Clear filters</PillButton
-          >
-        </div>
-      {:else}
-        {#each filtered as r (r.uid)}
-          <div class="row" class:open={openUid === r.uid}>
-            <RecipeRow
-              recipe={r}
-              open={openUid === r.uid}
-              {photos}
-              dark={theme === "dark"}
-              {loadPhoto}
-              onToggle={() => toggleRow(r.uid)}
-            />
-            {#if openUid === r.uid}
-              <div transition:slide={{ duration: motion(160) }}>
-                <DetailStrip
-                  recipe={r}
-                  loading={loadingRecipeUid === r.uid}
-                  onRead={() => openRecipe(r)}
-                  onGrocery={() => addToGrocery(r)}
-                  onPlan={() => planMeal(r)}
-                />
-              </div>
-            {/if}
-          </div>
-        {/each}
-      {/if}
-    </div>
+    {#if detail}
+      <RecipeDetail
+        recipe={detail}
+        {loadPhoto}
+        onBack={backToBrowse}
+        backLabel="Back to recipes"
+        titleTransitionName="rb-recipe-title"
+      />
+    {/if}
   {/if}
 
   <Toast {toast} />
 </WidgetShell>
 
 <style>
+  /* The browse view fills the shell as a flex column. It stays in the DOM but is pulled from
+     layout (display: none) while the detail pane shows, so its scroll offset and every loaded
+     thumbnail survive the swap — the Back is instant and re-fetches nothing. */
+  .browse {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .browse.hidden {
+    display: none;
+  }
+
   /* Header, search, and controls are fixed chrome (flex: none) so only `.list` absorbs the
      overflow once `main` hits WidgetShell's host-height cap. */
   header {
@@ -611,21 +700,14 @@
   }
   .row {
     border-bottom: 1px solid var(--line);
+    /* Skip layout + paint for rows scrolled out of view — the cheap long-list win short of full
+       virtualization. `contain-intrinsic-size: auto 58px` reserves each row's last
+       rendered height (falling back to a collapsed-row estimate), so the scrollbar stays stable
+       and an expanded row keeps its size when scrolled off. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 58px;
   }
   .row:last-child {
     border-bottom: none;
-  }
-
-  .noresults {
-    display: grid;
-    place-items: center;
-    gap: 10px;
-    padding: 40px 24px;
-    text-align: center;
-    color: var(--muted);
-  }
-  .noresults p {
-    margin: 0;
-    font-size: 14px;
   }
 </style>

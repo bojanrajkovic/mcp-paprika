@@ -12,16 +12,21 @@
   // `backLabel` is the back control's accessible name — each consumer names its own destination
   // ("Back to the week" / "Back to recipes"), since the visible glyph + "Back" can't say where.
   // `loadPhoto` reads the photo proxy resource to a `data:` URI; omitted (or returning null) → no hero.
+  // `titleTransitionName` opts this heading into a View Transition shared-element morph: the
+  // recipe-browse widget passes a name so its tapped row title glides into this heading. Omitted
+  // by the other consumers (menu, meal-week), so it stays inert (`none`) there.
   let {
     recipe,
     onBack,
     backLabel = "Back",
     loadPhoto,
+    titleTransitionName,
   }: {
     recipe: RecipeDetailData;
     onBack: () => void;
     backLabel?: string;
     loadPhoto?: (uri: string) => Promise<string | null>;
+    titleTransitionName?: string;
   } = $props();
 
   // Hero photo: requested at a detail-pane width, reloaded whenever the recipe changes (the pane is
@@ -74,7 +79,9 @@
       src={heroSrc}
       alt={`Photo of ${recipe.name}`}
     />{/if}
-  <h2 class="rname">{recipe.name}</h2>
+  <h2 class="rname" style:view-transition-name={titleTransitionName ?? "none"}>
+    {recipe.name}
+  </h2>
   {#if meta.length > 0}<p class="meta">{meta.join(" · ")}</p>{/if}
 
   {#if ingredients.length > 0}

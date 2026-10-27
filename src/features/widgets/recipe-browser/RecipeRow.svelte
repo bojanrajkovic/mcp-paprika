@@ -43,7 +43,13 @@
 
 <button class="main" class:open onclick={onToggle} aria-expanded={open}>
   <span class="info">
-    <span class="name">{recipe.name}</span>
+    <!-- When this row is the open one, its title carries the View Transition name so it morphs into
+       the detail heading on read (only one row is open at a time, so the name stays unique). -->
+    <span
+      class="name"
+      style:view-transition-name={open ? "rb-recipe-title" : "none"}
+      >{recipe.name}</span
+    >
     <span class="sub">
       {#if category}<span class="cat">{category}</span>{/if}
       {#if category && time}<span class="sep">·</span>{/if}
@@ -112,7 +118,10 @@
   }
   .time {
     font-size: 12px;
-    color: var(--faint);
+    /* `--muted`, not `--faint`: cook time is meaningful info a cook scans for, and `--faint` at
+       this size fails WCAG AA (3.27:1 light / 4.02:1 dark). Muted clears it (5.34:1 / 7.0:1); the
+       weight difference from `.cat` (500 vs 400) carries the hierarchy instead of low contrast. */
+    color: var(--muted);
     white-space: nowrap;
     flex: none;
   }

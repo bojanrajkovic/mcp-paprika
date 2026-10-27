@@ -185,7 +185,32 @@ export class App {
   }
   sendMessage(message) { console.log("[widget-preview] sendMessage", message); return Promise.resolve({}); }
   updateModelContext() { return Promise.resolve({}); }
-  callServerTool() { return Promise.resolve({ content: [] }); }
+  callServerTool(req) {
+    // read_recipe is answered with a canned detail so the browse -> detail swap (and its View
+    // Transition) is exercisable offline. name/servings/time are pulled from the matching browse
+    // item WHEN the payload keys rows by recipe uid (the recipe-browser's shape) so the detail
+    // matches the tapped row; the menu (keyed by menu-item uid) and meal-week (no items array)
+    // fall through to the generic Sample Recipe defaults. ingredients/directions are fixed sample
+    // prose. Every other tool stays a no-op (see the index footer).
+    try {
+      if (req && req.name === "read_recipe") {
+        const uid = req.arguments && req.arguments.lookup && req.arguments.lookup.uid;
+        let name = "Sample Recipe", servings = "", totalTime = "", photoResourceUri = "";
+        try {
+          const items = JSON.parse(this.#payload || "{}").items;
+          const hit = Array.isArray(items) ? items.find((it) => it && it.uid === uid) : null;
+          if (hit) { name = hit.name || name; servings = hit.servings || ""; totalTime = hit.totalTime || ""; photoResourceUri = hit.photoResourceUri || ""; }
+        } catch {}
+        const structuredContent = {
+          uid: uid || "preview", name, servings, totalTime, photoResourceUri,
+          ingredients: "2 egg yolks\\n1 stick unsalted butter, melted\\n1 tbsp lemon juice\\n4 eggs\\n2 English muffins, split",
+          directions: "Whisk the yolks and lemon over a bain-marie.\\nStream in the warm butter until the sauce thickens.\\nPoach the eggs, toast the muffins, and spoon the sauce over the top.",
+        };
+        return Promise.resolve({ content: [{ type: "text", text: name }], structuredContent });
+      }
+    } catch {}
+    return Promise.resolve({ content: [] });
+  }
   openLink(args) { console.log("[widget-preview] openLink", args); return Promise.resolve({}); }
   downloadFile() { return Promise.resolve({}); }
 }`;

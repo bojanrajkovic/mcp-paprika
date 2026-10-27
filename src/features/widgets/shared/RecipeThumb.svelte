@@ -67,9 +67,14 @@
 <span
   class="thumb"
   use:lazyLoad
-  style="--thumb-size: {size}px; {photoSrc ? '' : `background: ${tile};`}"
+  style="--thumb-size: {size}px; background: {tile};"
   aria-hidden="true"
-  >{#if photoSrc}<img class="thumbimg" src={photoSrc} alt="" />{/if}</span
+  >{#if photoSrc}<img
+      class="thumbimg"
+      src={photoSrc}
+      alt=""
+      decoding="async"
+    />{/if}</span
 >
 
 <style>
@@ -85,5 +90,14 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    /* Crossfade the cover in over the name-hashed tile as its bytes land, instead of a hard pop
+       while scrolling an image-heavy list. The tile sits underneath (the .thumb background), so
+       this reads as tile → photo. WidgetShell's global reduced-motion block zeroes the duration. */
+    animation: thumb-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes thumb-in {
+    from {
+      opacity: 0;
+    }
   }
 </style>
