@@ -63,7 +63,9 @@ export interface ToolSpec<
   readonly description: string;
   readonly annotations: ToolAnnotations;
   readonly inputSchema: I;
-  readonly outputSchema?: O extends Record<string, unknown> ? ZodType<O> : never;
+  // Bracketed so the conditional doesn't distribute: a union `O` needs one union schema,
+  // not a schema for any single arm (which no union schema would satisfy).
+  readonly outputSchema?: [O] extends [Record<string, unknown>] ? ZodType<O> : never;
   readonly ui?: {
     /** The `ui://widget/{name}` resource a host renders for this tool's result. Omitted by a view-less app-only tool. */
     readonly resourceUri?: string;
