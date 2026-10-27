@@ -13,7 +13,7 @@ import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT, WIDGET_VENDOR_SLOT } from "../feat
 
 /**
  * A dev-only Hono router serving
- * `GET /widget-preview?widget=<name>&payload=<json>&theme=<light|dark>&userAgent=<host>&elicitation=<0|1>`:
+ * `GET /widget-preview?widget=<name>&payload=<json>&theme=<light|dark>&userAgent=<host>&elicitation=<0|1>&touch=<0|1>&scale=<n>`:
  * a built widget rendered in a plain browser tab with a FAKE host shim, so widget
  * UI can be iterated with ordinary devtools, no real MCP host required. `theme` and
  * `userAgent` drive the shim's `getHostContext()`, so the host-matched theme and
@@ -21,6 +21,14 @@ import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT, WIDGET_VENDOR_SLOT } from "../feat
  * `elicitation=1` sets `window.__MCP_SERVER_CAPS__.supportsElicitation=true` in the
  * shim constructor, mirroring what `widgets-resource.ts` injects at `resources/read`
  * time so the elicitation-aware confirm path can be exercised without a real MCP host.
+ * `touch=1` sets `getHostContext().deviceCapabilities.touch = true`, so a touch-only
+ * affordance (pantry's swipe-to-remove, grocery's swipe-to-mark) can be exercised
+ * without a real touch host — `matchMedia("(pointer: coarse)")` alone doesn't flip
+ * true under plain viewport-resize emulation. `scale=<n>` (n > 1) repeats a small
+ * base payload's `items` array n times (unique-suffixed uids), entirely CLIENT-SIDE
+ * in the shim's `connect()` — so a very-large-list stress test never has to encode
+ * hundreds of items into the URL, which trips Node's raw HTTP header-size limit
+ * (a 431) well before this route's own 64 KB `?payload=` guard ever runs.
  *
  * Mount it ONLY behind the `MCP_WIDGET_PREVIEW` flag (it does not exist in
  * production) and, like the favicon, BEFORE the `/mcp` bearer guard (it is
@@ -152,16 +160,28 @@ export class App {
       const parsed = JSON.parse(this.#payload);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) structuredContent = parsed;
     } catch {}
+    try {
+      const scale = Number(new URLSearchParams(location.search).get("scale"));
+      if (structuredContent && Array.isArray(structuredContent.items) && scale > 1) {
+        const base = structuredContent.items;
+        const scaled = [];
+        for (let copy = 0; copy < scale; copy++) {
+          for (const item of base) scaled.push({ ...item, uid: item.uid + "-" + copy });
+        }
+        structuredContent = { ...structuredContent, items: scaled };
+      }
+    } catch {}
     this.ontoolresult && this.ontoolresult({ content: [{ type: "text", text: this.#payload }], structuredContent });
   }
   getHostContext() {
-    let theme = "light", userAgent;
+    let theme = "light", userAgent, deviceCapabilities;
     try {
       const q = new URLSearchParams(location.search);
       if (q.get("theme") === "dark") theme = "dark";
       userAgent = q.get("userAgent") ?? undefined;
+      if (q.get("touch") === "1") deviceCapabilities = { touch: true };
     } catch {}
-    return userAgent ? { theme, userAgent } : { theme };
+    return { theme, ...(userAgent ? { userAgent } : {}), ...(deviceCapabilities ? { deviceCapabilities } : {}) };
   }
   sendMessage(message) { console.log("[widget-preview] sendMessage", message); return Promise.resolve({}); }
   updateModelContext() { return Promise.resolve({}); }

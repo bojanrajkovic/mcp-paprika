@@ -44,5 +44,5 @@ Two surfaces are _traditional_ frontend and earn a visual design: the **widget s
 
 - **WCAG AA contrast** (≥4.5:1 body, ≥3:1 large) on both surfaces, in light and dark where the surface themes (the widgets follow the host theme; the consent screen is light-only by design).
 - **Reduced motion honored.** The widgets already gate both CSS and JS-driven transitions on `prefers-reduced-motion`; the consent screen is essentially static.
-- **Touch-first on the widget surface.** Real tap targets; swipe gestures always have a visible-button fallback on pointer hosts. The swipe-only mobile path's assistive-tech gap is a known widget follow-up.
+- **Touch-first on the widget surface.** Real tap targets; swipe gestures keep a visible-button fallback on pointer hosts and, on touch-only hosts, a visually-hidden but screen-reader-operable per-row control (the pantry's swipe-to-act path), so the gesture is never the only way to act.
 - **Plain, non-alarmist language at the trust moment.** The destination host is the legible anchor; copy is calm and direct, escaped against injection.

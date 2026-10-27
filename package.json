@@ -23,6 +23,7 @@
     "build": "tsc && pnpm build:widgets",
     "build:widgets": "tsx scripts/build-widgets.ts",
     "dev": "tsx src/index.ts",
+    "dev:preview": "tsx scripts/widget-preview.ts",
     "dev:widgets": "tsx scripts/build-widgets.ts --watch",
     "format": "oxfmt --write . && pnpm format:svelte",
     "format:svelte": "prettier --plugin prettier-plugin-svelte --write \"src/**/*.svelte\"",
