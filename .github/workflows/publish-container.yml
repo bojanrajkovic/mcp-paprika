@@ -91,6 +91,8 @@ jobs:
           load: true
           tags: mcp-paprika:scan
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
 
       # Vulnerability scan via Grype. We're already trusting Anchore for
       # Syft-based SBOM generation, so keeping the scanner in the same
@@ -117,6 +119,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
 
       # --- Supply-chain attestations + signature over the pushed digest ---
 
