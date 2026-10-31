@@ -13,6 +13,9 @@
 /** The MCP protocol method handled by a span (e.g. `tools/call`). */
 export const ATTR_MCP_METHOD_NAME = "mcp.method.name";
 
+/** The JSON-RPC error code of a response, as a string; set only when the response is an error. */
+export const ATTR_RPC_RESPONSE_STATUS_CODE = "rpc.response.status_code";
+
 /**
  * The MCP session id — the per-client session a request belongs to (HTTP transport;
  * stdio is one session per process and sets none). SPAN-ONLY: per-session, so

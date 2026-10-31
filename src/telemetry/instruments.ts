@@ -1,5 +1,6 @@
 // The semconv-named instruments shared by more than one recording seam (the
-// tool and resource chokepoints both feed `mcp.server.operation.duration`;
+// tool and resource chokepoints and the transport wrap all feed
+// `mcp.server.operation.duration`;
 // both transports feed the session histogram). Single-seam custom counters
 // live at their seam — only the shared, spec-named ones are centralized so
 // the descriptor exists exactly once. Everything is `lazy` because the

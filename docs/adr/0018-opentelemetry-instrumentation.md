@@ -56,7 +56,7 @@ Rejected (the inverse of the shipped hybrid) because registering the hook costs 
 
 - The MCP/GenAI conventions are Development-status: a stabilization rename pass over `src/telemetry/semconv.ts` (and any dashboards) is expected future work.
 - Two bootstrap paths must stay behaviorally identical; a future instrumentation that requires module patching will silently not patch under the bin/stdio path and must be caught in review.
-- SDK-internal MCP operations (`initialize`, `tools/list`, `resources/list`) are uninstrumented — the TypeScript SDK exposes no interceptor seam — so `mcp.server.operation.duration` covers `tools/call` and `resources/read` only.
+- The TypeScript SDK exposes no interceptor seam, so `mcp.server.operation.duration` for SDK-internal MCP operations (`initialize`, `tools/list`, `resources/list`) is recorded by wrapping the connected transport (`src/telemetry/mcp-operations.ts`). These operations get a metric but no span. `tools/call` and `resources/read` keep recording at their chokepoints, so a call the SDK rejects before reaching one records nothing.
 - The diag logger adds a third sanctioned `process.stderr.write` site.
 
 ## References

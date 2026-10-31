@@ -12,11 +12,15 @@ import { makeOAuthClient, makeOAuthToken } from "../../test/auth/__fixtures__/oa
 import { createOidcStub } from "../../test/auth/__fixtures__/oidc-stub.js";
 import { useMswServer } from "../../test/support/msw.js";
 import { failLoudOnUpstream, PAPRIKA_API_BASE, paprikaSyncMockHandlers } from "../../test/support/paprika-msw.js";
+import { installTestTelemetry } from "../../test/support/telemetry-test-utils.js";
 import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../../test/support/tool-test-utils.js";
 import { useXdgIsolation } from "../../test/support/xdg-isolation.js";
 import { buildAuthCaches } from "../auth/disk.js";
 import { hashTokenForStorage } from "../auth/tokens.js";
 import { accessLog, type HttpTransportHandle, startHttp, type StartHttpOptions } from "./http.js";
+
+// Module scope, before any recording — see the helper's doc-comment.
+const telemetry = installTestTelemetry();
 
 /**
  * These tests drive the HTTP transport with raw `fetch`, not the MCP SDK
@@ -236,6 +240,28 @@ describe("HTTP transport (Streamable HTTP)", () => {
         expect(sessionId.length).toBeGreaterThan(0);
         const health = await fetchHealth(handle);
         expect(health.sessions).toBe(1);
+      } finally {
+        await handle.shutdown();
+      }
+    });
+  });
+
+  describe("mcp.server.operation.duration", () => {
+    it("records a fresh session's handshake and later requests", async () => {
+      const count = async (method: string): Promise<number> => {
+        const points = await telemetry.histogramPoints("mcp.server.operation.duration", {
+          "mcp.method.name": method,
+        });
+        return points.reduce((sum, point) => sum + point.value.count, 0);
+      };
+      const before = await count("initialize");
+      const handle = await startHttp(makeConfig());
+      try {
+        const sessionId = await initializeSession(handle);
+        await postJsonRpc(handle, { jsonrpc: "2.0", id: 2, method: "ping" }, sessionId);
+
+        expect(await count("initialize")).toBe(before + 1);
+        expect(await count("ping")).toBeGreaterThan(0);
       } finally {
         await handle.shutdown();
       }

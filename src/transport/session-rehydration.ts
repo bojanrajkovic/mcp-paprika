@@ -13,6 +13,7 @@ import { subjectMatches } from "../auth/subject.js";
 import { buildBrandedServer } from "../server/build.js";
 import { recordClientConnection, recordSessionId } from "../telemetry/client-fingerprint.js";
 import { ATTR_MCP_PAPRIKA_SESSION_ADOPT_OUTCOME, ATTR_MCP_PAPRIKA_TRANSPORT } from "../telemetry/instruments.js";
+import { recordMcpOperations } from "../telemetry/mcp-operations.js";
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { ATTR_MCP_SESSION_ID } from "../telemetry/semconv.js";
 import { tracePromise } from "../telemetry/trace-result.js";
@@ -256,6 +257,8 @@ export function buildRehydration(deps: RehydrationDeps): Rehydration {
 
       const session = sessions.get(id);
       if (session === undefined) return failed("session missing from the map after synthetic initialize");
+      // After the replay, so a rebuilt session doesn't count its synthetic initialize as client traffic.
+      recordMcpOperations(transport);
       return session;
     } catch (err) {
       // Only a foreign throw from @hono/mcp, the SDK, or Hono lands here; our own

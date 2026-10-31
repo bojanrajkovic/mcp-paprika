@@ -12,6 +12,7 @@ import { runSyncLoop } from "../server/sync-loop.js";
 import { shutdownTelemetry } from "../telemetry/bootstrap.js";
 import { clientAttrs, clientFingerprint, recordClientConnection } from "../telemetry/client-fingerprint.js";
 import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
+import { recordMcpOperations } from "../telemetry/mcp-operations.js";
 import { startTimer } from "../telemetry/scope.js";
 // Side-effect: every domain/feature module self-registers on import, so the kernel's
 // `registeredModules()` is populated before `buildKernel` reads it.
@@ -119,6 +120,7 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
     }
     deliver?.(message);
   };
+  recordMcpOperations(transport);
   tlog.info("server ready");
 
   // The single end-of-session point, latched: the stdin-EOF handler below and

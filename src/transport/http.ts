@@ -33,6 +33,7 @@ import { broadcastNotifier } from "../server/notifier.js";
 import { runSyncLoop } from "../server/sync-loop.js";
 import { clientAttrs, clientFingerprint } from "../telemetry/client-fingerprint.js";
 import { mcpServerSessionDuration } from "../telemetry/instruments.js";
+import { recordMcpOperations } from "../telemetry/mcp-operations.js";
 import { getTracer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
 import { unwrapAtBoot } from "../utils/errors.js";
@@ -597,6 +598,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     });
 
     await server.connect(transport);
+    recordMcpOperations(transport);
     const response = await transport.handleRequest(c, body);
     return response ?? c.body(null, 204);
   });
