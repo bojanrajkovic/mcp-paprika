@@ -3,9 +3,11 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Hono } from "hono";
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { installTestTelemetry } from "../../test/support/telemetry-test-utils.js";
 import { buildRehydration, type RequestOrigin, type Session } from "./session-rehydration.js";
 import {
   buildSessionStore,
@@ -15,6 +17,9 @@ import {
   SESSION_TTL_MS,
   type SessionDiskCache,
 } from "./session-store.js";
+
+// Module scope, before any recording — see the helper's doc-comment.
+const telemetry = installTestTelemetry();
 
 const NO_ORIGIN: RequestOrigin = { host: undefined, origin: undefined };
 
@@ -86,6 +91,35 @@ describe("buildRehydration", () => {
     expect(session?.subject).toBe("alice");
     expect(session?.server.server.getClientCapabilities()).toMatchObject({ elicitation: { form: {} } });
     expect(session?.server.server.getClientVersion()).toMatchObject({ name: "vitest-client", version: "1.2.3" });
+  });
+
+  it("records operations for client traffic but not for its synthetic replay", async () => {
+    const r = record();
+    await seed(r);
+    const count = async (method: string): Promise<number> => {
+      const points = await telemetry.histogramPoints("mcp.server.operation.duration", { "mcp.method.name": method });
+      return points.reduce((sum, point) => sum + point.value.count, 0);
+    };
+
+    const session = await setup().adoptOrNull(r.sessionId, "alice", NO_ORIGIN);
+
+    expect(await count("initialize")).toBe(0);
+    expect(await count("notifications/initialized")).toBe(0);
+
+    const app = new Hono();
+    app.all("/mcp", async (c) => (await session!.transport.handleRequest(c)) ?? c.body(null, 204));
+    const response = await app.request("/mcp", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        "mcp-session-id": r.sessionId,
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+    });
+    await response.text();
+
+    expect(await count("ping")).toBe(1);
   });
 
   it("serves an already-live session without rebuilding it", async () => {
