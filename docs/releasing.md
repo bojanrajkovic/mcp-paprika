@@ -59,7 +59,7 @@ Freeze `main` only between "candidate validated" and "release PR merged" (typica
 
 release-please uses `.release-please-manifest.json` as the source of truth for the current version. Manual prerelease tags created via `gh release create`:
 
-- Do not update `.release-please-manifest.json` (no `package.json` bump in main, no CHANGELOG entry). `publish.yml` does an in-workflow `npm version` so the published artifact's version matches the release tag, but that bump never commits back.
+- Do not update `.release-please-manifest.json` (no `package.json` bump in main, no CHANGELOG entry). `publish.yml` does an in-workflow `npm version` so the published artifact's version matches the release tag, but that bump never commits back. `publish-container.yml` passes the tag's version as the `VERSION` build arg, and the Dockerfile stamps it into the image's `package.json`, so telemetry's `service.version` matches the tag too.
 - Do not affect release-please's commit range: it looks at commits since the manifest version's tag, not at every release tag in the repo.
 - Do appear in the GitHub Releases list as prereleases. They're kept as historical record.
 

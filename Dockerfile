@@ -22,6 +22,13 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 COPY tsconfig.json ./
 COPY scripts/build-widgets.ts ./scripts/build-widgets.ts
 COPY src ./src
+
+# Prerelease tags bypass release-please, so package.json can lag the release.
+# Stamp the tag's version here: the runtime stage copies this package.json, and
+# telemetry reads service.version from it. Local builds keep the checked-in version.
+ARG VERSION=""
+RUN if [ -n "$VERSION" ]; then pnpm pkg set version="$VERSION"; fi
+
 RUN pnpm build
 
 # Pre-create the runtime data directory tree here, in a stage that can chown.
