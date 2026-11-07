@@ -5,4 +5,4 @@ allowBuilds:
   protobufjs: true
   sharp: true
 minimumReleaseAgeExclude:
-  - '@bojanrajkovic/go-duration@0.1.0'
+  - "@bojanrajkovic/go-duration@0.1.0"
