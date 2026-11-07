@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@bojanrajkovic/go-duration':
+        specifier: ^0.1.0
+        version: 0.1.0(temporal-polyfill@1.0.8)
       '@hono/mcp':
         specifier: 0.3.2
         version: 0.3.2(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.14))(hono@4.13.14)(zod@4.6.7)
@@ -91,7 +94,7 @@ importers:
         version: 8.2.0
       parse-duration:
         specifier: ^2.1.9
-        version: 2.1.9
+        version: 2.1.11
       pino:
         specifier: ^10.3.1
         version: 10.3.1
@@ -101,6 +104,9 @@ importers:
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@24.19.2)
+      temporal-polyfill:
+        specifier: ^1.0.8
+        version: 1.0.8
       undici:
         specifier: ^8.12.3
         version: 8.12.3
@@ -219,6 +225,15 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
+
+  '@bojanrajkovic/go-duration@0.1.0':
+    resolution: {integrity: sha512-DoHcWQUGw/h4UjHSdZLjGKH9aVbqI+mipqp3qCeNPfxtwtBr2nbI6CEGgRtDrwyTb2AuW9fzSjbZsM6Ox8XApw==}
+    engines: {node: '>=26'}
+    peerDependencies:
+      temporal-polyfill: ^1.0.0
+    peerDependenciesMeta:
+      temporal-polyfill:
+        optional: true
 
   '@commitlint/cli@21.2.4':
     resolution: {integrity: sha512-g3M/wrQdElqGH5vROIeL2QiYIxrzqUkhCgsDyDlWfKEyQdCt10OyMB28W2cJtpZ+VNGMvmaN923infr1hOfyrg==}
@@ -2294,8 +2309,8 @@ packages:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
     engines: {node: '>=6'}
 
-  parse-duration@2.1.9:
-    resolution: {integrity: sha512-q73c2djLx0fPIEcnW4Eb9LBZnH+NunMUzKh3/UwHyMz8LKxd4hF0OVq3nap8x0AevX1QEyCojF7QO/vAb6PFiA==}
+  parse-duration@2.1.11:
+    resolution: {integrity: sha512-Z1Njr25ZXSDXdN6u5s2rtnn4khB/Yc+/p0kWhJFnvCWJhDsf5hAv7AO0xMa/nF7uafwwi2JxIp6TGx9CTX4diQ==}
 
   parse-json@5.2.0:
     resolution: {integrity: sha512-ayCKvm/phCGxOkYRSCM82iDwct8/EonSEgCSxWxD7ve6jHggsFl4fZVQBPRNgQoKiuV/odhFrGzQXZwbifC8Rg==}
@@ -2580,6 +2595,15 @@ packages:
     resolution: {integrity: sha512-yEFYrVhod+hdNyx7g5Bnkkb0G6si8HJurOoOEgC8B/O0uXLHlaey/65KRv6cuWBNhBgHKAROVpc7QyYqE5gFng==}
     engines: {node: '>=20'}
 
+  temporal-polyfill@1.0.8:
+    resolution: {integrity: sha512-RCCGa0GddT099XG49ijdD0tDf86L8vfuZun1+JyJiO4Y2NP9PACQsG0OnvNPXwVLisdvhr/zqL2nhKQmXXx08A==}
+
+  temporal-spec@1.0.1:
+    resolution: {integrity: sha512-wxVoanmDeavXie1vu2JaQ3WIc3JZnWAOYFBsJyATaVsXsycKYUflGsyBmrRSnoCpZJpwPyr38VpgSUlQ8CbFxg==}
+
+  temporal-utils@1.0.4:
+    resolution: {integrity: sha512-4mAcgbWlaxe+gn23gk8g0iHxCVGVOhKzSCfF5HM3lfvH8BdT+/pBmH/R/E4CrIse+koUgs8ThkPzCLnui6Fi8w==}
+
   thread-stream@4.2.0:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
@@ -2828,6 +2852,10 @@ snapshots:
       '@babel/helper-validator-identifier': 7.29.7
 
   '@bcoe/v8-coverage@1.0.2': {}
+
+  '@bojanrajkovic/go-duration@0.1.0(temporal-polyfill@1.0.8)':
+    optionalDependencies:
+      temporal-polyfill: 1.0.8
 
   '@commitlint/cli@21.2.4(conventional-commits-parser@7.1.2)(typescript@6.0.3)':
     dependencies:
@@ -4603,7 +4631,7 @@ snapshots:
     dependencies:
       callsites: 3.1.0
 
-  parse-duration@2.1.9: {}
+  parse-duration@2.1.11: {}
 
   parse-json@5.2.0:
     dependencies:
@@ -4973,6 +5001,15 @@ snapshots:
       - '@typescript-eslint/types'
 
   tagged-tag@1.0.0: {}
+
+  temporal-polyfill@1.0.8:
+    dependencies:
+      temporal-spec: 1.0.1
+      temporal-utils: 1.0.4
+
+  temporal-spec@1.0.1: {}
+
+  temporal-utils@1.0.4: {}
 
   thread-stream@4.2.0:
     dependencies:

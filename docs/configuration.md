@@ -77,10 +77,10 @@ if any of them is set, with what to use instead.
 `PAPRIKA_SYNC_INTERVAL`, `PAPRIKA_SYNC_PENDING_WRITE_TTL`, and `MCP_HTTP_SHUTDOWN_DRAIN`
 take a duration in Go's format: one or more number-and-unit pairs, with no spaces.
 
-- Units: `ns`, `us` (or `µs`/`μs`), `ms`, `s`, `m`, `h`, and `d`
-- Examples: `15m`, `1h30m`, `500ms`, `1.5h`, `.5h`, `7d`
+- Units: `ns`, `us` (or `µs`/`μs`), `ms`, `s`, `m`, and `h`. There's no day unit, as in Go; write `168h` for a week
+- Examples: `15m`, `1h30m`, `500ms`, `1.5h`, `.5h`, `168h`
 - `0` means zero (off, for the pending-write TTL and the shutdown drain)
-- At most `24d`, because Node's timers can't wait longer
+- At most `596h`, because Node's timers can't wait longer
 - The sync interval must be at least `1s`
 
 Any other bare number (`900`, `900000`) is rejected at boot, because it doesn't say

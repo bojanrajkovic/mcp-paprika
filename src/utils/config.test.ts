@@ -117,14 +117,14 @@ describe("Configuration loading", () => {
       ["1h30m", 5_400_000],
       ["500ms", 500],
       ["1.5h", 5_400_000],
-      ["7d", 604_800_000],
+      ["168h", 604_800_000],
       ["2m30s", 150_000],
       [".5h", 1_800_000],
       ["5.h", 18_000_000],
       ["1.1s", 1_100],
       ["1500μs", 2],
       ["1500µs", 2],
-      ["24d", 2_073_600_000],
+      ["596h", 2_145_600_000],
     ])("accepts Go-style %s", (text, ms) => {
       // pendingWriteTtl, not interval: the interval adds its own 1s minimum.
       const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { pendingWriteTtl: text } });
@@ -132,7 +132,7 @@ describe("Configuration loading", () => {
     });
 
     it("rejects a duration past Node's 24.8-day timer limit", () => {
-      const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { interval: "25d" } });
+      const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { interval: "597h" } });
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(ConfigError.validation(result.error.issues).reason).toContain("timer limit");

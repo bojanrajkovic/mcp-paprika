@@ -1,9 +1,11 @@
+// go-duration reads the global `Temporal` at import; Node 24 lacks it. Must load first.
+import "temporal-polyfill/global";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { tryParseDuration } from "@bojanrajkovic/go-duration";
 import dotenv from "dotenv";
 import { err, ok, type Result } from "neverthrow";
-import parseDurationMs from "parse-duration";
 import { z } from "zod";
 
 import { getConfigDir } from "./xdg.js";
@@ -101,26 +103,28 @@ export class ConfigError extends Error {
   }
 }
 
-// Go's `time.ParseDuration` grammar plus `d`: one or more number+unit pairs, e.g. `15m`,
-// `1h30m`, `500ms`, `.5h`, `7d`, or a bare `0` (as in Go). Strict on purpose — any other
-// bare number is ambiguous (seconds? minutes? milliseconds?), so it fails at boot with a
-// hint instead of guessing. Both micro signs work for microseconds (`µs` U+00B5, `μs` U+03BC).
-const GO_DURATION = /^(0|((\d+(\.\d*)?|\.\d+)(ns|us|µs|μs|ms|s|m|h|d))+)$/;
-
 // Node's timers can't wait longer than this; a bigger delay silently fires after 1 ms.
 const MAX_TIMER_MS = 2_147_483_647;
 
-/** Normalize what parse-duration misreads: Greek mu → micro sign, and `5.h` → `5h` (it reads `5.h` as 5 ms). */
-function toParseDurationInput(val: string): string {
-  return val.replaceAll("μ", "µ").replace(/(\d)\.(?=[a-zµ])/g, "$1");
-}
-
+// Go's `time.ParseDuration` grammar, e.g. `15m`, `1h30m`, `500ms`, `.5h`, or a bare `0`. Strict on
+// purpose: any other bare number is ambiguous (seconds? minutes? milliseconds?), so it fails at
+// boot with a hint instead of guessing. There is no day unit; write `168h` for a week.
 const durationField = z
   .string()
   .trim()
-  .regex(GO_DURATION, 'must be a duration with units, like "15m", "1h30m", "500ms", or "7d"')
-  .transform((val) => Math.round(parseDurationMs(toParseDurationInput(val)) ?? 0))
-  .pipe(z.number().max(MAX_TIMER_MS, "must be at most 24d (Node's timer limit)"));
+  .transform((val, ctx) => {
+    const parsed = tryParseDuration(val);
+    if (parsed.ok && parsed.value.sign >= 0) {
+      return Math.round(parsed.value.total("milliseconds"));
+    }
+    ctx.issues.push({
+      code: "custom",
+      message: 'must be a duration with units, like "15m", "1h30m", "500ms", or "168h"',
+      input: val,
+    });
+    return z.NEVER;
+  })
+  .pipe(z.number().max(MAX_TIMER_MS, "must be at most 596h (Node's timer limit)"));
 
 const BOOLEAN_STRINGS: Readonly<Record<string, boolean>> = {
   true: true,
