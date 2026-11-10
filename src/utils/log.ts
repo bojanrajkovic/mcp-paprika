@@ -88,17 +88,16 @@ export const REDACT_PATHS: ReadonlyArray<string> = [
   "*.*.generation_token",
 ];
 
-// Numeric pino level values → level names (pino serializes numeric levels)
-const NUMERIC_TO_PINO_LEVEL: Record<number, PinoLevel> = {
-  10: "trace",
-  20: "debug",
-  30: "info",
-  40: "warn",
-  50: "error",
-  60: "fatal",
-};
+/**
+ * The record shape every pino logger in this process shares: a top-level `service`
+ * and `level` as a lowercase name. `base` also drops pino's default `pid`/`hostname`.
+ */
+export const PINO_BASE = {
+  base: { service: "mcp-paprika" },
+  formatters: { level: (label: string) => ({ level: label }) },
+} satisfies pino.LoggerOptions;
 
-const PINO_INTERNAL_KEYS = new Set(["level", "time", "hostname", "pid", "v"]);
+const PINO_INTERNAL_KEYS = new Set(["level", "time", "hostname", "pid", "v", "service"]);
 
 const PINO_LEVEL_RANK: Record<LevelWithSilent, number> = {
   trace: 10,
@@ -147,10 +146,12 @@ export function notifierStream(notifier: Notifier): Writable {
         const line = (chunk as Buffer).toString("utf8").trim();
         if (line.length === 0) return callback();
         const record = JSON.parse(line) as Record<string, unknown>;
-        const pinoLevelName = NUMERIC_TO_PINO_LEVEL[record["level"] as number];
-        if (pinoLevelName === undefined) return callback();
+        const level = record["level"];
+        if (typeof level !== "string" || !Object.hasOwn(PINO_LEVEL_RANK, level) || level === "silent") {
+          return callback();
+        }
 
-        const mcpLevel = pinoLevelToMcp(pinoLevelName);
+        const mcpLevel = pinoLevelToMcp(level as PinoLevel);
         const component = typeof record["component"] === "string" ? record["component"] : "unknown";
 
         const data: Record<string, unknown> = { msg: String(record["msg"] ?? "") };
@@ -252,10 +253,7 @@ export function createLogger(
     {
       level: rootLevel,
       redact: { paths: REDACT_PATHS as unknown as Array<string>, censor: "[Redacted]" },
-      // Suppress default `pid`/`hostname` from emitted records — they're noise for our use case
-      // and would leak into the notifier fan-out's curated data.
-      // null (not undefined) is required by pino's exactOptionalPropertyTypes TS config.
-      base: null,
+      ...PINO_BASE,
       // Trace correlation WITHOUT @opentelemetry/instrumentation-pino: that
       // package patches the pino module, which needs the ESM loader hook the
       // bin/stdio path can't have. A mixin reads the active span at

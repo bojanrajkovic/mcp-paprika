@@ -1030,11 +1030,11 @@ describe("accessLog middleware", () => {
     expect(records).toHaveLength(1);
     const record = records[0];
     expect(record?.["level"]).toBe(30); // pino info = 30
-    expect(record?.["method"]).toBe("GET");
+    expect(record?.["http_method"]).toBe("GET");
     expect(record?.["path"]).toBe("/mcp");
-    expect(record?.["status"]).toBe(200);
-    expect(typeof record?.["durationMs"]).toBe("number");
-    expect((record?.["durationMs"] as number) >= 0).toBe(true);
+    expect(record?.["http_status"]).toBe(200);
+    expect(typeof record?.["duration_ms"]).toBe("number");
+    expect((record?.["duration_ms"] as number) >= 0).toBe(true);
     expect(record?.["msg"]).toBe("http request");
   });
 
@@ -1058,9 +1058,9 @@ describe("accessLog middleware", () => {
     expect(records).toHaveLength(1);
     const record = records[0];
     expect(record?.["level"]).toBe(50); // pino error = 50
-    expect(record?.["method"]).toBe("POST");
+    expect(record?.["http_method"]).toBe("POST");
     expect(record?.["path"]).toBe("/mcp");
-    expect(record?.["status"]).toBe(500);
+    expect(record?.["http_status"]).toBe(500);
     expect(record?.["msg"]).toBe("http request 5xx");
   });
 
@@ -1074,7 +1074,7 @@ describe("accessLog middleware", () => {
     expect(records).toHaveLength(1);
     const record = records[0];
     expect(record?.["level"]).toBe(30); // pino info = 30, not error (50)
-    expect(record?.["status"]).toBe(401);
+    expect(record?.["http_status"]).toBe(401);
     expect(record?.["msg"]).toBe("http request");
   });
 
@@ -1110,8 +1110,8 @@ describe("accessLog middleware", () => {
 
     expect(records).toHaveLength(1);
     expect(records[0]!["path"]).toBe("/will-throw");
-    expect(records[0]!["method"]).toBe("GET");
-    expect(records[0]!["status"]).toBe(500);
+    expect(records[0]!["http_method"]).toBe("GET");
+    expect(records[0]!["http_status"]).toBe(500);
     expect(records[0]!["level"]).toBe(50); // error
   });
 });
@@ -1165,8 +1165,8 @@ describe("accessLog middleware placement — integration", () => {
       const mcpRecords = records.filter((r) => r["path"] === "/mcp");
       expect(mcpRecords.length).toBeGreaterThan(0);
       const r = mcpRecords[0]!;
-      expect(r["method"]).toBe("POST");
-      expect(r["status"]).toBe(400);
+      expect(r["http_method"]).toBe("POST");
+      expect(r["http_status"]).toBe(400);
       expect(r["level"]).toBe(30); // info; 5xx would be error (50)
     } finally {
       await handle.shutdown();
@@ -1195,10 +1195,10 @@ describe("accessLog middleware placement — integration", () => {
     const boomRecords = records.filter((r) => r["path"] === "/boom");
     expect(boomRecords).toHaveLength(1);
     const r = boomRecords[0]!;
-    expect(r["method"]).toBe("GET");
-    expect(r["status"]).toBe(500);
+    expect(r["http_method"]).toBe("GET");
+    expect(r["http_status"]).toBe(500);
     expect(r["level"]).toBe(50); // pino numeric level for error
     expect(r["msg"]).toBe("http request 5xx");
-    expect(typeof r["durationMs"]).toBe("number");
+    expect(typeof r["duration_ms"]).toBe("number");
   });
 });

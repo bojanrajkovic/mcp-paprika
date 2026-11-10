@@ -111,6 +111,11 @@ The server uses structured [pino](https://getpino.io/) logging. In stdio mode, l
 to stderr (TTY) or a file (non-TTY) to keep stdout clean for the MCP wire format. In
 HTTP mode, logs go to stdout as raw JSON.
 
+Every JSON record carries `level` as a lowercase name (`info`, `warn`, ...),
+`service: "mcp-paprika"`, and the `component` that logged it. Records logged inside a
+span also carry `trace_id` and `span_id`. The HTTP access-log record (`http request`)
+carries `http_method`, `path`, `http_status`, and `duration_ms`.
+
 `MCP_LOG_PRETTY=auto` (the default) uses pino-pretty for all stdio output, both TTY (to
 stderr) and non-TTY (to the log file). HTTP transport always emits raw JSON to stdout
 regardless of this setting. `MCP_LOG_FILE` overrides the default file path used in

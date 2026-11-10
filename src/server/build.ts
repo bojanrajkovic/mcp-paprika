@@ -10,7 +10,7 @@ import { PaprikaClient } from "../paprika/client.js";
 import { setDiagLogTarget } from "../telemetry/scope.js";
 import { BRANDING, iconSvgDataUri } from "../utils/branding.js";
 import { unwrapAtBoot } from "../utils/errors.js";
-import { createLogger, type LoggerOptions, resolvePrimaryDestination } from "../utils/log.js";
+import { createLogger, type LoggerOptions, PINO_BASE, resolvePrimaryDestination } from "../utils/log.js";
 import { getCacheDir } from "../utils/xdg.js";
 
 const SERVER_NAME = "mcp-paprika";
@@ -59,7 +59,7 @@ export async function buildInfraBase(
   const log = createLogger(logOptions, primary);
   // OTel diag lines follow the app logs to the same stream and level, through a bare
   // logger so the app logger's notifier fan-out never forwards them to MCP clients.
-  setDiagLogTarget(pino({ base: null, level: logOptions.level }, primary));
+  setDiagLogTarget(pino({ ...PINO_BASE, level: logOptions.level }, primary));
   log.info({ transport: config.transport }, "mcp-paprika starting");
 
   log.info("authenticating with paprika");

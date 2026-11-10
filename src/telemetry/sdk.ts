@@ -17,7 +17,8 @@ import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { join } from "node:path";
 
-import { diag, type DiagLogger, DiagLogLevel } from "@opentelemetry/api";
+import { diag, type DiagLogger, DiagLogLevel, type Exception } from "@opentelemetry/api";
+import { setGlobalErrorHandler } from "@opentelemetry/core";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { NetInstrumentation } from "@opentelemetry/instrumentation-net";
@@ -43,6 +44,7 @@ import { Result } from "neverthrow";
 import pino from "pino";
 import { z } from "zod";
 
+import { PINO_BASE } from "../utils/log.js";
 import { getDiagLogTarget, lazy } from "./scope.js";
 import { urlScrubbingExporter } from "./url-scrub.js";
 
@@ -59,7 +61,7 @@ const DIAG_LEVELS: Readonly<Record<string, DiagLogLevel>> = {
 // Before the composition root sets a target (the telemetry preload runs before any
 // logger exists), diag lines go to stderr — never stdout, the stdio MCP wire. Pino's
 // own level is "trace" so it never re-filters: `diag.setLogger`'s level is the gate.
-const stderrDiagLog = lazy(() => pino({ base: null, level: "trace" }, pino.destination({ dest: 2, sync: true })));
+const stderrDiagLog = lazy(() => pino({ ...PINO_BASE, level: "trace" }, pino.destination({ dest: 2, sync: true })));
 
 /**
  * The OTel diag logger: structured pino records (`component: "otel"`) on the target
@@ -83,6 +85,17 @@ export function diagLogger(): DiagLogger {
       (getDiagLogTarget() ?? stderrDiagLog())[level](fields, message);
     };
   return { error: at("error"), warn: at("warn"), info: at("info"), debug: at("debug"), verbose: at("trace") };
+}
+
+/**
+ * The OTel global error handler (export failures land here). OTel's default handler
+ * flattens the error to a JSON string and logs only that string, so `msg` would hold
+ * JSON. This one logs the error's message and passes the error itself, which
+ * `diagLogger` puts under `err`. Exported for tests.
+ */
+export function reportOtelError(error: Exception): void {
+  if (typeof error === "string") diag.error(error);
+  else diag.error(error.message ?? error.name ?? String(error.code), error);
 }
 
 const packageJsonSchema = z.object({ version: z.string() });
@@ -155,6 +168,7 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
       const rawLevel = process.env["OTEL_LOG_LEVEL"];
       delete process.env["OTEL_LOG_LEVEL"];
       diag.setLogger(diagLogger(), DIAG_LEVELS[rawLevel?.toLowerCase() ?? ""] ?? DiagLogLevel.ERROR);
+      setGlobalErrorHandler(reportOtelError);
 
       const version = serviceVersion();
       // The reader does not read OTEL_METRIC_EXPORT_INTERVAL / _TIMEOUT itself

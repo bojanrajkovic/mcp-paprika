@@ -76,7 +76,7 @@ export interface HttpTransportHandle extends TransportHandle {
  * Hono middleware factory that logs one structured record per request.
  *
  * Emits `info` for all 2xx/3xx/4xx responses and `error` for 5xx. The record
- * carries `{method, path, status, durationMs}` so operators can correlate
+ * carries `{http_method, path, http_status, duration_ms}` so operators can correlate
  * access patterns with structured log streams without parsing text.
  *
  * Exported for isolated unit testing — `startHttp` has no logger injection
@@ -234,7 +234,13 @@ export function accessLog(log: Logger) {
       // session (and ties back to its `mcp client connected` fingerprint); absent on
       // initialize and non-/mcp routes.
       const session = c.req.header?.(MCP_SESSION_HEADER);
-      const fields = { method: c.req.method, path: c.req.path, status, durationMs, ...(session && { session }) };
+      const fields = {
+        http_method: c.req.method,
+        path: c.req.path,
+        http_status: status,
+        duration_ms: durationMs,
+        ...(session && { session }),
+      };
 
       if (status >= 500) {
         log.error(fields, "http request 5xx");

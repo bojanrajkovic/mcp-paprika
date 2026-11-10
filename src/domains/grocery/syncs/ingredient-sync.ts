@@ -46,12 +46,12 @@ export function groceryIngredientsSync(): SyncContribution<GroceryState, "aisle"
         // Such a row carries no aisle memory — add_grocery_items resolves it to "" and the
         // item then defaults to "Miscellaneous", identical to having no catalog entry at
         // all — so keeping it just bloats the catalog. (Historically the null value also
-        // aborted the whole sync cycle before meals/menus could sync.) Warn on the dropped
-        // count so the drop is observable rather than silent.
+        // aborted the whole sync cycle before meals/menus could sync.) Log the dropped
+        // count at debug: it recurs every cycle and needs no action.
         const filteredIngredients = groceryIngredients.filter((i) => i.aisleUid !== "");
         const droppedNoAisle = groceryIngredients.length - filteredIngredients.length;
         if (droppedNoAisle > 0) {
-          log.warn({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
+          log.debug({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
         }
 
         return cache.getAll().andThen((cachedIngredients) => {
