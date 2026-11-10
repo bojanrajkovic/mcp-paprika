@@ -44,6 +44,7 @@ import { Result } from "neverthrow";
 import pino from "pino";
 import { z } from "zod";
 
+import { PINO_BASE } from "../utils/log.js";
 import { getDiagLogTarget, lazy } from "./scope.js";
 import { urlScrubbingExporter } from "./url-scrub.js";
 
@@ -60,7 +61,7 @@ const DIAG_LEVELS: Readonly<Record<string, DiagLogLevel>> = {
 // Before the composition root sets a target (the telemetry preload runs before any
 // logger exists), diag lines go to stderr — never stdout, the stdio MCP wire. Pino's
 // own level is "trace" so it never re-filters: `diag.setLogger`'s level is the gate.
-const stderrDiagLog = lazy(() => pino({ base: null, level: "trace" }, pino.destination({ dest: 2, sync: true })));
+const stderrDiagLog = lazy(() => pino({ ...PINO_BASE, level: "trace" }, pino.destination({ dest: 2, sync: true })));
 
 /**
  * The OTel diag logger: structured pino records (`component: "otel"`) on the target

@@ -17,7 +17,7 @@ import { createLogger, notifierStream, pinoLevelToMcp, resolvePrimaryDestination
 // ---------------------------------------------------------------------------
 
 /** Build a pino-shaped JSON line as pino emits it to streams. */
-function pinoLine(opts: { level: number; msg: string; time?: number; [k: string]: unknown }): Buffer {
+function pinoLine(opts: { level: string; msg: string; time?: number; [k: string]: unknown }): Buffer {
   const record = { time: Date.now(), ...opts };
   return Buffer.from(JSON.stringify(record) + "\n", "utf8");
 }
@@ -54,13 +54,13 @@ function makeStubNotifier(resolveWith: "resolve" | "reject" = "resolve"): {
   return { notifier, spy };
 }
 
-// Pino numeric levels
-const LEVEL_TRACE = 10;
-const LEVEL_DEBUG = 20;
-const LEVEL_INFO = 30;
-const LEVEL_WARN = 40;
-const LEVEL_ERROR = 50;
-const LEVEL_FATAL = 60;
+// Pino level names, as PINO_BASE's level formatter writes them
+const LEVEL_TRACE = "trace";
+const LEVEL_DEBUG = "debug";
+const LEVEL_INFO = "info";
+const LEVEL_WARN = "warn";
+const LEVEL_ERROR = "error";
+const LEVEL_FATAL = "fatal";
 
 // ---------------------------------------------------------------------------
 // internal types, level mapper, and redact-path constants
@@ -156,6 +156,7 @@ describe("notifierStream", () => {
         hostname: "myhost",
         pid: 1234,
         v: 1,
+        service: "mcp-paprika",
         custom: "kept",
       });
 
@@ -170,13 +171,14 @@ describe("notifierStream", () => {
       expect(data).not.toHaveProperty("hostname");
       expect(data).not.toHaveProperty("pid");
       expect(data).not.toHaveProperty("v");
+      expect(data).not.toHaveProperty("service");
       // msg and caller fields must be present
       expect(data["msg"]).toBe("curated");
       expect(data["custom"]).toBe("kept");
     });
 
     it("level mapping is correct for all six pino levels", async () => {
-      const levelCases: Array<[number, string]> = [
+      const levelCases: Array<[string, string]> = [
         [LEVEL_TRACE, "debug"],
         [LEVEL_DEBUG, "debug"],
         [LEVEL_INFO, "info"],
@@ -185,11 +187,11 @@ describe("notifierStream", () => {
         [LEVEL_FATAL, "critical"],
       ];
 
-      for (const [numericLevel, expectedMcpLevel] of levelCases) {
+      for (const [pinoLevel, expectedMcpLevel] of levelCases) {
         const { notifier, spy } = makeStubNotifier();
         const stream = notifierStream(notifier);
 
-        await writeAsync(stream, pinoLine({ level: numericLevel, msg: "test" }));
+        await writeAsync(stream, pinoLine({ level: pinoLevel, msg: "test" }));
         await new Promise((r) => setImmediate(r));
 
         expect(spy).toHaveBeenCalledTimes(1);
@@ -264,11 +266,13 @@ describe("notifierStream", () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it("silently drops records with unknown numeric level", async () => {
+    it("silently drops records whose level is not a pino level name", async () => {
       const { notifier, spy } = makeStubNotifier();
       const stream = notifierStream(notifier);
 
-      await writeAsync(stream, Buffer.from(JSON.stringify({ level: 99, msg: "wat" }) + "\n"));
+      for (const level of ["wat", "silent", "toString", 40, undefined]) {
+        await writeAsync(stream, Buffer.from(JSON.stringify({ level, msg: "wat" }) + "\n"));
+      }
       await new Promise((r) => setImmediate(r));
 
       expect(spy).not.toHaveBeenCalled();
@@ -697,6 +701,52 @@ describe("createLogger (composition)", () => {
       // Pino internals stripped
       expect(data).not.toHaveProperty("level");
       expect(data).not.toHaveProperty("time");
+    });
+
+    it("every pino level reaches the client with its MCP level and the component as logger name", async () => {
+      const { notifier, spy } = makeStubNotifier();
+      const { opts } = makeFileOpts({ notifier, level: "trace", notifyLevel: "trace" });
+      const logger = createLogger(opts).child({ component: "sync" });
+
+      logger.trace("t");
+      logger.debug("d");
+      logger.info("i");
+      logger.warn("w");
+      logger.error("e");
+      logger.fatal("f");
+      await new Promise((r) => setImmediate(r));
+
+      expect(spy.mock.calls.map(([record]) => record)).toEqual([
+        { level: "debug", logger: "sync", data: { msg: "t", component: "sync" } },
+        { level: "debug", logger: "sync", data: { msg: "d", component: "sync" } },
+        { level: "info", logger: "sync", data: { msg: "i", component: "sync" } },
+        { level: "warning", logger: "sync", data: { msg: "w", component: "sync" } },
+        { level: "error", logger: "sync", data: { msg: "e", component: "sync" } },
+        { level: "critical", logger: "sync", data: { msg: "f", component: "sync" } },
+      ]);
+    });
+  });
+
+  describe("record shape", () => {
+    it("writes level as a name and a top-level service, without pid or hostname", () => {
+      const { opts, logFile } = makeFileOpts();
+      const logger = createLogger(opts);
+
+      logger.warn("shape");
+
+      const [record] = readLogLines(logFile);
+      expect(record).toMatchObject({ level: "warn", service: "mcp-paprika", msg: "shape" });
+      expect(record).not.toHaveProperty("pid");
+      expect(record).not.toHaveProperty("hostname");
+    });
+
+    it("pino-pretty renders the level name in stdio pretty mode", () => {
+      const { opts, logFile } = makeFileOpts({ pretty: true });
+      const logger = createLogger(opts);
+
+      logger.warn("pretty shape");
+
+      expect(readFileSync(logFile, "utf8")).toMatch(/WARN.*pretty shape/);
     });
   });
 
