@@ -17,7 +17,8 @@ import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { join } from "node:path";
 
-import { diag, type DiagLogger, DiagLogLevel } from "@opentelemetry/api";
+import { diag, type DiagLogger, DiagLogLevel, type Exception } from "@opentelemetry/api";
+import { setGlobalErrorHandler } from "@opentelemetry/core";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { NetInstrumentation } from "@opentelemetry/instrumentation-net";
@@ -83,6 +84,17 @@ export function diagLogger(): DiagLogger {
       (getDiagLogTarget() ?? stderrDiagLog())[level](fields, message);
     };
   return { error: at("error"), warn: at("warn"), info: at("info"), debug: at("debug"), verbose: at("trace") };
+}
+
+/**
+ * The OTel global error handler (export failures land here). OTel's default handler
+ * flattens the error to a JSON string and logs only that string, so `msg` would hold
+ * JSON. This one logs the error's message and passes the error itself, which
+ * `diagLogger` puts under `err`. Exported for tests.
+ */
+export function reportOtelError(error: Exception): void {
+  if (typeof error === "string") diag.error(error);
+  else diag.error(error.message ?? error.name ?? String(error.code), error);
 }
 
 const packageJsonSchema = z.object({ version: z.string() });
@@ -155,6 +167,7 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
       const rawLevel = process.env["OTEL_LOG_LEVEL"];
       delete process.env["OTEL_LOG_LEVEL"];
       diag.setLogger(diagLogger(), DIAG_LEVELS[rawLevel?.toLowerCase() ?? ""] ?? DiagLogLevel.ERROR);
+      setGlobalErrorHandler(reportOtelError);
 
       const version = serviceVersion();
       // The reader does not read OTEL_METRIC_EXPORT_INTERVAL / _TIMEOUT itself

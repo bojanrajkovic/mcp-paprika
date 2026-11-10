@@ -1,8 +1,9 @@
+import { diag, DiagLogLevel } from "@opentelemetry/api";
 import pino from "pino";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setDiagLogTarget } from "./scope.js";
-import { diagLogger } from "./sdk.js";
+import { diagLogger, reportOtelError } from "./sdk.js";
 
 /** A bare pino logger that collects its JSON lines instead of writing them anywhere. */
 function capturingLogger(): { logger: pino.Logger; records: () => Array<Record<string, unknown>> } {
@@ -61,5 +62,27 @@ describe("diagLogger", () => {
     diag.error("late");
 
     expect(records()).toMatchObject([{ msg: "late" }]);
+  });
+});
+
+describe("reportOtelError", () => {
+  afterEach(() => {
+    diag.disable();
+    setDiagLogTarget(undefined);
+  });
+
+  it("logs the error's message as msg and the error itself under err", () => {
+    const { logger, records } = capturingLogger();
+    setDiagLogTarget(logger);
+    diag.setLogger(diagLogger(), DiagLogLevel.ERROR);
+
+    reportOtelError(Object.assign(new Error("Service Unavailable"), { code: 503 }));
+    reportOtelError("plain string");
+
+    expect(records()).toMatchObject([
+      { component: "otel", msg: "Service Unavailable", err: { message: "Service Unavailable", code: 503 } },
+      { component: "otel", msg: "plain string" },
+    ]);
+    expect(records()[1]).not.toHaveProperty("args");
   });
 });
