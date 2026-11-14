@@ -13,7 +13,7 @@ importers:
         version: 0.1.0(temporal-polyfill@1.0.8)
       '@hono/mcp':
         specifier: 0.3.5
-        version: 0.3.5(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.18))(hono@4.13.18)(zod@4.6.7)
+        version: 0.3.5(@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.18))(hono@4.13.18)(zod@4.6.7)
       '@hono/node-server':
         specifier: 2.0.12
         version: 2.0.12(hono@4.13.18)
@@ -21,8 +21,8 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(hono@4.13.18)
       '@modelcontextprotocol/sdk':
-        specifier: ^1.32.1
-        version: 1.32.1(supports-color@7.2.0)(zod@4.6.7)
+        specifier: ^1.32.2
+        version: 1.32.2(supports-color@7.2.0)(zod@4.6.7)
       '@opentelemetry/api':
         specifier: ^1.10.0
         version: 1.10.0
@@ -122,7 +122,7 @@ importers:
         version: 21.2.4
       '@modelcontextprotocol/ext-apps':
         specifier: 1.7.5
-        version: 1.7.5(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)
+        version: 1.7.5(@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)
       '@msw/source':
         specifier: ^0.7.0
         version: 0.7.0(msw@3.0.3(@types/node@24.19.2)(graphql@16.14.1)(supports-color@7.2.0)(typescript@6.0.3)(vite@8.0.16(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.6.1)(tsx@4.23.15)(yaml@2.9.1)))(supports-color@7.2.0)
@@ -753,8 +753,8 @@ packages:
       react-dom:
         optional: true
 
-  '@modelcontextprotocol/sdk@1.32.1':
-    resolution: {integrity: sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==}
+  '@modelcontextprotocol/sdk@1.32.2':
+    resolution: {integrity: sha512-SWsVtH/0vULSQStoZ6xxH2K09Li8fXYTMC64ZeogCdpZ3XSi1eCPOByV1OpuJxuI3OcmHhosDWYyii07tpPsLw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -1482,6 +1482,11 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
+    peerDependencies:
+      ajv: ^8.0.0
+    peerDependenciesMeta:
+      ajv:
+        optional: true
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
@@ -3087,9 +3092,9 @@ snapshots:
       protobufjs: 7.6.6
       yargs: 17.7.2
 
-  '@hono/mcp@0.3.5(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.18))(hono@4.13.18)(zod@4.6.7)':
+  '@hono/mcp@0.3.5(@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.18))(hono@4.13.18)(zod@4.6.7)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.32.1(supports-color@7.2.0)(zod@4.6.7)
+      '@modelcontextprotocol/sdk': 1.32.2(supports-color@7.2.0)(zod@4.6.7)
       hono: 4.13.18
       hono-rate-limiter: 0.5.4(hono@4.13.18)
       pkce-challenge: 5.0.1
@@ -3261,13 +3266,13 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)':
+  '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.32.1(supports-color@7.2.0)(zod@4.6.7)
+      '@modelcontextprotocol/sdk': 1.32.2(supports-color@7.2.0)(zod@4.6.7)
       '@standard-schema/spec': 1.1.0
       zod: 4.6.7
 
-  '@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7)':
+  '@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7)':
     dependencies:
       '@hono/node-server': 2.0.12(hono@4.13.18)
       ajv: 8.20.0
