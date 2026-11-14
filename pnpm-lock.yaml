@@ -93,7 +93,7 @@ importers:
         specifier: ^8.2.0
         version: 8.2.0
       parse-duration:
-        specifier: ^2.1.9
+        specifier: ^2.1.11
         version: 2.1.11
       pino:
         specifier: ^10.3.1
