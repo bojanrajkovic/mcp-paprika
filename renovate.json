@@ -1,12 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    "helpers:pinGitHubActionDigests",
-    ":automergeMinor",
-    ":automergeDigest",
-    "security:minimumReleaseAgeNpm"
-  ],
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":automergeMinor", ":automergeDigest"],
   "labels": ["dependencies"],
   "rangeStrategy": "bump",
   "lockFileMaintenance": {
