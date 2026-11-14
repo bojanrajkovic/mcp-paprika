@@ -15,8 +15,8 @@ importers:
         specifier: 0.3.5
         version: 0.3.5(@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.18))(hono@4.13.18)(zod@4.6.7)
       '@hono/node-server':
-        specifier: 2.0.12
-        version: 2.0.12(hono@4.13.18)
+        specifier: 2.1.7
+        version: 2.1.7(hono@4.13.18)
       '@hono/otel':
         specifier: ^1.1.2
         version: 1.1.2(hono@4.13.18)
@@ -509,11 +509,11 @@ packages:
       hono-rate-limiter: ^0.5.4
       zod: ^3.25.0 || ^4.0.0
 
-  '@hono/node-server@2.0.12':
-    resolution: {integrity: sha512-eWpQYr67tqJLeaSUl0Q+TquuYfUdTibpOJlUMV2FfUP7+KqCC5TufnwnlXL6mobZBJbGAYRd7ZvEBDCbLInjhg==}
+  '@hono/node-server@2.1.7':
+    resolution: {integrity: sha512-Wr0E6S+v2Bw9FkpGNP5BQ5QbJvclUa06UVehd65WFZe6XeJwbrKQQ5wPDevc0IC+QyzbO7v3Llh5uo45IZcSnA==}
     engines: {node: '>=20'}
     peerDependencies:
-      hono: ^4
+      hono: ^4 || ^5.0.0-0
 
   '@hono/otel@1.1.2':
     resolution: {integrity: sha512-UaBMKPGaQTj4sjvpGqQ+57eolTwMI2znzxV/QBUF99XxhcmqtqaZX95flXpGgWb+lnlinlCy23Y1sZ8+TzzM9A==}
@@ -3128,7 +3128,7 @@ snapshots:
       pkce-challenge: 5.0.1
       zod: 4.6.7
 
-  '@hono/node-server@2.0.12(hono@4.13.18)':
+  '@hono/node-server@2.1.7(hono@4.13.18)':
     dependencies:
       hono: 4.13.18
 
@@ -3302,7 +3302,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7)':
     dependencies:
-      '@hono/node-server': 2.0.12(hono@4.13.18)
+      '@hono/node-server': 2.1.7(hono@4.13.18)
       ajv: 8.20.0
       ajv-formats: 3.0.1
       content-type: 1.0.5
