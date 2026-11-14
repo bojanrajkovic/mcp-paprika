@@ -18,8 +18,8 @@ importers:
         specifier: 2.1.7
         version: 2.1.7(hono@4.13.18)
       '@hono/otel':
-        specifier: ^1.1.2
-        version: 1.1.2(hono@4.13.18)
+        specifier: ^1.3.0
+        version: 1.3.0(hono@4.13.18)
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(supports-color@7.2.0)(zod@4.6.7)
@@ -515,8 +515,8 @@ packages:
     peerDependencies:
       hono: ^4 || ^5.0.0-0
 
-  '@hono/otel@1.1.2':
-    resolution: {integrity: sha512-UaBMKPGaQTj4sjvpGqQ+57eolTwMI2znzxV/QBUF99XxhcmqtqaZX95flXpGgWb+lnlinlCy23Y1sZ8+TzzM9A==}
+  '@hono/otel@1.3.0':
+    resolution: {integrity: sha512-x4L9U2O+Z9lD+EAKQfEWSX8iDIR/122IDM6sImGWoWF6KO1s+0icGncpDgwQjm1Iry+Kq94TdoYTpiMfOB5gzw==}
     peerDependencies:
       hono: '>=4.0.0'
 
@@ -3132,7 +3132,7 @@ snapshots:
     dependencies:
       hono: 4.13.18
 
-  '@hono/otel@1.1.2(hono@4.13.18)':
+  '@hono/otel@1.3.0(hono@4.13.18)':
     dependencies:
       '@opentelemetry/api': 1.10.0
       '@opentelemetry/semantic-conventions': 1.41.1
