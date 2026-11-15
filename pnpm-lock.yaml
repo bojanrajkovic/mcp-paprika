@@ -45,7 +45,7 @@ importers:
         specifier: ^0.38.0
         version: 0.38.0(@opentelemetry/api@1.10.0)(supports-color@7.2.0)
       '@opentelemetry/instrumentation-undici':
-        specifier: ^0.35.0
+        specifier: ^0.35.1
         version: 0.35.1(@opentelemetry/api@1.10.0)(supports-color@7.2.0)
       '@opentelemetry/resource-detector-container':
         specifier: ^0.9.1
