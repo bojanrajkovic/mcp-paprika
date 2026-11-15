@@ -175,7 +175,7 @@ importers:
         specifier: ^1.93.0
         version: 1.93.0
       prettier:
-        specifier: ^3.10.0
+        specifier: ^3.10.1
         version: 3.10.1
       prettier-plugin-svelte:
         specifier: ^4.1.1
