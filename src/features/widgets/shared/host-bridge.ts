@@ -48,6 +48,16 @@ export interface ReceivedResult {
 }
 
 /**
+ * ext-apps 2 types `structuredContent` as any JSON value. Our server only ever sends an object, so
+ * anything else (array, scalar, null) from a host is treated as absent.
+ */
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/**
  * Call a server tool through the host bridge, treating a transport rejection the same as a
  * tool-reported error so an in-flight row is never left stuck. Returns the structured channel too,
  * for callers that reconcile from it (the grocery re-add); subtractive callers ignore it.
@@ -59,7 +69,7 @@ export async function callTool(
 ): Promise<{ isError: boolean; structuredContent: Record<string, unknown> | undefined }> {
   try {
     const res = await app.callServerTool({ name, arguments: args });
-    return { isError: Boolean(res.isError), structuredContent: res.structuredContent };
+    return { isError: Boolean(res.isError), structuredContent: asRecord(res.structuredContent) };
   } catch {
     return { isError: true, structuredContent: undefined };
   }
@@ -141,7 +151,7 @@ export function connectHost(
       // deferred, so the whole boot timeline reaches our Tempo via record_widget_timing.
       reportWidgetTiming(app);
     }
-    handlers.onResult(result);
+    handlers.onResult({ ...result, structuredContent: asRecord(result.structuredContent) });
   };
   app.onhostcontextchanged = apply;
   Promise.resolve(app.connect()).then(() => {
