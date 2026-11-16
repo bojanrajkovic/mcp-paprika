@@ -108,7 +108,7 @@
     "svelte-check": "^4.7.8",
     "tsx": "^4.23.15",
     "type-fest": "^5.10.0",
-    "typescript": "^7.0.0",
+    "typescript": "^6.0.3",
     "vitest": "^5.0.0"
   },
   "engines": {
