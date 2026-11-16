@@ -1,22 +1,25 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>bojanrajkovic/renovate-config"],
+  "extends": [
+    "github>bojanrajkovic/renovate-config"
+  ],
   "packageRules": [
     {
-      "description": "Production dependencies release as fix(deps). The shared preset titles every update chore(deps)",
-      "matchDepTypes": ["dependencies"],
-      "semanticCommitType": "fix"
-    },
-    {
       "description": "Group all devDependencies together",
-      "matchDepTypes": ["devDependencies"],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
       "groupName": "dev dependencies",
       "automerge": true
     },
     {
       "description": "Don't automerge major production dependency bumps",
-      "matchDepTypes": ["dependencies"],
-      "matchUpdateTypes": ["major"],
+      "matchDepTypes": [
+        "dependencies"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "automerge": false
     }
   ]
