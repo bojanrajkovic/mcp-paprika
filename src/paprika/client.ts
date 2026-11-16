@@ -726,7 +726,9 @@ export class PaprikaClient {
     const compressed = gzipSync(JSON.stringify(payload));
     const formData = new FormData();
     formData.append("data", new Blob([compressed]), dataFilename);
-    formData.append("photo_upload", new Blob([imageBytes], { type: "image/jpeg" }), imageFilename);
+    // @types/node 26 types Buffer as Buffer<ArrayBufferLike>; Blob only accepts ArrayBuffer-backed views.
+    const photoBlob = new Blob([new Uint8Array(imageBytes)], { type: "image/jpeg" });
+    formData.append("photo_upload", photoBlob, imageFilename);
     return formData;
   }
 
