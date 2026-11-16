@@ -84,7 +84,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
-    "@modelcontextprotocol/ext-apps": "1.7.5",
+    "@modelcontextprotocol/ext-apps": "2.0.4",
     "@msw/source": "^0.7.0",
     "@opentelemetry/context-async-hooks": "^3.1.1",
     "@opentelemetry/sdk-trace": "^3.1.1",
@@ -93,8 +93,8 @@
     "@tsconfig/strictest": "^2.0.9",
     "@types/har-format": "^1.2.16",
     "@types/luxon": "^3.7.6",
-    "@types/node": "^24.19.2",
-    "@vitest/coverage-v8": "^4.1.12",
+    "@types/node": "^26.0.0",
+    "@vitest/coverage-v8": "^5.0.0",
     "esbuild": "^0.28.2",
     "esbuild-svelte": "^0.9.5",
     "fast-check": "^4.10.2",
@@ -109,7 +109,7 @@
     "tsx": "^4.23.15",
     "type-fest": "^5.10.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.12"
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=26.13.1"
