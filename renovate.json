@@ -1,30 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":automergeMinor", ":automergeDigest"],
-  "labels": ["dependencies"],
-  "rangeStrategy": "bump",
-  "lockFileMaintenance": {
-    "enabled": true,
-    "automerge": true
-  },
+  "extends": ["github>bojanrajkovic/renovate-config"],
   "packageRules": [
+    {
+      "description": "Production dependencies release as fix(deps). The shared preset titles every update chore(deps)",
+      "matchDepTypes": ["dependencies"],
+      "semanticCommitType": "fix"
+    },
     {
       "description": "Group all devDependencies together",
       "matchDepTypes": ["devDependencies"],
       "groupName": "dev dependencies",
-      "automerge": true
-    },
-    {
-      "description": "Group GitHub Actions updates",
-      "matchManagers": ["github-actions"],
-      "groupName": "GitHub Actions",
-      "automerge": true
-    },
-    {
-      "description": "Group Node.js version updates across managers",
-      "matchPackageNames": ["node"],
-      "matchManagers": ["mise", "github-actions", "nvm"],
-      "groupName": "Node.js",
       "automerge": true
     },
     {
