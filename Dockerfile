@@ -3,7 +3,7 @@
 # ─── Stage 1: builder ────────────────────────────────────────────────────────
 # Full Debian-based Node image so corepack/pnpm and TypeScript compilation
 # have all the tools they need.
-FROM node:26.13.1-bookworm-slim AS builder
+FROM node:26.13.1-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 AS builder
 
 WORKDIR /app
 
@@ -42,7 +42,7 @@ RUN mkdir -p /opt/data/config /opt/data/cache
 # A separate install with --prod produces a node_modules tree without dev
 # dependencies (TypeScript, vitest, oxlint, etc.) — keeps the runtime image
 # small.
-FROM node:26.13.1-bookworm-slim AS prod-deps
+FROM node:26.13.1-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 AS prod-deps
 
 WORKDIR /app
 RUN corepack enable
@@ -57,7 +57,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 # Distroless `nodejs24-debian13:nonroot` ships a built-in `ENTRYPOINT
 # ["/nodejs/bin/node"]` and runs as user 65532 (nonroot). We only need to
 # supply CMD args.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:6abfcb367ebc291572c774c1592a986be2ab26a2486f73093401327495a5962a
 
 WORKDIR /app
 
