@@ -17,9 +17,8 @@ import { confirmGate, pickOne } from "./elicit.js";
  */
 export type TypedCallToolResult<O extends Record<string, unknown> | void> =
   O extends Record<string, unknown>
-    ?
-        | { content: CallToolResult["content"]; structuredContent: O }
-        | { content: CallToolResult["content"]; isError: true }
+    ? | { content: CallToolResult["content"]; structuredContent: O }
+      | { content: CallToolResult["content"]; isError: true }
     : CallToolResult;
 
 /**
