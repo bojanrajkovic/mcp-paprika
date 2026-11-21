@@ -333,13 +333,13 @@
         {#each displaySections as sec (sec.from)}
           {#if !singleDay}
             <div class="day">
-              <span class="dl"
-                >{#if sec.from === sec.to}Day {sec.from}{:else}Days {sec.from}–{sec.to}{/if}{#if days > 1}<span
+              <span class="dl">
+                {#if sec.from === sec.to}Day {sec.from}{:else}Days {sec.from}–{sec.to}{/if}{#if days > 1}<span
                     class="dctx"
                   >
-                    of {days}</span
-                  >{/if}</span
-              >
+                    of {days}
+                  </span>{/if}
+              </span>
             </div>
           {/if}
           {#if sec.items.length === 0}
@@ -363,12 +363,12 @@
                   <span class="info">
                     <span class="name">{item.name}</span>
                     <span class="sub">
-                      {#if item.typeName !== null}<span class="eyebrow"
-                          >{item.typeName}</span
-                        >{/if}
-                      {#if item.typeName !== null && time}<span class="sep"
-                          >·</span
-                        >{/if}
+                      {#if item.typeName !== null}<span class="eyebrow">
+                          {item.typeName}
+                        </span>{/if}
+                      {#if item.typeName !== null && time}<span class="sep">
+                          ·
+                        </span>{/if}
                       {#if time}<span class="time">{time}</span>{/if}
                       <RatingDots rating={item.recipe.rating} />
                     </span>
@@ -387,9 +387,9 @@
                   aria-label="Open {item.name}"
                 >
                   <span class="rt">
-                    {#if item.typeName !== null}<span class="mt"
-                        >{item.typeName}</span
-                      >{/if}
+                    {#if item.typeName !== null}<span class="mt">
+                        {item.typeName}
+                      </span>{/if}
                     <span class="name">{item.name}</span>
                   </span>
                   {#if loadingItemUid === item.uid}
@@ -401,9 +401,9 @@
               {:else}
                 <div class="row freeform">
                   <span class="rt">
-                    {#if item.typeName !== null}<span class="mt"
-                        >{item.typeName}</span
-                      >{/if}
+                    {#if item.typeName !== null}<span class="mt">
+                        {item.typeName}
+                      </span>{/if}
                     <span class="name">{item.name}</span>
                   </span>
                 </div>

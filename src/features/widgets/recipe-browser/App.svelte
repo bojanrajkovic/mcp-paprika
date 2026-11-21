@@ -386,9 +386,9 @@
     <div class="browse" class:hidden={detail !== null}>
       <header>
         <BrandMark {title} />
-        <span class="count"
-          >{filtered.length} recipe{filtered.length === 1 ? "" : "s"}</span
-        >
+        <span class="count">
+          {filtered.length} recipe{filtered.length === 1 ? "" : "s"}
+        </span>
       </header>
 
       {#if showSearch}
@@ -411,9 +411,9 @@
               onclick={clearSearch}
               aria-label="Clear search"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true"
-                ><path d="M4 4l8 8M12 4l-8 8" /></svg
-              >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" />
+              </svg>
             </button>
           {/if}
         </div>
@@ -426,8 +426,10 @@
               <button
                 class="chip"
                 class:on={c === activeCat}
-                onclick={() => setCategory(c)}>{c}</button
+                onclick={() => setCategory(c)}
               >
+                {c}
+              </button>
             {/each}
           </div>
         {:else}
@@ -467,9 +469,9 @@
             desc={filteredEmptyDesc}
           >
             {#snippet children()}
-              <PillButton onclick={clearFilters} ariaLabel="Clear filters"
-                >Clear filters</PillButton
-              >
+              <PillButton onclick={clearFilters} ariaLabel="Clear filters">
+                Clear filters
+              </PillButton>
             {/snippet}
           </StatusScreen>
         {:else}

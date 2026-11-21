@@ -435,16 +435,20 @@
           aria-pressed={mode === "review"}
           onclick={() => {
             if (mode !== "review") nav(() => (mode = "review"), "back");
-          }}>Review</button
+          }}
         >
+          Review
+        </button>
         <button
           class="tab"
           class:on={mode === "cook"}
           aria-pressed={mode === "cook"}
           onclick={() => {
             if (mode !== "cook") nav(() => (mode = "cook"), "fwd");
-          }}>Cook</button
+          }}
         >
+          Cook
+        </button>
       </div>
     </header>
 
@@ -473,17 +477,17 @@
               placeholder="e.g. the marinade belongs with the pork, not the paste"
             ></textarea>
             <div class="reanchor-actions">
-              <PillButton variant="accent" onclick={sendReanchor}
-                >Send</PillButton
-              >
-              <PillButton onclick={() => (reanchorOpen = false)}
-                >Cancel</PillButton
-              >
+              <PillButton variant="accent" onclick={sendReanchor}>
+                Send
+              </PillButton>
+              <PillButton onclick={() => (reanchorOpen = false)}>
+                Cancel
+              </PillButton>
             </div>
           {:else}
-            <button class="reanchor-open" onclick={() => (reanchorOpen = true)}
-              >Re-anchor differently…</button
-            >
+            <button class="reanchor-open" onclick={() => (reanchorOpen = true)}>
+              Re-anchor differently…
+            </button>
           {/if}
         </div>
       </div>
@@ -538,9 +542,9 @@
                   aria-pressed={prepChecked.has(`s${gi.toString()}`)}
                   onclick={() => togglePrep(`s${gi.toString()}`)}
                 >
-                  <span class="box" aria-hidden="true"
-                    >{prepChecked.has(`s${gi.toString()}`) ? "✓" : ""}</span
-                  >
+                  <span class="box" aria-hidden="true">
+                    {prepChecked.has(`s${gi.toString()}`) ? "✓" : ""}
+                  </span>
                   <span class="prep-text">{step.text}</span>
                 </button>
               </li>
@@ -567,8 +571,9 @@
             class="link rise"
             style:animation-delay="180ms"
             onclick={() => nav(() => (mode = "review"), "back")}
-            >Review the recipe again</button
           >
+            Review the recipe again
+          </button>
         {:else}
           {#if photoSrc}
             <div class="hero-wrap">
@@ -588,8 +593,10 @@
             <button
               class="split-main"
               disabled={logState === "logging"}
-              onclick={logToday}>Log as today’s</button
+              onclick={logToday}
             >
+              Log as today’s
+            </button>
             <select
               class="split-select"
               bind:value={mealType}
@@ -603,13 +610,17 @@
           <button
             class="link rise"
             style:animation-delay="250ms"
-            onclick={logDifferentDay}>Log a different day…</button
+            onclick={logDifferentDay}
           >
+            Log a different day…
+          </button>
           <button
             class="link subtle rise"
             style:animation-delay="290ms"
-            onclick={backToSteps}>Back to steps</button
+            onclick={backToSteps}
           >
+            Back to steps
+          </button>
         {/if}
       </div>
     {:else}
@@ -632,8 +643,10 @@
             nav(() => {
               if (stepPos === 0) cookPhase = "prep";
               else stepPos -= 1;
-            }, "back")}>{stepPos === 0 ? "← Prep" : "← Prev"}</button
+            }, "back")}
         >
+          {stepPos === 0 ? "← Prep" : "← Prev"}
+        </button>
         <button
           class="navbtn primary"
           onclick={() => nav(() => (stepPos += 1), "fwd")}
@@ -702,8 +715,10 @@
             <button
               class="x"
               aria-label="Toggle this ingredient off"
-              onclick={() => toggleRemoved(stepIdx, ref)}>×</button
+              onclick={() => toggleRemoved(stepIdx, ref)}
             >
+              ×
+            </button>
           </span>
         {/if}
       {/each}

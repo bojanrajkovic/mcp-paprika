@@ -143,8 +143,9 @@
                   class="bd-plan"
                   onclick={() => onPlan(band.label, days[i]?.iso ?? "")}
                   aria-label={`Plan ${band.label.toLowerCase()} for ${days[i]?.long ?? ""}`}
-                  ><span class="bd-plan-glyph">+</span></button
                 >
+                  <span class="bd-plan-glyph">+</span>
+                </button>
               {/if}
             </div>
           {/each}

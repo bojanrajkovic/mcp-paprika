@@ -377,9 +377,9 @@
         {#if confirmingClear}
           <div class="mode" transition:fade={{ duration: motion(140) }}>
             <span class="progress">Clear {purchasedCount} purchased?</span>
-            <PillButton variant="danger-strong" onclick={confirmClear}
-              >Clear</PillButton
-            >
+            <PillButton variant="danger-strong" onclick={confirmClear}>
+              Clear
+            </PillButton>
             <PillButton onclick={cancelClear}>Keep</PillButton>
           </div>
         {:else if confirmingMove}
@@ -397,19 +397,20 @@
               role="img"
               aria-label="{purchasedCount} of {items.length} done"
             >
-              <span class="ring-count" aria-hidden="true"
-                >{purchasedCount}/{items.length}</span
-              >
+              <span class="ring-count" aria-hidden="true">
+                {purchasedCount}/{items.length}
+              </span>
             </div>
             {#if purchasedCount > 0}
               <PillButton
                 variant="accent"
                 onclick={elicitation ? confirmMove : onMove}
-                >Move {purchasedCount} → pantry</PillButton
               >
-              <PillButton onclick={elicitation ? confirmClear : onClear}
-                >Clear {purchasedCount}</PillButton
-              >
+                Move {purchasedCount} → pantry
+              </PillButton>
+              <PillButton onclick={elicitation ? confirmClear : onClear}>
+                Clear {purchasedCount}
+              </PillButton>
             {/if}
           </div>
         {/if}
@@ -429,9 +430,9 @@
 
 {#snippet aisleHeader(group: { key: string; items: Row[] })}
   {@const remaining = group.items.filter((i) => !i.purchased).length}
-  <span class="count" class:done={remaining === 0}
-    >{remaining}/{group.items.length}</span
-  >
+  <span class="count" class:done={remaining === 0}>
+    {remaining}/{group.items.length}
+  </span>
 {/snippet}
 
 {#snippet rowList(rowItems: Row[])}
@@ -472,9 +473,9 @@
           {#if item._busy}
             <Spinner size={15} color="var(--success)" />
           {:else}
-            <svg viewBox="0 0 16 16" aria-hidden="true"
-              ><path class="tick" d="M3.5 8.5l3 3 6-6.5" /></svg
-            >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path class="tick" d="M3.5 8.5l3 3 6-6.5" />
+            </svg>
           {/if}
         </span>
         <ItemRow
