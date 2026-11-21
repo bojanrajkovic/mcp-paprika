@@ -69,13 +69,14 @@
   use:lazyLoad
   style="--thumb-size: {size}px; background: {tile};"
   aria-hidden="true"
-  >{#if photoSrc}<img
+>
+  {#if photoSrc}<img
       class="thumbimg"
       src={photoSrc}
       alt=""
       decoding="async"
-    />{/if}</span
->
+    />{/if}
+</span>
 
 <style>
   .thumb {

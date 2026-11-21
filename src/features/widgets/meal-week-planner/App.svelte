@@ -576,9 +576,9 @@
           <!-- Done is green (The Green-Means-Done Rule) — as a tick graphic, not text:
                the light success value is fill-tuned (3.9:1) and only clears the 3:1
                component floor, so the label itself stays muted. -->
-          <svg class="tick" viewBox="0 0 16 16" aria-hidden="true"
-            ><path d="M3 8.5 6.5 12 13 4.5" /></svg
-          >
+          <svg class="tick" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 8.5 6.5 12 13 4.5" />
+          </svg>
         {/if}
         {plannedCount} of 7 planned
       </span>

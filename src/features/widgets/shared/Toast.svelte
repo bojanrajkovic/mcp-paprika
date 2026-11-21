@@ -20,9 +20,9 @@
   >
     <span class="tmsg">{toast.msg}</span>
     {#if toast.action}
-      <button class="undo" onclick={toast.action.fn}
-        >{toast.action.label}</button
-      >
+      <button class="undo" onclick={toast.action.fn}>
+        {toast.action.label}
+      </button>
     {/if}
   </div>
 {/if}

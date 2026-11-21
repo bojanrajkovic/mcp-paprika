@@ -26,8 +26,10 @@
   class:flip
   style="--chev-size: {size}px; --chev-color: {color};"
   viewBox="0 0 16 16"
-  aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg
+  aria-hidden="true"
 >
+  <path d="M6 4l4 4-4 4" />
+</svg>
 
 <style>
   .chev {

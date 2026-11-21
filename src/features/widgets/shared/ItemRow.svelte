@@ -21,10 +21,9 @@
 </script>
 
 <span class="body" class:done>
-  <span class="name"
-    >{ingredient}{#if quantity}<span class="qty">{" · "}{quantity}</span
-      >{/if}</span
-  >
+  <span class="name">
+    {ingredient}{#if quantity}<span class="qty">{" · "}{quantity}</span>{/if}
+  </span>
   {@render extra?.()}
 </span>
 

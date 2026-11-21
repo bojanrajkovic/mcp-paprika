@@ -30,8 +30,10 @@
   class:accent={variant === "accent"}
   class:accent-fill={variant === "accent-fill"}
   {onclick}
-  aria-label={ariaLabel}>{@render children()}</button
+  aria-label={ariaLabel}
 >
+  {@render children()}
+</button>
 
 <style>
   .pill {

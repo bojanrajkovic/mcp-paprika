@@ -178,8 +178,10 @@
                 <span class="dash">—</span>
                 <PillButton
                   variant="accent-fill"
-                  onclick={() => onPlan(slot.label)}>Plan ↗</PillButton
+                  onclick={() => onPlan(slot.label)}
                 >
+                  Plan ↗
+                </PillButton>
               </div>
             {:else}
               {#each slot.meals as meal (meal.uid)}

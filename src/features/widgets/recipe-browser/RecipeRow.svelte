@@ -48,8 +48,9 @@
     <span
       class="name"
       style:view-transition-name={open ? "rb-recipe-title" : "none"}
-      >{recipe.name}</span
     >
+      {recipe.name}
+    </span>
     <span class="sub">
       {#if category}<span class="cat">{category}</span>{/if}
       {#if category && time}<span class="sep">·</span>{/if}

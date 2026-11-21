@@ -65,11 +65,11 @@
 
 <header>
   <PillButton onclick={onBack} ariaLabel={backLabel}>
-    <span class="back"
-      ><svg viewBox="0 0 16 16" aria-hidden="true"
-        ><path d="M10 3.5 5.5 8l4.5 4.5" /></svg
-      >Back</span
-    >
+    <span class="back">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M10 3.5 5.5 8l4.5 4.5" />
+      </svg>Back
+    </span>
   </PillButton>
 </header>
 

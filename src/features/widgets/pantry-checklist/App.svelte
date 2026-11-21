@@ -551,16 +551,17 @@
           {#if drawerOpen}
             {#if confirmingClear}
               <span class="clear-confirm">Remove {outOfStock.length}?</span>
-              <PillButton variant="danger-strong" onclick={confirmClear}
-                >Clear</PillButton
-              >
+              <PillButton variant="danger-strong" onclick={confirmClear}>
+                Clear
+              </PillButton>
               <PillButton onclick={cancelClear}>Keep</PillButton>
             {:else}
               <PillButton
                 variant="danger"
                 onclick={elicitation ? confirmClear : onClear}
-                >Clear all</PillButton
               >
+                Clear all
+              </PillButton>
             {/if}
           {/if}
         </div>
@@ -582,8 +583,10 @@
                 <PillButton
                   variant="accent"
                   onclick={() => onRestock(item)}
-                  ariaLabel="Restock {item.ingredient}">Restock</PillButton
+                  ariaLabel="Restock {item.ingredient}"
                 >
+                  Restock
+                </PillButton>
               </div>
             {/each}
           </div>
@@ -641,9 +644,9 @@
       >
         <ItemRow ingredient={item.ingredient} quantity={item.quantity}>
           {#snippet extra()}
-            {#if es}<span class="badge {es}"
-                >{expLabel(item.expirationDate)}</span
-              >{/if}
+            {#if es}<span class="badge {es}">
+                {expLabel(item.expirationDate)}
+              </span>{/if}
           {/snippet}
         </ItemRow>
         {#if touchDevice}
@@ -651,9 +654,9 @@
                button — visually clipped away but present in the accessibility tree and tab order,
                revealed as a pill on hardware-keyboard focus. The only non-gesture path to mark-out
                on a touch-only host; do not prune as unused. -->
-          <button class="sr-action" onclick={() => onOut(item, { fly: true })}
-            >Mark {item.ingredient} out of stock</button
-          >
+          <button class="sr-action" onclick={() => onOut(item, { fly: true })}>
+            Mark {item.ingredient} out of stock
+          </button>
         {/if}
         {#if !touchDevice}
           <!-- Revealed on row hover / keyboard focus where hover exists (the wall of identical
@@ -663,8 +666,9 @@
               variant="danger"
               onclick={() => onOut(item, { fly: true })}
               ariaLabel="Mark {item.ingredient} out of stock"
-              >Out of Stock</PillButton
             >
+              Out of Stock
+            </PillButton>
           </span>
         {/if}
       </div>
