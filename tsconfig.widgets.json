@@ -10,6 +10,8 @@
     // sandboxed iframe. `types: []` drops @types/node so server-only globals can't leak in.
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": [],
+    // @tsconfig/node26 no longer sets this; svelte-check otherwise defaults to deprecated node10.
+    "moduleResolution": "nodenext",
     "noEmit": true
   },
   // The three browser-entry shapes, mirroring the excludes in tsconfig.json / tsconfig.test.json.
