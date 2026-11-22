@@ -4,7 +4,7 @@
   // components. esbuild bundles these (stripping types without checking — ADR-0019); this
   // config is what `svelte-check` reads so the same files are actually typechecked.
   // `pnpm typecheck` chains `typecheck:widgets`, so the pre-push hook and CI cover it.
-  "extends": ["@tsconfig/strictest/tsconfig.json", "@tsconfig/node24/tsconfig.json"],
+  "extends": ["@tsconfig/strictest/tsconfig.json", "@tsconfig/node26/tsconfig.json"],
   "compilerOptions": {
     // Browser globals (document, performance, setTimeout→number), NOT Node — these run in a
     // sandboxed iframe. `types: []` drops @types/node so server-only globals can't leak in.
