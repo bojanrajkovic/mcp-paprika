@@ -303,8 +303,8 @@ importers:
         specifier: 0.1.2
         version: 0.1.2
       '@tsconfig/node26':
-        specifier: 26.0.0
-        version: 26.0.0
+        specifier: 26.0.2
+        version: 26.0.2
       '@tsconfig/strictest':
         specifier: 2.0.9
         version: 2.0.9
@@ -1564,8 +1564,8 @@ packages:
   '@total-typescript/shoehorn@0.1.2':
     resolution: {integrity: sha512-p7nNZbOZIofpDNyP0u1BctFbjxD44Qc+oO5jufgQdFdGIXJLc33QRloJpq7k5T59CTgLWfQSUxsuqLcmeurYRw==}
 
-  '@tsconfig/node26@26.0.0':
-    resolution: {integrity: sha512-AlW882moMu/JzvTVjdGqJEsrqD5nSWHiFD7Aeuw6Rb58S4Aig+09mDUFFlXJx/y6/y77NwGYLlqhWxvolcC0sw==}
+  '@tsconfig/node26@26.0.2':
+    resolution: {integrity: sha512-RIBSoNGQxUQ8r4hSrEzS6TrUneoKaCuX6BjL4zF3wqttGq2w06zCea4d8P1gRvM/HZyDT1FQJ8trZSyy/63oMg==}
 
   '@tsconfig/strictest@2.0.9':
     resolution: {integrity: sha512-CbwIySRXoGapLZYXqQHF15cg0wQImJa25Ynmubb7816vnHqTdQrmQlSbZxkJrrBusHLbF1kFbNVn8XtxmQ3EpQ==}
@@ -3923,7 +3923,7 @@ snapshots:
 
   '@total-typescript/shoehorn@0.1.2': {}
 
-  '@tsconfig/node26@26.0.0': {}
+  '@tsconfig/node26@26.0.2': {}
 
   '@tsconfig/strictest@2.0.9': {}
 
