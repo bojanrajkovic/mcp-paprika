@@ -52,7 +52,7 @@ export const uploadPhotoSourceSchema = z
           .describe(
             "Absolute path of an image file on the server's filesystem — for a photo someone sent you or one you " +
               "cropped/edited locally. Only works when the server is configured with allowed directories " +
-              "(PAPRIKA_PHOTO_FILE_ROOTS); otherwise use `url`.",
+              "(PAPRIKA_PHOTO_FILE_ROOTS, stdio only); otherwise use `url`.",
           ),
       })
       .strict(),
@@ -111,6 +111,7 @@ async function resolveSource(
   source: UploadPhotoSource,
   recipeUid: RecipeUid,
   generatedImageStore: GeneratedImageStore,
+  photoFileRoots: readonly string[],
 ): Promise<ResolvedSource> {
   if ("url" in source) {
     // SSRF-safe fetch (scheme + IP-literal guard, rebinding-safe dispatcher,
@@ -144,7 +145,7 @@ async function resolveSource(
   }
 
   if ("path" in source) {
-    const read = await readLocalImage(source.path);
+    const read = await readLocalImage(source.path, photoFileRoots);
     return "error" in read ? read : { bytes: read.bytes, generated: false };
   }
 
@@ -187,7 +188,12 @@ export const uploadPhotoTool = defineTool(
           `No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
         );
 
-      const resolved = await resolveSource(args.source, args.recipe_uid, ctx.infra.generatedImageStore);
+      const resolved = await resolveSource(
+        args.source,
+        args.recipe_uid,
+        ctx.infra.generatedImageStore,
+        ctx.infra.config.photos.fileRoots,
+      );
       if ("error" in resolved) return errorResult(resolved.error);
       if (!sniffImage(resolved.bytes)) {
         return errorResult("Unsupported image format. Provide a JPEG, PNG, WEBP, or GIF image.");

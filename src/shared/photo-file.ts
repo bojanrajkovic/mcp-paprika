@@ -1,65 +1,77 @@
-import { readFile, realpath, stat } from "node:fs/promises";
-import { delimiter, isAbsolute, sep } from "node:path";
+import { open, realpath } from "node:fs/promises";
+import { isAbsolute, sep } from "node:path";
 
 import { MAX_IMAGE_BYTES } from "./photo-fetch.js";
-
-/**
- * Env var listing the directories `upload_recipe_photo` may read `{ path }` sources
- * from, separated by the platform path delimiter (`:` on POSIX). Unset or empty
- * disables the path source entirely — the default, because a remote (HTTP) caller
- * must never be able to make the server read its own disk.
- *
- * Meant for stdio deployments where the server shares a filesystem with the agent
- * (e.g. a sandboxed agent container): set it to the agent's workspace.
- */
-export const PHOTO_FILE_ROOTS_ENV = "PAPRIKA_PHOTO_FILE_ROOTS";
-
-/** Roots from {@link PHOTO_FILE_ROOTS_ENV}, read at call time. */
-export function photoFileRoots(env: NodeJS.ProcessEnv = process.env): string[] {
-  return (env[PHOTO_FILE_ROOTS_ENV] ?? "")
-    .split(delimiter)
-    .map((r) => r.trim())
-    .filter((r) => r.length > 0);
-}
 
 function within(path: string, root: string): boolean {
   const base = root.endsWith(sep) ? root : root + sep;
   return path === root || path.startsWith(base);
 }
 
+/** `stat()` of whatever is at `path` now, via an open descriptor, or null. */
+async function statAt(path: string): Promise<{ dev: number; ino: number } | null> {
+  try {
+    const h = await open(path, "r");
+    try {
+      return await h.stat();
+    } finally {
+      await h.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Reads image bytes from a local file, allowed only when the file's real path (after
- * resolving symlinks) sits under one of the configured roots. Enforces the same size
- * cap as URL downloads. Returns an error message instead of throwing.
+ * Reads image bytes from a local file for `upload_recipe_photo`'s `{ path }` source,
+ * allowed only when the file's real path (symlinks resolved) sits under one of `roots`
+ * (`config.photos.fileRoots`; empty disables the source). Enforces the same size cap as
+ * URL downloads. Returns an error message instead of throwing.
+ *
+ * Race-safe without platform-specific fd tricks: the file is opened first, then its real
+ * path is resolved and checked, and the opened descriptor must be the same file (device
+ * + inode) as the one now at that real path. Swapping the path for a symlink between the
+ * steps makes the identities differ, so the read is refused. Bytes come from the
+ * descriptor, never from a second open by name.
  */
 export async function readLocalImage(
   path: string,
-  roots: readonly string[] = photoFileRoots(),
+  roots: readonly string[],
 ): Promise<{ bytes: Buffer } | { error: string }> {
   if (roots.length === 0) {
     return {
-      error: `Reading photos from a file path is disabled on this server (set ${PHOTO_FILE_ROOTS_ENV}). Use \`url\` instead.`,
+      error:
+        "Reading photos from a file path is disabled on this server (set PAPRIKA_PHOTO_FILE_ROOTS). Use `url` instead.",
     };
   }
   if (!isAbsolute(path)) return { error: `The path must be absolute: "${path}".` };
 
-  let real: string;
+  let handle;
   try {
-    real = await realpath(path);
+    handle = await open(path, "r");
   } catch {
     return { error: `No readable file at "${path}".` };
   }
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile()) return { error: `"${path}" is not a regular file.` };
 
-  const realRoots = await Promise.all(roots.map((r) => realpath(r).catch(() => null)));
-  if (!realRoots.some((r) => r !== null && within(real, r))) {
-    return { error: `"${path}" is outside the allowed photo directories (${roots.join(", ")}).` };
-  }
+    const real = await realpath(path).catch(() => null);
+    const realRoots = await Promise.all(roots.map((r) => realpath(r).catch(() => null)));
+    if (real === null || !realRoots.some((r) => r !== null && within(real, r))) {
+      return { error: `"${path}" is outside the allowed photo directories (${roots.join(", ")}).` };
+    }
+    const current = await statAt(real);
+    if (current?.dev !== opened.dev || current.ino !== opened.ino) {
+      return { error: `"${path}" changed while it was being read; try again.` };
+    }
 
-  const info = await stat(real);
-  if (!info.isFile()) return { error: `"${path}" is not a regular file.` };
-  if (info.size === 0) return { error: `"${path}" is empty.` };
-  if (info.size > MAX_IMAGE_BYTES) {
-    return { error: `Image too large (${info.size.toString()} bytes; max ${MAX_IMAGE_BYTES.toString()}).` };
+    if (opened.size === 0) return { error: `"${path}" is empty.` };
+    if (opened.size > MAX_IMAGE_BYTES) {
+      return { error: `Image too large (${opened.size.toString()} bytes; max ${MAX_IMAGE_BYTES.toString()}).` };
+    }
+    return { bytes: await handle.readFile() };
+  } finally {
+    await handle.close();
   }
-  return { bytes: await readFile(real) };
 }

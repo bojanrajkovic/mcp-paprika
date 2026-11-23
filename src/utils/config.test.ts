@@ -267,6 +267,33 @@ describe("Configuration loading", () => {
     });
   });
 
+  describe("Photo file roots (PAPRIKA_PHOTO_FILE_ROOTS)", () => {
+    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
+
+    it("defaults to none (path source disabled)", () => {
+      expect(paprikaConfigSchema.parse(validBase).photos.fileRoots).toEqual([]);
+    });
+
+    it("routes the env var and splits it like other lists", () => {
+      const overrides = buildEnvOverrides({ ...BASE_ENV, PAPRIKA_PHOTO_FILE_ROOTS: "/workspace, /tmp/x ," });
+      expect(paprikaConfigSchema.parse(overrides).photos.fileRoots).toEqual(["/workspace", "/tmp/x"]);
+    });
+
+    it("is rejected with MCP_TRANSPORT=http", () => {
+      const result = paprikaConfigSchema.safeParse({
+        ...validBase,
+        transport: "http",
+        photos: { fileRoots: ["/srv"] },
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.some((i) => i.message.includes("PAPRIKA_PHOTO_FILE_ROOTS is stdio-only"))).toBe(
+          true,
+        );
+      }
+    });
+  });
+
   describe("Validation errors", () => {
     it("missing email produces validation error with PAPRIKA_EMAIL hint", () => {
       const result = paprikaConfigSchema.safeParse({ paprika: {} });

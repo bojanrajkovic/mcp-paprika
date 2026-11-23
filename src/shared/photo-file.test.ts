@@ -2,10 +2,29 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { MAX_IMAGE_BYTES } from "./photo-fetch.js";
-import { photoFileRoots, readLocalImage } from "./photo-file.js";
+import { readLocalImage } from "./photo-file.js";
+
+// Lets a test run code between readLocalImage's open() and its realpath() check, to
+// simulate a file being swapped mid-read.
+const hooks = vi.hoisted(() => ({ beforeRealpath: null as null | (() => void) }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    realpath: async (...args: Parameters<typeof actual.realpath>) => {
+      const hook = hooks.beforeRealpath;
+      hooks.beforeRealpath = null;
+      hook?.();
+      return actual.realpath(...args);
+    },
+  };
+});
+afterEach(() => {
+  hooks.beforeRealpath = null;
+});
 
 let dir: string;
 let root: string;
@@ -24,13 +43,6 @@ beforeAll(() => {
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
-});
-
-describe("photoFileRoots", () => {
-  it("splits the env var and drops blanks; unset means none", () => {
-    expect(photoFileRoots({ PAPRIKA_PHOTO_FILE_ROOTS: "/a: /b ::" })).toEqual(["/a", "/b"]);
-    expect(photoFileRoots({})).toEqual([]);
-  });
 });
 
 describe("readLocalImage", () => {
@@ -68,5 +80,19 @@ describe("readLocalImage", () => {
     expect(await readLocalImage(join(root, "empty.jpg"), [root])).toHaveProperty("error");
     const r = await readLocalImage(join(root, "big.jpg"), [root]);
     expect("error" in r && r.error).toContain("too large");
+  });
+
+  it("refuses a file swapped for a symlink to outside the roots after it was opened", async () => {
+    const swap = join(root, "swap.jpg");
+    writeFileSync(swap, Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+    // Opened as a symlink to the secret; replaced by a real in-root file before the check.
+    rmSync(swap);
+    symlinkSync(join(outside, "b.jpg"), swap);
+    hooks.beforeRealpath = () => {
+      rmSync(swap);
+      writeFileSync(swap, Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+    };
+    const r = await readLocalImage(swap, [root]);
+    expect("error" in r && r.error).toContain("changed");
   });
 });
