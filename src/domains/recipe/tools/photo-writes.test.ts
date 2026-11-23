@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { errAsync, okAsync } from "neverthrow";
 import sharp from "sharp";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -124,6 +128,41 @@ describe("upload_recipe_photo", () => {
     expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
   });
 
+  it("reads a local file by path when the directory is allowed (PAPRIKA_PHOTO_FILE_ROOTS)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "upload-path-"));
+    try {
+      const file = join(dir, "dish.jpg");
+      writeFileSync(file, Buffer.from(jpegBase64, "base64"));
+      vi.stubEnv("PAPRIKA_PHOTO_FILE_ROOTS", dir);
+      kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
+      vi.mocked(kh.client().uploadPhoto).mockImplementation((r: Recipe) => okAsync(r));
+
+      const result = await kh.callTool("upload_recipe_photo", { recipe_uid: RECIPE_UID, source: { path: file } });
+
+      expect(result.isError).toBeFalsy();
+      expect(kh.client().uploadPhoto).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a path source when no directories are allowed, without uploading", async () => {
+    vi.stubEnv("PAPRIKA_PHOTO_FILE_ROOTS", "");
+    try {
+      kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
+      const result = await kh.callTool("upload_recipe_photo", {
+        recipe_uid: RECIPE_UID,
+        source: { path: "/etc/hosts" },
+      });
+      expect(result.isError).toBe(true);
+      expect(getText(result)).toContain("disabled");
+      expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("schema rejects more than one source (exactly-one enforced by the union)", () => {
     const both = uploadPhotoInputSchema.safeParse({
       recipe_uid: RECIPE_UID,
@@ -146,6 +185,7 @@ describe("upload_recipe_photo", () => {
     expect(uploadPhotoInputSchema.safeParse({ recipe_uid: RECIPE_UID, source: { image_base64: "abc" } }).success).toBe(
       true,
     );
+    expect(uploadPhotoInputSchema.safeParse({ recipe_uid: RECIPE_UID, source: { path: "/a.jpg" } }).success).toBe(true);
   });
 
   it("attaches a previewed image by generation_token (no regeneration, no base64)", async () => {

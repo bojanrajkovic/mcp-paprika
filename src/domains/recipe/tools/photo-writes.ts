@@ -8,6 +8,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
+import { readLocalImage } from "../../../shared/photo-file.js";
 import { commitFailure, confirmOrCancel, errorResult, imageResult, toolResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
@@ -15,8 +16,8 @@ import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
 import { photoCatalogGuard, recipeColdStartGuard } from "./guards.js";
 
 /**
- * Image source for `upload_recipe_photo`: exactly one of `url`, `generation_token`, or
- * `image_base64`. A `z.union` of `.strict()` single-key objects (presence
+ * Image source for `upload_recipe_photo`: exactly one of `url`, `generation_token`,
+ * `path`, or `image_base64`. A `z.union` of `.strict()` single-key objects (presence
  * dispatch, like `mealTypeSpecSchema`) so the "exactly one" rule is enforced at
  * the Zod boundary rather than a runtime check.
  */
@@ -45,6 +46,18 @@ export const uploadPhotoSourceSchema = z
       .strict(),
     z
       .object({
+        path: z
+          .string()
+          .min(1)
+          .describe(
+            "Absolute path of an image file on the server's filesystem — for a photo someone sent you or one you " +
+              "cropped/edited locally. Only works when the server is configured with allowed directories " +
+              "(PAPRIKA_PHOTO_FILE_ROOTS); otherwise use `url`.",
+          ),
+      })
+      .strict(),
+    z
+      .object({
         image_base64: z
           .string()
           .min(1)
@@ -52,7 +65,7 @@ export const uploadPhotoSourceSchema = z
       })
       .strict(),
   ])
-  .describe("Exactly one image source: { url } | { generation_token } | { image_base64 }.");
+  .describe("Exactly one image source: { url } | { generation_token } | { path } | { image_base64 }.");
 
 export const uploadPhotoInputSchema = z.object({
   recipe_uid: RecipeUidSchema.describe("UID of the recipe to attach the photo to."),
@@ -130,6 +143,11 @@ async function resolveSource(
     return { bytes: entry.bytes, generated: true };
   }
 
+  if ("path" in source) {
+    const read = await readLocalImage(source.path);
+    return "error" in read ? read : { bytes: read.bytes, generated: false };
+  }
+
   const buf = Buffer.from(source.image_base64, "base64");
   if (buf.length === 0) return { error: "Invalid or empty base64 image data." };
   if (buf.length > MAX_IMAGE_BYTES) {
@@ -151,10 +169,11 @@ export const uploadPhotoTool = defineTool(
     description:
       "Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server " +
       "downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — " +
-      "no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe " +
-      "from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format " +
-      "(JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the " +
-      "server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.",
+      "no need to regenerate), a local file `path` (when the server allows it — for photos sent to you or cropped " +
+      "locally; never base64-encode a file yourself), or, for programmatic callers, inline `image_base64`. If you " +
+      "built the recipe from a web page, pass that page's main/hero (og:image) URL. The server normalizes any " +
+      "format (JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. Photos are appended to the " +
+      "recipe's gallery in order.",
     inputSchema: uploadPhotoInputSchema.shape,
     outputSchema: uploadPhotoOutputSchema,
   },
