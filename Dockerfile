@@ -57,7 +57,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 # Distroless `nodejs24-debian13:nonroot` ships a built-in `ENTRYPOINT
 # ["/nodejs/bin/node"]` and runs as user 65532 (nonroot). We only need to
 # supply CMD args.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:6abfcb367ebc291572c774c1592a986be2ab26a2486f73093401327495a5962a
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:39b0407357c9fadf1a9708d22088f02de21f0e1e8a688474eea2d8701e7d5693
 
 WORKDIR /app
 
