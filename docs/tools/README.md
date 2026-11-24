@@ -756,9 +756,9 @@ Update a recipe's content fields by UID (name, ingredients, directions, descript
 
 **Upload a photo to a recipe** — write
 
-Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format (JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.
+Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — no need to regenerate), a local file `path` (when the server allows it — for photos sent to you or cropped locally; never base64-encode a file yourself), or, for programmatic callers, inline `image_base64`. If you built the recipe from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format (JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. Photos are appended to the recipe's gallery in order.
 
 **Parameters**
 
 - `recipe_uid` — UID of the recipe to attach the photo to.
-- `source` — Exactly one image source: { url } | { generation_token } | { image_base64 }.
+- `source` — Exactly one image source: { url } | { generation_token } | { path } | { image_base64 }.

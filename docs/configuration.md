@@ -29,6 +29,7 @@ common to both transports.
 | `PAPRIKA_SYNC_ENABLED`            | No       | `true`    | Enable background sync                                                |
 | `PAPRIKA_SYNC_PENDING_WRITE_TTL`  | No       | `"60s"`   | How long a local write is shielded from sync reconciliation           |
 | `PAPRIKA_SYNC_RECIPE_CONCURRENCY` | No       | `5`       | Concurrent recipe fetches during sync (see note below)                |
+| `PAPRIKA_PHOTO_FILE_ROOTS`        | No       | —         | stdio only: directories `upload_recipe_photo` may read files from     |
 | `MCP_TRANSPORT`                   | No       | `"stdio"` | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP) |
 
 When `MCP_TRANSPORT=http`, see [http-transport.md](http-transport.md) and
@@ -104,6 +105,16 @@ warning. The retry and circuit-breaker stack still protects you; tune conservati
 
 If Paprika rate-limits a cold start partway through, the recipes that arrived are kept,
 and sync retries the rest after a short delay rather than waiting `PAPRIKA_SYNC_INTERVAL`.
+
+### Photo uploads from local files
+
+`upload_recipe_photo` can read an image straight from disk with `source: { path }`, for
+stdio deployments where the server shares a filesystem with the agent (for example, a
+sandboxed agent container that receives chat attachments). It is off unless
+`PAPRIKA_PHOTO_FILE_ROOTS` lists the allowed directories, comma-separated like the other
+list settings. The file's real path, after symlinks, must sit under one of them, and the
+10 MB image cap applies. The setting is stdio-only: with `MCP_TRANSPORT=http` the server
+refuses to start, because a remote caller must never be able to read the server's disk.
 
 ## Logging
 

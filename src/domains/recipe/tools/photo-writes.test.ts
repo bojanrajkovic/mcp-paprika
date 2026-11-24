@@ -1,7 +1,12 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { errAsync, okAsync } from "neverthrow";
 import sharp from "sharp";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { PaprikaConfig } from "../../../utils/config.js";
 import type { RecipeState } from "../module.js";
 import type { Photo } from "../photo/types.js";
 import type { Recipe } from "../types.js";
@@ -124,6 +129,17 @@ describe("upload_recipe_photo", () => {
     expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
   });
 
+  it("refuses a path source when no directories are allowed, without uploading", async () => {
+    kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
+    const result = await kh.callTool("upload_recipe_photo", {
+      recipe_uid: RECIPE_UID,
+      source: { path: "/etc/hosts" },
+    });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain("disabled");
+    expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
+  });
+
   it("schema rejects more than one source (exactly-one enforced by the union)", () => {
     const both = uploadPhotoInputSchema.safeParse({
       recipe_uid: RECIPE_UID,
@@ -146,6 +162,7 @@ describe("upload_recipe_photo", () => {
     expect(uploadPhotoInputSchema.safeParse({ recipe_uid: RECIPE_UID, source: { image_base64: "abc" } }).success).toBe(
       true,
     );
+    expect(uploadPhotoInputSchema.safeParse({ recipe_uid: RECIPE_UID, source: { path: "/a.jpg" } }).success).toBe(true);
   });
 
   it("attaches a previewed image by generation_token (no regeneration, no base64)", async () => {
@@ -334,6 +351,45 @@ describe("upload_recipe_photo", () => {
       source: { image_base64: jpegBase64 },
     });
     expect(getText(result)).toContain("still syncing");
+    expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
+  });
+});
+
+describe("upload_recipe_photo from a local path (config.photos.fileRoots)", () => {
+  const photoDir = mkdtempSync(join(tmpdir(), "upload-path-"));
+  const kh = useKernelHarness<RecipeState>("recipe", {
+    config: {
+      transport: "stdio",
+      sync: { enabled: true, pendingWriteTtl: 60_000, interval: 60_000, recipeFetchConcurrency: 4 },
+      photos: { fileRoots: [photoDir] },
+    } as unknown as PaprikaConfig,
+  });
+  beforeEach(kh.setup);
+  afterEach(kh.teardown);
+  afterAll(() => {
+    rmSync(photoDir, { recursive: true, force: true });
+  });
+
+  it("reads the file and uploads it", async () => {
+    const file = join(photoDir, "dish.jpg");
+    writeFileSync(file, Buffer.from(jpegBase64, "base64"));
+    kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
+    vi.mocked(kh.client().uploadPhoto).mockImplementation((r: Recipe) => okAsync(r));
+
+    const result = await kh.callTool("upload_recipe_photo", { recipe_uid: RECIPE_UID, source: { path: file } });
+
+    expect(result.isError).toBeFalsy();
+    expect(kh.client().uploadPhoto).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a file outside the allowed directories, without uploading", async () => {
+    kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
+    const result = await kh.callTool("upload_recipe_photo", {
+      recipe_uid: RECIPE_UID,
+      source: { path: "/etc/hosts" },
+    });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain("outside");
     expect(kh.client().uploadPhoto).not.toHaveBeenCalled();
   });
 });

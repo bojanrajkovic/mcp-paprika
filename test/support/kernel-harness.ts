@@ -31,12 +31,15 @@ export type { SeedData } from "../fixtures/seed.js";
 type Built = Awaited<ReturnType<ErasedModule["build"]>>;
 
 function makeTestConfig(): PaprikaConfig {
-  // The modules read only `sync.{enabled,pendingWriteTtl}` (store pending-write TTL) and
-  // `features` (the discover/photo-gen gates). A cast keeps the test free of the full
+  // The modules read only `sync.{enabled,pendingWriteTtl}` (store pending-write TTL),
+  // `photos.fileRoots` (upload_recipe_photo's path source) and `features` (the
+  // discover/photo-gen gates). A cast keeps the test free of the full
   // schema — the historical test convention (cf. makeAppContext's `{} as …` casts).
   return {
     transport: "stdio",
     sync: { enabled: true, pendingWriteTtl: 60_000, interval: 60_000, recipeFetchConcurrency: 4 },
+    // The schema default: `upload_recipe_photo`'s `{ path }` source disabled.
+    photos: { fileRoots: [] },
     // `features` omitted → `config.features?.…` is undefined → embeddings + imageGen off.
   } as unknown as PaprikaConfig;
 }

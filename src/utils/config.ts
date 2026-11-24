@@ -17,6 +17,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "sync.enabled": "PAPRIKA_SYNC_ENABLED",
   "sync.pendingWriteTtl": "PAPRIKA_SYNC_PENDING_WRITE_TTL",
   "sync.recipeFetchConcurrency": "PAPRIKA_SYNC_RECIPE_CONCURRENCY",
+  "photos.fileRoots": "PAPRIKA_PHOTO_FILE_ROOTS",
   transport: "MCP_TRANSPORT",
   "http.port": "MCP_HTTP_PORT",
   "http.host": "MCP_HTTP_HOST",
@@ -216,6 +217,14 @@ export const paprikaConfigSchema = z
         recipeFetchConcurrency: z.coerce.number().int().positive().default(5),
       })
       .prefault({}),
+    // Directories `upload_recipe_photo` may read `{ path }` sources from. Empty (the
+    // default) disables the path source. stdio only: the superRefine below rejects it
+    // with MCP_TRANSPORT=http, where a remote caller must never read the server's disk.
+    photos: z
+      .object({
+        fileRoots: listField.default([]),
+      })
+      .prefault({}),
     // Transport selection. `stdio` (default) keeps the current behavior for all
     // existing CLI clients (Claude Code, Claude Desktop, Cursor, mcp-cli). `http`
     // exposes Streamable HTTP for Claude Mobile and other HTTP-based MCP
@@ -377,6 +386,16 @@ export const paprikaConfigSchema = z
       });
     }
   })
+  .superRefine((cfg, ctx) => {
+    if (cfg.transport === "http" && cfg.photos.fileRoots.length > 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["photos", "fileRoots"],
+        message:
+          "PAPRIKA_PHOTO_FILE_ROOTS is stdio-only; with MCP_TRANSPORT=http it would let remote callers read the server's disk",
+      });
+    }
+  })
   // AI feature config is independent of transport.
   .superRefine((cfg, ctx) => {
     // A model without creds would silently leave semantic search off.
@@ -475,6 +494,9 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["PAPRIKA_SYNC_RECIPE_CONCURRENCY"] !== undefined)
     sync["recipeFetchConcurrency"] = env["PAPRIKA_SYNC_RECIPE_CONCURRENCY"];
 
+  const photos: Record<string, unknown> = {};
+  if (env["PAPRIKA_PHOTO_FILE_ROOTS"] !== undefined) photos["fileRoots"] = env["PAPRIKA_PHOTO_FILE_ROOTS"];
+
   if (env["MCP_TRANSPORT"] !== undefined) overrides["transport"] = env["MCP_TRANSPORT"];
   if (env["MCP_HTTP_PORT"] !== undefined) http["port"] = env["MCP_HTTP_PORT"];
   if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
@@ -532,6 +554,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (Object.keys(oauth).length > 0) overrides["oauth"] = oauth;
   if (Object.keys(paprika).length > 0) overrides["paprika"] = paprika;
   if (Object.keys(sync).length > 0) overrides["sync"] = sync;
+  if (Object.keys(photos).length > 0) overrides["photos"] = photos;
   if (Object.keys(http).length > 0) overrides["http"] = http;
 
   return overrides;
