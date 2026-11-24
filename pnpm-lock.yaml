@@ -325,7 +325,7 @@ importers:
         version: 0.28.2
       esbuild-svelte:
         specifier: 0.9.5
-        version: 0.9.5(esbuild@0.28.2)(svelte@5.59.0)
+        version: 0.9.5(esbuild@0.28.2)(svelte@5.59.1)
       fast-check:
         specifier: 4.10.3
         version: 4.10.3
@@ -337,7 +337,7 @@ importers:
         version: 3.0.7(@types/node@26.6.6)(typescript@6.0.3)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       oxfmt:
         specifier: 0.79.0
-        version: 0.79.0(svelte@5.59.0)
+        version: 0.79.0(svelte@5.59.1)
       oxlint:
         specifier: 1.94.0
         version: 1.94.0
@@ -346,13 +346,13 @@ importers:
         version: 3.10.1
       prettier-plugin-svelte:
         specifier: 4.2.0
-        version: 4.2.0(prettier@3.10.1)(svelte@5.59.0)
+        version: 4.2.0(prettier@3.10.1)(svelte@5.59.1)
       svelte:
-        specifier: 5.59.0
-        version: 5.59.0
+        specifier: 5.59.1
+        version: 5.59.1
       svelte-check:
         specifier: 4.7.8
-        version: 4.7.8(picomatch@4.0.7)(svelte@5.59.0)(typescript@6.0.3)
+        version: 4.7.8(picomatch@4.0.7)(svelte@5.59.1)(typescript@6.0.3)
       tsx:
         specifier: 4.23.15
         version: 4.23.15
@@ -2713,8 +2713,8 @@ packages:
       svelte: ^4.0.0 || ^5.0.0-next.0
       typescript: ^5.0.0 || ^6.0.0
 
-  svelte@5.59.0:
-    resolution: {integrity: sha512-D2wE/hsHvZtbitZ+2TSFsiw00ck/Y9uK4tO59f391z4bzbdyVO2tFHqwiENKc57pp51hX7klBG+EkAVyDlD4sw==}
+  svelte@5.59.1:
+    resolution: {integrity: sha512-ADG20W/jYSQut/79AavRRfbXQYebFKMVWT/xAbjVVZfZA4XzIoFfcpanEfYTyN+uWQUaPP+nstFx4qVKwEVnQQ==}
     engines: {node: '>=18'}
 
   tagged-tag@1.0.0:
@@ -4206,11 +4206,11 @@ snapshots:
 
   es-toolkit@1.53.2: {}
 
-  esbuild-svelte@0.9.5(esbuild@0.28.2)(svelte@5.59.0):
+  esbuild-svelte@0.9.5(esbuild@0.28.2)(svelte@5.59.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       esbuild: 0.28.2
-      svelte: 5.59.0
+      svelte: 5.59.1
 
   esbuild@0.28.2:
     optionalDependencies:
@@ -4667,7 +4667,7 @@ snapshots:
 
   outvariant@1.4.3: {}
 
-  oxfmt@0.79.0(svelte@5.59.0):
+  oxfmt@0.79.0(svelte@5.59.1):
     dependencies:
       tinypool: 2.2.0
     optionalDependencies:
@@ -4690,7 +4690,7 @@ snapshots:
       '@oxfmt/binding-win32-arm64-msvc': 0.79.0
       '@oxfmt/binding-win32-ia32-msvc': 0.79.0
       '@oxfmt/binding-win32-x64-msvc': 0.79.0
-      svelte: 5.59.0
+      svelte: 5.59.1
 
   oxlint@1.94.0:
     optionalDependencies:
@@ -4781,10 +4781,10 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.4
 
-  prettier-plugin-svelte@4.2.0(prettier@3.10.1)(svelte@5.59.0):
+  prettier-plugin-svelte@4.2.0(prettier@3.10.1)(svelte@5.59.1):
     dependencies:
       prettier: 3.10.1
-      svelte: 5.59.0
+      svelte: 5.59.1
 
   prettier@3.10.1: {}
 
@@ -5047,7 +5047,7 @@ snapshots:
 
   strip-json-comments@5.1.0: {}
 
-  svelte-check@4.7.8(picomatch@4.0.7)(svelte@5.59.0)(typescript@6.0.3):
+  svelte-check@4.7.8(picomatch@4.0.7)(svelte@5.59.1)(typescript@6.0.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@sveltejs/load-config': 0.2.3
@@ -5055,12 +5055,12 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.7)
       picocolors: 1.1.1
       sade: 1.8.1
-      svelte: 5.59.0
+      svelte: 5.59.1
       typescript: 6.0.3
     transitivePeerDependencies:
       - picomatch
 
-  svelte@5.59.0:
+  svelte@5.59.1:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/sourcemap-codec': 1.6.0
