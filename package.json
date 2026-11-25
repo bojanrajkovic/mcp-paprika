@@ -67,7 +67,7 @@
     "cockatiel": "^4.0.0",
     "dotenv": "^18.0.10",
     "env-paths": "^4.0.0",
-    "hono": "4.13.19",
+    "hono": "4.13.20",
     "hono-rate-limiter": "^0.5.4",
     "ipaddr.js": "^2.5.0",
     "jose": "^6.2.18",
