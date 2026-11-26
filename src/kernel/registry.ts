@@ -427,11 +427,20 @@ export async function buildKernel(
   const flushAll = (): ResultAsync<void, CacheError> =>
     ResultAsync.combine(flushers.map((f) => f())).map(() => undefined);
 
-  const syncOnce = buildSyncDriver({
+  const runCycle = buildSyncDriver({
     modules: built.map((b) => ({ id: b.id, syncs: b.syncs, ctx: () => bootCtxOf(b) })),
     flushAll,
     log: infra.log.child({ component: "sync" }),
   });
+  // Cycles run one at a time: the boot cycle can still be running in the background
+  // (see the boot deadline below) when the interval loop fires its first cycle, and two
+  // reconciles of the same store must never overlap.
+  let lastCycle: Promise<unknown> = Promise.resolve();
+  const syncOnce: typeof runCycle = (trigger) => {
+    const cycle = lastCycle.then(() => runCycle(trigger));
+    lastCycle = cycle.catch(() => undefined);
+    return cycle;
+  };
 
   // Boot: construct → run the INITIAL sync cycle → run the post-sync onIndexReady
   // hook. The initial cycle gates the hook, so e.g. the vector index builds against
@@ -441,7 +450,14 @@ export async function buildKernel(
   infra.log.info("running initial sync");
   // The initial cycle's results are intentionally discarded — the interval driver
   // re-syncs immediately to keep the cache warm, and nothing consumes a cycle's results.
-  await inBoot(async () => {
+  //
+  // Boot waits for the cycle at most `sync.bootTimeout`. Stores are already hydrated
+  // from the disk cache, and the stdio transport only connects once buildKernel
+  // returns, so a slow Paprika API (it can hold a request ~60s before a 429) would
+  // otherwise outlast the MCP client's startup timeout and the server's tools would
+  // never load. Past the deadline the cycle (and the onIndexReady hook after it)
+  // finishes in the background; a failure there is logged rather than failing boot.
+  const bootWork = inBoot(async () => {
     await syncOnce("boot");
     // Span name kept verbatim as "boot.phase index" (pre-collapse dashboards key on it).
     await tracePromise(getTracer(), "boot.phase index", {}, async () => {
@@ -450,7 +466,26 @@ export async function buildKernel(
       }
     });
   });
-  bootOp.end();
+  const bootTimeoutMs = infra.config.sync.bootTimeout;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  const finishedInTime = await Promise.race([
+    bootWork.then(() => true),
+    new Promise<false>((resolve) => {
+      deadline = setTimeout(() => resolve(false), bootTimeoutMs);
+    }),
+  ]).finally(() => clearTimeout(deadline));
+  if (finishedInTime) {
+    bootOp.end();
+  } else {
+    infra.log.warn({ timeoutMs: bootTimeoutMs }, "initial sync still running; continuing in background");
+    void bootWork.then(
+      () => {
+        bootOp.end();
+        infra.log.info("initial sync finished in background");
+      },
+      (cause: unknown) => infra.log.error({ err: cause }, "initial sync failed in background"),
+    );
+  }
 
   return {
     registerAll(server: McpServer): void {

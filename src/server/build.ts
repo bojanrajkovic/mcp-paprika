@@ -67,7 +67,10 @@ export async function buildInfraBase(
     config.paprika.email,
     config.paprika.password,
     log.child({ component: "paprika-client" }),
-    { recipeFetchConcurrency: config.sync.recipeFetchConcurrency },
+    {
+      recipeFetchConcurrency: config.sync.recipeFetchConcurrency,
+      requestTimeoutMs: config.paprika.requestTimeout,
+    },
   );
   unwrapAtBoot(await client.authenticate(), "paprika authentication");
   log.info("authenticated with paprika");

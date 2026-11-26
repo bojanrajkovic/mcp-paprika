@@ -360,7 +360,13 @@ describe("upload_recipe_photo from a local path (config.photos.fileRoots)", () =
   const kh = useKernelHarness<RecipeState>("recipe", {
     config: {
       transport: "stdio",
-      sync: { enabled: true, pendingWriteTtl: 60_000, interval: 60_000, recipeFetchConcurrency: 4 },
+      sync: {
+        enabled: true,
+        pendingWriteTtl: 60_000,
+        interval: 60_000,
+        recipeFetchConcurrency: 4,
+        bootTimeout: 60_000,
+      },
       photos: { fileRoots: [photoDir] },
     } as unknown as PaprikaConfig,
   });

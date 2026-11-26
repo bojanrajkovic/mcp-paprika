@@ -64,7 +64,7 @@ afterEach(async () => {
 // (recipe-sync.test.ts + the syncReplaceAllEntity tests in paprika/sync.test.ts).
 const KERNEL_TEST_CONFIG = {
   transport: "stdio",
-  sync: { enabled: true, pendingWriteTtl: 60_000, interval: 60_000, recipeFetchConcurrency: 4 },
+  sync: { enabled: true, pendingWriteTtl: 60_000, interval: 60_000, recipeFetchConcurrency: 4, bootTimeout: 60_000 },
 } as unknown as PaprikaConfig;
 
 async function buildKernelHarness(): Promise<{

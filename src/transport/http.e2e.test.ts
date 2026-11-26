@@ -53,7 +53,7 @@ const msw = useMswServer([], { onUnhandledFrame: failLoudOnUpstream });
 function makeE2eConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
   return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
-    sync: { enabled: false, interval: 60_000 },
+    sync: { enabled: false, interval: 60_000, bootTimeout: 60_000 },
     transport: "http",
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
     logging: SILENT_LOGGING_CONFIG,

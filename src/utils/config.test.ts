@@ -193,6 +193,31 @@ describe("Configuration loading", () => {
     });
   });
 
+  describe("Startup timeouts (PAPRIKA_REQUEST_TIMEOUT, PAPRIKA_SYNC_BOOT_TIMEOUT)", () => {
+    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
+
+    it("default to 20s per request and 15s for the boot sync", () => {
+      const config = paprikaConfigSchema.parse(validBase);
+      expect(config.paprika.requestTimeout).toBe(20_000);
+      expect(config.sync.bootTimeout).toBe(15_000);
+    });
+
+    it("route their env vars and parse durations", () => {
+      const config = paprikaConfigSchema.parse(
+        buildEnvOverrides({ ...BASE_ENV, PAPRIKA_REQUEST_TIMEOUT: "45s", PAPRIKA_SYNC_BOOT_TIMEOUT: "1m" }),
+      );
+      expect(config.paprika.requestTimeout).toBe(45_000);
+      expect(config.sync.bootTimeout).toBe(60_000);
+    });
+
+    it("accept a zero boot timeout but reject a request timeout under 1s", () => {
+      expect(paprikaConfigSchema.parse({ ...validBase, sync: { bootTimeout: "0s" } }).sync.bootTimeout).toBe(0);
+      expect(
+        paprikaConfigSchema.safeParse({ paprika: { ...validBase.paprika, requestTimeout: "500ms" } }).success,
+      ).toBe(false);
+    });
+  });
+
   describe("Boolean field (PAPRIKA_SYNC_ENABLED)", () => {
     const validBase = { paprika: { email: "user@test.com", password: "secret" } };
 

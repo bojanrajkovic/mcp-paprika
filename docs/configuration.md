@@ -25,10 +25,12 @@ common to both transports.
 | --------------------------------- | -------- | --------- | --------------------------------------------------------------------- |
 | `PAPRIKA_EMAIL`                   | Yes      | —         | Paprika account email                                                 |
 | `PAPRIKA_PASSWORD`                | Yes      | —         | Paprika account password                                              |
+| `PAPRIKA_REQUEST_TIMEOUT`         | No       | `"20s"`   | Per-attempt timeout for each Paprika request, login included          |
 | `PAPRIKA_SYNC_INTERVAL`           | No       | `"15m"`   | Background sync polling interval                                      |
 | `PAPRIKA_SYNC_ENABLED`            | No       | `true`    | Enable background sync                                                |
 | `PAPRIKA_SYNC_PENDING_WRITE_TTL`  | No       | `"60s"`   | How long a local write is shielded from sync reconciliation           |
 | `PAPRIKA_SYNC_RECIPE_CONCURRENCY` | No       | `5`       | Concurrent recipe fetches during sync (see note below)                |
+| `PAPRIKA_SYNC_BOOT_TIMEOUT`       | No       | `"15s"`   | How long startup waits for the initial sync (see note below)          |
 | `PAPRIKA_PHOTO_FILE_ROOTS`        | No       | —         | stdio only: directories `upload_recipe_photo` may read files from     |
 | `MCP_TRANSPORT`                   | No       | `"stdio"` | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP) |
 
@@ -105,6 +107,22 @@ warning. The retry and circuit-breaker stack still protects you; tune conservati
 
 If Paprika rate-limits a cold start partway through, the recipes that arrived are kept,
 and sync retries the rest after a short delay rather than waiting `PAPRIKA_SYNC_INTERVAL`.
+
+### Startup and slow Paprika responses
+
+The server runs one sync cycle before it starts accepting MCP connections, so tools see
+fresh data. Paprika occasionally holds a request open for a minute or more before
+answering (often with HTTP 429). Two settings keep that from stalling startup past an MCP
+client's own startup timeout (many clients give up after about 30 seconds and then show
+none of the server's tools):
+
+- `PAPRIKA_REQUEST_TIMEOUT` (default `20s`) aborts any single request attempt, login
+  included, that takes longer. The abort is retried like any other network error.
+- `PAPRIKA_SYNC_BOOT_TIMEOUT` (default `15s`) caps how long startup waits for that first
+  sync. Past it, the server starts serving from the on-disk cache and the sync finishes in
+  the background. Until it does, tools that need a completed sync answer "not yet synced"
+  and the agent can retry. Set it to `0s` to never wait, or raise it if you would rather
+  start late than serve cached data.
 
 ### Photo uploads from local files
 
