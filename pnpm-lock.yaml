@@ -190,13 +190,13 @@ importers:
         version: 0.1.0(temporal-polyfill@1.0.8)
       '@hono/mcp':
         specifier: 0.3.5
-        version: 0.3.5(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.20))(hono@4.13.20)(zod@4.6.7)
+        version: 0.3.5(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.21))(hono@4.13.21)(zod@4.6.7)
       '@hono/node-server':
         specifier: 2.1.11
-        version: 2.1.11(hono@4.13.20)
+        version: 2.1.11(hono@4.13.21)
       '@hono/otel':
-        specifier: ^1.3.0
-        version: 1.3.0(hono@4.13.20)
+        specifier: ^1.4.0
+        version: 1.4.0(hono@4.13.21)
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(zod@4.6.7)
@@ -252,11 +252,11 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
       hono:
-        specifier: 4.13.20
-        version: 4.13.20
+        specifier: 4.13.21
+        version: 4.13.21
       hono-rate-limiter:
         specifier: ^0.5.4
-        version: 0.5.4(hono@4.13.20)
+        version: 0.5.4(hono@4.13.21)
       ipaddr.js:
         specifier: ^2.5.0
         version: 2.5.0
@@ -692,8 +692,8 @@ packages:
     peerDependencies:
       hono: ^4 || ^5.0.0-0
 
-  '@hono/otel@1.3.0':
-    resolution: {integrity: sha512-x4L9U2O+Z9lD+EAKQfEWSX8iDIR/122IDM6sImGWoWF6KO1s+0icGncpDgwQjm1Iry+Kq94TdoYTpiMfOB5gzw==}
+  '@hono/otel@1.4.0':
+    resolution: {integrity: sha512-wuqviobKN1ZU8g7UIsPYCnIsonV/ZjBmrgYgjO0pmjVl+uRleHUTmrcZSovicSAgnRzvlTxF+mnTujyv2f0Mlg==}
     peerDependencies:
       hono: '>=4.0.0'
 
@@ -2071,8 +2071,8 @@ packages:
       unstorage:
         optional: true
 
-  hono@4.13.20:
-    resolution: {integrity: sha512-xo6gecEJQ+CjTtOUUbcLHE8CdRKMeF4qITe+DT+OhFnSUmZR/ZBa9XavAfiGh4HlukmlaHFdaK4dz5tkTYFNmA==}
+  hono@4.13.21:
+    resolution: {integrity: sha512-h9UsguqfVk4kjUwLvQpHOmOaJpW10jz9lp8bvKUUa04wJG/fabKFBqXZ06D6LFaeKQZtUZRVeg0gfkTTEsX7Mw==}
     engines: {node: '>=16.9.0'}
 
   http-errors@2.0.1:
@@ -3224,23 +3224,23 @@ snapshots:
       protobufjs: 7.6.6
       yargs: 17.7.3
 
-  '@hono/mcp@0.3.5(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.20))(hono@4.13.20)(zod@4.6.7)':
+  '@hono/mcp@0.3.5(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(hono-rate-limiter@0.5.4(hono@4.13.21))(hono@4.13.21)(zod@4.6.7)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.7)
-      hono: 4.13.20
-      hono-rate-limiter: 0.5.4(hono@4.13.20)
+      hono: 4.13.21
+      hono-rate-limiter: 0.5.4(hono@4.13.21)
       pkce-challenge: 5.0.2
       zod: 4.6.7
 
-  '@hono/node-server@2.1.11(hono@4.13.20)':
+  '@hono/node-server@2.1.11(hono@4.13.21)':
     dependencies:
-      hono: 4.13.20
+      hono: 4.13.21
 
-  '@hono/otel@1.3.0(hono@4.13.20)':
+  '@hono/otel@1.4.0(hono@4.13.21)':
     dependencies:
       '@opentelemetry/api': 1.10.0
       '@opentelemetry/semantic-conventions': 1.45.0
-      hono: 4.13.20
+      hono: 4.13.21
 
   '@img/colour@1.1.0': {}
 
@@ -3420,7 +3420,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.32.2(zod@4.6.7)':
     dependencies:
-      '@hono/node-server': 2.1.11(hono@4.13.20)
+      '@hono/node-server': 2.1.11(hono@4.13.21)
       ajv: 8.20.0
       ajv-formats: 3.0.1
       content-type: 1.0.5
@@ -3430,7 +3430,7 @@ snapshots:
       eventsource-parser: 3.1.1
       express: 5.3.0
       express-rate-limit: 8.7.5(express@5.3.0)
-      hono: 4.13.20
+      hono: 4.13.21
       jose: 6.2.18
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.2
@@ -4403,11 +4403,11 @@ snapshots:
 
   help-me@5.0.0: {}
 
-  hono-rate-limiter@0.5.4(hono@4.13.20):
+  hono-rate-limiter@0.5.4(hono@4.13.21):
     dependencies:
-      hono: 4.13.20
+      hono: 4.13.21
 
-  hono@4.13.20: {}
+  hono@4.13.21: {}
 
   http-errors@2.0.1:
     dependencies:
