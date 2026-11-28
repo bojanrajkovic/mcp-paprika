@@ -35,7 +35,7 @@ afterEach(async () => {
 function makeStdioConfig(): PaprikaConfig {
   return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
-    sync: { enabled: false, interval: 60_000 },
+    sync: { enabled: false, interval: 60_000, bootTimeout: 60_000 },
     transport: "stdio",
     http: { port: 3000, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
   });
@@ -44,7 +44,7 @@ function makeStdioConfig(): PaprikaConfig {
 function makeHttpConfig(oauthIssuer: string, redirectAllowlist: ReadonlyArray<string> = []): PaprikaConfig {
   return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
-    sync: { enabled: false, interval: 60_000 },
+    sync: { enabled: false, interval: 60_000, bootTimeout: 60_000 },
     transport: "http",
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
     oauth: {
@@ -82,7 +82,7 @@ describe("buildAuthContext", () => {
 
       const config: PaprikaConfig = fromAny({
         paprika: { email: "test@example.com", password: "secret" },
-        sync: { enabled: false, interval: 60_000 },
+        sync: { enabled: false, interval: 60_000, bootTimeout: 60_000 },
         transport: "http",
         http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
         // no oauth block

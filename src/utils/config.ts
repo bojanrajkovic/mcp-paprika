@@ -13,10 +13,12 @@ import { getConfigDir } from "./xdg.js";
 const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "paprika.email": "PAPRIKA_EMAIL",
   "paprika.password": "PAPRIKA_PASSWORD",
+  "paprika.requestTimeout": "PAPRIKA_REQUEST_TIMEOUT",
   "sync.interval": "PAPRIKA_SYNC_INTERVAL",
   "sync.enabled": "PAPRIKA_SYNC_ENABLED",
   "sync.pendingWriteTtl": "PAPRIKA_SYNC_PENDING_WRITE_TTL",
   "sync.recipeFetchConcurrency": "PAPRIKA_SYNC_RECIPE_CONCURRENCY",
+  "sync.bootTimeout": "PAPRIKA_SYNC_BOOT_TIMEOUT",
   "photos.fileRoots": "PAPRIKA_PHOTO_FILE_ROOTS",
   transport: "MCP_TRANSPORT",
   "http.port": "MCP_HTTP_PORT",
@@ -198,6 +200,11 @@ export const paprikaConfigSchema = z
       z.object({
         email: z.string().min(1),
         password: z.string().min(1),
+        // Per-attempt deadline for every Paprika request, login included. Paprika can
+        // hold a request open ~60s before answering 429; without a deadline a stalled
+        // socket hangs the caller (and the boot sync) indefinitely. A timeout is retried
+        // like any other network error.
+        requestTimeout: durationField.pipe(z.number().min(1000, "must be at least 1s")).prefault("20s"),
       }),
     ),
     sync: z
@@ -215,6 +222,11 @@ export const paprikaConfigSchema = z
         // reliability is the primary constraint, so PaprikaClient warns above its
         // recommended max (high concurrency against one origin risks 429s). See #174.
         recipeFetchConcurrency: z.coerce.number().int().positive().default(5),
+        // How long startup waits for the initial sync before connecting the transport
+        // anyway (the cycle then finishes in the background). Stores are hydrated from the
+        // disk cache before the cycle starts, so tools can serve while it finishes; this
+        // keeps a slow Paprika API from outlasting the MCP client's startup timeout.
+        bootTimeout: durationField.prefault("15s"),
       })
       .prefault({}),
     // Directories `upload_recipe_photo` may read `{ path }` sources from. Empty (the
@@ -486,6 +498,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
 
   if (env["PAPRIKA_EMAIL"] !== undefined) paprika["email"] = env["PAPRIKA_EMAIL"];
   if (env["PAPRIKA_PASSWORD"] !== undefined) paprika["password"] = env["PAPRIKA_PASSWORD"];
+  if (env["PAPRIKA_REQUEST_TIMEOUT"] !== undefined) paprika["requestTimeout"] = env["PAPRIKA_REQUEST_TIMEOUT"];
 
   if (env["PAPRIKA_SYNC_INTERVAL"] !== undefined) sync["interval"] = env["PAPRIKA_SYNC_INTERVAL"];
   if (env["PAPRIKA_SYNC_ENABLED"] !== undefined) sync["enabled"] = env["PAPRIKA_SYNC_ENABLED"];
@@ -493,6 +506,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
     sync["pendingWriteTtl"] = env["PAPRIKA_SYNC_PENDING_WRITE_TTL"];
   if (env["PAPRIKA_SYNC_RECIPE_CONCURRENCY"] !== undefined)
     sync["recipeFetchConcurrency"] = env["PAPRIKA_SYNC_RECIPE_CONCURRENCY"];
+  if (env["PAPRIKA_SYNC_BOOT_TIMEOUT"] !== undefined) sync["bootTimeout"] = env["PAPRIKA_SYNC_BOOT_TIMEOUT"];
 
   const photos: Record<string, unknown> = {};
   if (env["PAPRIKA_PHOTO_FILE_ROOTS"] !== undefined) photos["fileRoots"] = env["PAPRIKA_PHOTO_FILE_ROOTS"];

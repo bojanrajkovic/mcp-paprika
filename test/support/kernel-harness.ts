@@ -32,12 +32,13 @@ type Built = Awaited<ReturnType<ErasedModule["build"]>>;
 
 function makeTestConfig(): PaprikaConfig {
   // The modules read only `sync.{enabled,pendingWriteTtl}` (store pending-write TTL),
+  // `sync.bootTimeout` (buildKernel's wait for the initial sync),
   // `photos.fileRoots` (upload_recipe_photo's path source) and `features` (the
   // discover/photo-gen gates). A cast keeps the test free of the full
   // schema — the historical test convention (cf. makeAppContext's `{} as …` casts).
   return {
     transport: "stdio",
-    sync: { enabled: true, pendingWriteTtl: 60_000, interval: 60_000, recipeFetchConcurrency: 4 },
+    sync: { enabled: true, pendingWriteTtl: 60_000, interval: 60_000, recipeFetchConcurrency: 4, bootTimeout: 60_000 },
     // The schema default: `upload_recipe_photo`'s `{ path }` source disabled.
     photos: { fileRoots: [] },
     // `features` omitted → `config.features?.…` is undefined → embeddings + imageGen off.

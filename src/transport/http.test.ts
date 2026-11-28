@@ -128,7 +128,7 @@ function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
   // operates (it's already in HTTP mode by being called at all).
   return {
     paprika: { email: "test@example.com", password: "secret" },
-    sync: { enabled: false, interval: 60_000 },
+    sync: { enabled: false, interval: 60_000, bootTimeout: 60_000 },
     transport: "stdio",
     http: {
       port: 0,
@@ -683,7 +683,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
 function makeOAuthConfig(): PaprikaConfig {
   return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
-    sync: { enabled: false, interval: 60_000 },
+    sync: { enabled: false, interval: 60_000, bootTimeout: 60_000 },
     transport: "http",
     http: {
       port: 0,

@@ -2,7 +2,7 @@ import { Writable } from "node:stream";
 import { gunzipSync } from "node:zlib";
 
 import { BrokenCircuitError } from "cockatiel";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { ResultAsync } from "neverthrow";
 import pino from "pino";
@@ -350,6 +350,54 @@ describe("PaprikaClient", () => {
       const error = (await client.authenticate())._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaError);
       expect(error.cause).toBeInstanceOf(ZodError);
+    });
+  });
+
+  describe("per-request timeout", () => {
+    it("aborts a stalled request after requestTimeoutMs and retries it", async () => {
+      let calls = 0;
+      server.use(
+        http.get(`${API_BASE}/recipes/`, async () => {
+          calls++;
+          if (calls === 1) await delay(5_000);
+          return HttpResponse.json({ result: [{ uid: "uid-1", hash: "h1" }] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", undefined, { requestTimeoutMs: 50 });
+      const recipes = (await client.listRecipes())._unsafeUnwrap();
+
+      expect(recipes).toHaveLength(1);
+      expect(calls).toBe(2);
+    });
+
+    it("gives up with a timeout error once every attempt stalls", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipes/`, async () => {
+          await delay(5_000);
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", undefined, { requestTimeoutMs: 50 });
+      const error = (await client.listRecipes())._unsafeUnwrapErr();
+
+      expect(error.message).toContain("timed out after 50 ms");
+    });
+
+    it("applies to login too, retrying a stalled authenticate()", async () => {
+      let calls = 0;
+      server.use(
+        http.post(AUTH_URL, async () => {
+          calls++;
+          if (calls === 1) await delay(5_000);
+          return HttpResponse.json({ result: { token: "valid-jwt-token" } });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", undefined, { requestTimeoutMs: 50 });
+      expect((await client.authenticate())._unsafeUnwrap()).toBeUndefined();
+      expect(calls).toBe(2);
     });
   });
 

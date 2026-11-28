@@ -1,4 +1,4 @@
-import { okAsync } from "neverthrow";
+import { okAsync, ResultAsync } from "neverthrow";
 import { describe, expect, it } from "vitest";
 
 import type { ErasedModule, Infra } from "./registry.js";
@@ -48,6 +48,70 @@ describe("buildKernel boot ordering", () => {
 
     await kernel.syncOnce();
     expect(order).toEqual(["sync", "index", "sync"]);
+  });
+});
+
+describe("buildKernel boot deadline", () => {
+  /** A module whose sync waits on `gate` before it resolves. */
+  function gatedModule(gate: Promise<void>, order: string[]): ErasedModule {
+    return {
+      id: "slow",
+      dependsOn: [],
+      build: async () => ({
+        state: {},
+        api: {},
+        tools: [],
+        resources: undefined,
+        syncs: [
+          {
+            tier: "core",
+            reconcile: () => {
+              order.push("sync:start");
+              return ResultAsync.fromSafePromise(gate.then(() => void order.push("sync:end")));
+            },
+          },
+        ],
+        onIndexReady: async () => {
+          order.push("index");
+        },
+        flush: undefined,
+      }),
+    } as unknown as ErasedModule;
+  }
+
+  function infraWithBootTimeout(ms: number): Infra {
+    const base = infra();
+    return { ...base, config: { ...base.config, sync: { ...base.config.sync, bootTimeout: ms } } };
+  }
+
+  it("returns once sync.bootTimeout passes and finishes the boot cycle in the background", async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+
+    const kernel = await buildKernel(infraWithBootTimeout(20), [gatedModule(gate, order)]);
+    expect(order).toEqual(["sync:start"]);
+
+    release();
+    await kernel.syncOnce();
+    expect(order).toEqual(["sync:start", "sync:end", "index", "sync:start", "sync:end"]);
+  });
+
+  it("serializes cycles so a later cycle waits for the background boot cycle", async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+
+    const kernel = await buildKernel(infraWithBootTimeout(0), [gatedModule(gate, order)]);
+    const next = kernel.syncOnce();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    // The second cycle has not started while the boot cycle is still gated.
+    expect(order).toEqual(["sync:start"]);
+
+    release();
+    await next;
+    expect(order.filter((step) => step === "sync:start")).toHaveLength(2);
+    expect(order.indexOf("sync:end")).toBeLessThan(order.lastIndexOf("sync:start"));
   });
 });
 
